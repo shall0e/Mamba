@@ -1,0 +1,16 @@
+node_modules/
+dist/
+config.json*
+catalog.json*
+downloads.json*
+torbox-availability.json*
+torbox-openapi.tmp.json
+artwork/
+game-metadata.json*
+.env*
+*.log
+vendor/7zip/*
+!vendor/7zip/7z.exe
+!vendor/7zip/7z.dll
+!vendor/7zip/License.txt
+!vendor/7zip/readme.txt

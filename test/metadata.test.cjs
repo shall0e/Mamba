@@ -1,0 +1,20 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const {Metadata,matchGame,metadataKey}=require('../lib/metadata.cjs');
+const {Catalog}=require('../lib/catalog.cjs');
+test('Steam metadata corrects names, caches artwork URLs and merges all release choices',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mamba-metadata-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+ const catalog=new Catalog(dir,()=>({}));
+ catalog.replace(['PORTAL [Repack]','Portal Deluxe Edition'].map((name,i)=>({id:'g'+i,name,sources:['s'+i],links:[{uri:'magnet:?xt=urn:btih:'+String(i).repeat(40),kind:'torrents',cached:true}]})));
+ let calls=0;
+ const metadata=new Metadata(dir,catalog,async()=>{calls++;return Response.json({items:[{id:620,name:'Portal 2'},{id:400,name:'Portal'}]});});
+ const results=await metadata.search('portal');assert.equal(results.total,1);assert.equal(results.items[0].name,'Portal');assert.equal(results.items[0].options.length,2);assert.match(results.items[0].cover,/\/400\//);
+ await metadata.search('portal');assert.equal(calls,1);
+ const restored=new Metadata(dir,catalog,()=>assert.fail('cached lookup'));await restored.load();await restored.search('portal');
+ assert.equal(matchGame('Portal',[{id:620,name:'Portal 2'}]),null);
+ assert.equal(matchGame('Call of Duty Modern Warfare 4',[{id:1,name:'Call of Duty 4 Modern Warfare'}]),null);
+ assert.notEqual(metadataKey('Portal'),metadataKey('Portal Remastered'));
+});

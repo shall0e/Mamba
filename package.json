@@ -1,0 +1,43 @@
+{
+  "name": "minimal-downloader",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder --dir",
+    "build:win": "electron-builder --win"
+  },
+  "build": {
+    "files": [
+      "**/*",
+      "!config.json",
+      "!config.json.tmp",
+      "!catalog.json*",
+      "!artwork/**",
+      "!game-metadata.json*",
+      "!downloads.json*",
+      "!torbox-availability.json*",
+      "!torbox-openapi.tmp.json",
+      "!test/**",
+      "!vendor/**"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/7zip",
+        "to": "7zip",
+        "filter": [
+          "7z.exe",
+          "7z.dll",
+          "License.txt",
+          "readme.txt"
+        ]
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^38.8.6",
+    "electron-builder": "^26.0.12"
+  }
+}

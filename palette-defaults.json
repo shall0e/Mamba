@@ -1,0 +1,20 @@
+{
+  "primary": "#181818",
+  "sidebar": "#101010",
+  "surface": "#101010",
+  "input": "#303030",
+  "inputInset": "#0c0c0c",
+  "hover": "#292929",
+  "selection": "#383838",
+  "focus": "#050505",
+  "text": "#eeeeee",
+  "textSecondary": "#b7b7b7",
+  "textMuted": "#939393",
+  "textOnSelection": "#ffffff",
+  "button": "#dddddd",
+  "buttonHover": "#ffffff",
+  "buttonText": "#181818",
+  "danger": "#ef9a92",
+  "dangerHover": "#c42b36",
+  "success": "#a9df7c"
+}
