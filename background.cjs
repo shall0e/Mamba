@@ -8,6 +8,6 @@ port.on('message', ({data}) => {
   if (!data || typeof data.method !== 'string') return;
   Promise.resolve().then(() => service.call(data.method, data.args)).then(
     result => send({id:data.id, result}),
-    error => send({id:data.id, error:String(error.message || 'Background task failed.').slice(0, 500)})
+    error => send({id:data.id, error:{message:String(error.message || 'Background task failed.').slice(0, 500),code:error.code}})
   ).catch(() => {});
 });

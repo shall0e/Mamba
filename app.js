@@ -11,14 +11,14 @@ let catalogState = {};
 let detailGeneration = 0;
 const cardJobs = new Map();
 
-function icon(name) { return document.querySelector(`#icon-${name}`).content.cloneNode(true); }
+function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button'); control.type = 'button'; control.className = className;
   if (iconName) control.append(icon(iconName));
   control.append(document.createTextNode(label));
   control.addEventListener('click', async () => {
-    control.disabled = true;
-    try { await action(); } catch (error) { showToast(error.message); } finally { control.disabled = control.dataset.locked === 'true'; }
+    control.disabled = true;control.setAttribute('aria-busy','true');
+    try { await action(); } catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); } finally { control.removeAttribute('aria-busy');control.disabled = control.dataset.locked === 'true'; }
   });
   return control;
 }
@@ -101,47 +101,9 @@ async function runSearch(more = false) {
     document.querySelector('#results-status').textContent = result.total ? `${result.total.toLocaleString()} ${result.total === 1 ? 'game' : 'games'}` : ['fetching', 'merging', 'checking'].includes(catalogState.phase) ? 'The catalog is syncing. Results will appear when checks finish.' : 'No TorBox-ready games found. Try another name or sync your sources.';
   } catch (error) { document.querySelector('#results-status').textContent = error.message; }
 }
-async function openGame(game) {
-  const generation = ++detailGeneration;
-  const detail = document.querySelector('#game-detail');
-  document.querySelector('#results-browse').hidden = true;
-  detail.hidden = false; detail.replaceChildren();
-  detail.append(button('Back to games', () => { detailGeneration++; detail.hidden = true; document.querySelector('#results-browse').hidden = false; }, 'arrow-left'));
-  const heading = document.createElement('h1'); heading.textContent = game.name; heading.tabIndex = -1; detail.append(heading); heading.focus({ preventScroll: true });
-  const status = document.createElement('p'); status.className = 'page-description'; status.setAttribute('role', 'status');
-  status.textContent = 'Checking TorBox and finding the best download…'; detail.append(status);
-  try {
-    const resolved = await window.mamba.resolveGame(game.id);
-    if (generation !== detailGeneration) return;
-    status.textContent = `${resolved.options.length} download options checked · ${resolved.sources.length} sources`;
-    const renderOption = (option, recommended = false) => {
-      const card = document.createElement('article'); card.className = 'download-choice' + (recommended ? ' recommended-choice' : '');
-      if (recommended) { const label = document.createElement('p'); label.className = 'choice-label'; label.textContent = 'BEST MATCH'; card.append(label); }
-      const name = document.createElement('h2'); name.textContent = option.release;
-      const meta = document.createElement('p'); meta.className = 'choice-meta'; meta.textContent = [option.fileSize, option.sources.join(', ')].filter(Boolean).join(' · ');
-      const reasons = document.createElement('p'); reasons.className = 'choice-reasons'; reasons.textContent = option.reasons.join(' · ');
-      const download = button(recommended ? 'Download best match' : 'Download this version', async () => {
-        await window.mamba.download(option.gameId, option.linkIndex); showToast('Added to downloads'); showPage('library');
-      }, 'download', recommended ? 'primary-button' : 'text-button');
-      download.disabled = !option.available;
-      if (!option.available) reasons.textContent = 'No longer cached on TorBox';
-      card.append(name, meta, reasons, download); return card;
-    };
-    if (resolved.best) detail.append(renderOption(resolved.best, true));
-    else { const message = document.createElement('p'); message.className = 'field-error'; message.textContent = resolved.message; detail.append(message); }
-    const alternatives = resolved.options.filter((option) => option !== resolved.best && !(resolved.best && option.gameId === resolved.best.gameId && option.linkIndex === resolved.best.linkIndex));
-    if (alternatives.length) {
-      const disclosure = document.createElement('details'); disclosure.className = 'other-downloads';
-      const summary = document.createElement('summary'); summary.textContent = `Other download options (${alternatives.length})`; summary.append(icon('chevron-down')); disclosure.append(summary);
-      alternatives.forEach((option) => disclosure.append(renderOption(option))); detail.append(disclosure);
-    }
-  } catch (error) {
-    if (generation !== detailGeneration) return;
-    status.textContent = String(error.message).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
-    detail.append(button('Check again', () => openGame(game), 'refresh-cw'));
-  }
-}
+async function openGame(game) { return window.MambaExperience.openGame(game); }
 function renderJobs(jobs) {
+  window.MambaExperience?.jobsChanged(jobs);
   const jobIds = new Set(jobs.map((job) => job.id));
   for (const [gameId, jobId] of cardJobs) if (!jobIds.has(jobId)) cardJobs.delete(gameId);
   for (const control of document.querySelectorAll('button[data-job-id]')) {
@@ -161,7 +123,7 @@ function renderJobs(jobs) {
   document.querySelector('#transfer-count').textContent = `${jobs.filter((job) => !['completed', 'cancelled', 'needs-setup', 'failed', 'paused'].includes(job.status)).length} active`;
   const list = document.querySelector('#transfer-list');
   for (const row of list.children) if (!jobIds.has(row.id.slice('transfer-'.length))) row.remove();
-  document.querySelector('#clear-finished').disabled = !jobs.some((job) => ['completed', 'needs-setup', 'cancelled', 'failed', 'paused'].includes(job.status));
+  document.querySelector('#clear-finished').disabled = !jobs.some((job) => ['completed', 'needs-setup', 'cancelled', 'failed'].includes(job.status));
   for (const job of jobs) {
     let row = document.getElementById(`transfer-${job.id}`);
     if (!row) {
@@ -170,31 +132,40 @@ function renderJobs(jobs) {
       const message = document.createElement('p'); message.className = 'transfer-message';
       const bar = document.createElement('progress'); bar.max = 100; bar.setAttribute('aria-label', `Progress for ${job.name}`);
       const actions = document.createElement('div'); actions.className = 'transfer-actions';
-      row.append(name, message, bar, actions); list.append(row);
+      const stages=document.createElement('ol');stages.className='transfer-stages';stages.setAttribute('aria-label','Download stages');for(const label of ['Preparing','Downloading','Extracting','Installing','Ready']){const stage=document.createElement('li');stage.textContent=label;stages.append(stage);}
+      row.append(name, stages, message, bar, actions); list.append(row);
     }
-    row.querySelector('.transfer-message').textContent = job.message + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s · ${remainingTime(job)}` : '');
+    row.querySelector('.transfer-message').textContent = (job.error ? job.error.title + ' · ' + job.error.advice : job.message) + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s · ${remainingTime(job)}` : '');
+    const current={queued:0,preparing:0,downloading:1,extracting:2,installing:3,completed:4,'needs-setup':3}[['paused','failed','cancelled'].includes(job.status)?job.stage:job.status];
+    [...row.querySelectorAll('.transfer-stages li')].forEach((node,index)=>{node.classList.toggle('stage-done',current!==undefined&&index<current);node.classList.toggle('stage-current',index===current);node.setAttribute('aria-current',index===current?'step':'false');});
     row.querySelector('progress').value = job.progress || 0;
+    row.querySelector('progress').hidden=['paused','failed','cancelled','needs-setup'].includes(job.status);
+    if(['preparing','extracting','installing'].includes(job.status))row.querySelector('progress').removeAttribute('value');
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
       actions.replaceChildren(); row.dataset.status = job.status;
-      if (['failed', 'cancelled', 'paused'].includes(job.status)) actions.append(button('Retry', () => window.mamba.retry(job.id), 'rotate-ccw'));
+      if (['queued','preparing','downloading'].includes(job.status))actions.append(button('Pause',()=>window.mamba.pause(job.id),'pause'));
+      if (['failed', 'cancelled', 'paused'].includes(job.status)) actions.append(button(job.status==='paused'?'Resume':'Retry', () => window.mamba.retry(job.id), 'rotate-ccw'));
       else if (!['completed', 'needs-setup'].includes(job.status)) actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
-      actions.append(button('Remove', () => window.mamba.removeDownload(job.id), 'x'));
+      if(job.status==='failed')actions.append(button('Get help',()=>showPage('activity'),'circle-alert'));
+      if(job.status==='completed'||job.status==='needs-setup')actions.append(button(job.status==='completed'?'View game':'Review installation',()=>openGame({id:job.gameId,name:job.name}),'arrow-right'));
+      if(['completed','needs-setup','failed','paused','cancelled'].includes(job.status))actions.append(button('Remove', () => window.mamba.removeDownload(job.id), 'x'));
     }
   }
 }
 document.querySelector('#clear-finished').addEventListener('click', async () => {
-  try { await window.mamba.clearFinished(); } catch (error) { showToast(error.message); }
+  try { await window.mamba.clearFinished(); } catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); }
 });
 
 function showPage(name) {
-  const pages = { search: '#search-page', library: '#library-page', settings: '#settings-backdrop' };
+  const pages = { search: '#search-page', library: '#library-page', settings: '#settings-backdrop',game:'#game-page',activity:'#activity-page' };
+  if(!pages[name])return;
   for (const [page, selector] of Object.entries(pages)) {
     document.querySelector(selector).hidden = page !== name;
   }
   document.querySelector(pages[name]).scrollTop = 0;
   document.querySelectorAll('[data-page]').forEach((button) => {
-    const active = button.dataset.page === name;
+    const active = button.dataset.page === (name === 'game' ? window.MambaExperience?.origin || 'search' : name);
     button.classList.toggle('active', active);
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -203,11 +174,13 @@ function showPage(name) {
     keyInput.type = 'password';
     updateSettingsState();
   }
-  const target = name === 'search' ? '.main-input' : name === 'library' ? '#library-title' : '#settings-title';
-  document.querySelector(target).focus({ preventScroll: true });
+  const target = {search:'.main-input',library:'#library-title',settings:'#settings-title',game:'#game-title',activity:'#activity-title'}[name];
+  document.querySelector(target)?.focus({ preventScroll: true });
+  window.MambaExperience?.pageChanged(name);
 }
 
 function renderLibrary(games = installedGames) {
+  if(window.MambaExperience)return window.MambaExperience.renderLibrary(games);
   installedGames = games.filter((game) => game && typeof game.name === 'string');
   const query = document.querySelector('#library-filter').value.trim().toLowerCase();
   const installed = installedGames.filter((game) => [game.name, ...(game.installations || []).map(item => item.sourceName || item.name), ...(game.dlcs || []).map(item => item.name)].join(' ').toLowerCase().includes(query));
@@ -303,7 +276,7 @@ function sourceLines() {
 }
 
 function hasSettingsChanges() {
-  return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(readDownloadPreferences()) !== JSON.stringify(downloadPreferences);
+  return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(Object.entries(readDownloadPreferences()).sort(([a],[b])=>a.localeCompare(b))) !== JSON.stringify(Object.entries(downloadPreferences).sort(([a],[b])=>a.localeCompare(b)));
 }
 
 function updateSearchState() {
@@ -329,7 +302,7 @@ function updateSettingsState() {
   for (const control of [keyInput, sourceUrlsInput, visibility, document.querySelector('#settings-save')]) {
     control.disabled = !configLoaded || settingsBusy;
   }
-  for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, [data-palette], #import-config, #export-config')) control.disabled = !configLoaded || settingsBusy;
+  for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config')) control.disabled = !configLoaded || settingsBusy;
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
   document.querySelector('#remove-key').hidden = configLoaded && !keyConfigured;
   document.querySelector('#settings-save').disabled = !configLoaded || settingsBusy || !hasSettingsChanges();
@@ -490,7 +463,7 @@ function applyPalette(palette) {
 }
 function applyLoadedConfig(config) {
   urls=config.sourceUrls; keyConfigured=config.configured; keyInput.value='';
-  downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{}};
+  downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{},preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any',notifications:config.notifications!==false};
   const fields=document.querySelector('#palette-fields');fields.replaceChildren();
   for(const [name,color]of Object.entries(downloadPreferences.palette)){
     const label=document.createElement('label');label.className='palette-field';
@@ -499,12 +472,16 @@ function applyLoadedConfig(config) {
     input.addEventListener('input',()=>{saveStatus.textContent='';applyPalette(readDownloadPreferences().palette);updateSettingsState();});
   }
   applyPalette(downloadPreferences.palette);populateDownloadPreferences();renderLibrary(config.installedGames||installedGames);
+  window.MambaExperience?.configure(config);
   configLoaded=true;settingsInitialized=true;localStorage.removeItem(STORAGE_KEY);sourceUrlsInput.value=urls.join('\n');updateSettingsState();updateSearchState();
 }
 function readDownloadPreferences() {
-  return { downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value, keepArchives:document.querySelector('#keep-archives').checked,transferTimeoutMinutes:Number(document.querySelector('#transfer-timeout').value),automaticUpdates:document.querySelector('#automatic-updates').checked,palette:Object.fromEntries([...document.querySelectorAll('[data-palette]')].map(input=>[input.dataset.palette,input.value])) };
+  return { preferredLanguage:document.querySelector('#preferred-language').value,preferredRelease:document.querySelector('#preferred-release').value,notifications:document.querySelector('#notifications').checked,downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value, keepArchives:document.querySelector('#keep-archives').checked,transferTimeoutMinutes:Number(document.querySelector('#transfer-timeout').value),automaticUpdates:document.querySelector('#automatic-updates').checked,palette:Object.fromEntries([...document.querySelectorAll('[data-palette]')].map(input=>[input.dataset.palette,input.value])) };
 }
 function populateDownloadPreferences() {
+  document.querySelector('#preferred-language').value=downloadPreferences.preferredLanguage||'english';
+  document.querySelector('#preferred-release').value=downloadPreferences.preferredRelease||'any';
+  document.querySelector('#notifications').checked=downloadPreferences.notifications!==false;
   document.querySelector('#download-path').value = downloadPreferences.downloadPath || '';
   document.querySelector('#auto-install').checked = downloadPreferences.autoInstall;
   document.querySelector('#cached-only').checked = downloadPreferences.cachedOnly;
@@ -515,11 +492,11 @@ function populateDownloadPreferences() {
   for(const input of document.querySelectorAll('[data-palette]'))input.value=downloadPreferences.palette[input.dataset.palette];
   applyPalette(downloadPreferences.palette);
 }
-for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates')) control.addEventListener('input',()=>{saveStatus.textContent='';updateSettingsState();});
+for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications')) control.addEventListener('input',()=>{saveStatus.textContent='';updateSettingsState();});
 
 document.querySelector('#browse-folder').addEventListener('click', async () => {
   try { const folder = await window.mamba.chooseFolder(); if (folder) { document.querySelector('#download-path').value = folder; updateSettingsState(); } }
-  catch (error) { showToast(error.message); }
+  catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); }
 });
 if (window.mamba) {
   window.mamba.onCatalog(renderCatalog);

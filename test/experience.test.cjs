@@ -1,0 +1,40 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const os=require('node:os');
+const path=require('node:path');
+const {LibraryState,storageInfo,ensureSpace,sizeBytes}=require('../lib/experience.cjs');
+const {Library}=require('../lib/library.cjs');
+const {Issues}=require('../lib/issues.cjs');
+const {rankOptions}=require('../lib/search.cjs');
+const {Downloads}=require('../lib/downloads.cjs');
+async function fixture(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mamba-experience-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));return dir;}
+test('imports existing games without moving them, and remembers favorites and play history',async t=>{
+  const dir=await fixture(t),games=path.join(dir,'games'),external=path.join(dir,'external');await fs.mkdir(games);await fs.mkdir(external);await fs.writeFile(path.join(external,'game.exe'),'fixture');
+  const state=new LibraryState(dir);await state.load();await state.addImport(external);
+  const library=new Library(async()=>({downloadPath:games}),{imports:()=>state.data.imports});const items=await library.scan();assert.equal(items.length,1);assert.equal(items[0].imported,true);assert.equal(items[0].folder,external);
+  await state.favorite(items[0],true);await state.played(items[0]);const restored=new LibraryState(dir);await restored.load();assert.equal(restored.decorate(items)[0].favorite,true);assert.ok(restored.decorate(items)[0].lastPlayed);
+  await restored.forget(external);assert.equal(restored.data.imports.length,0);assert.equal((await fs.stat(path.join(external,'game.exe'))).isFile(),true);
+});
+test('space estimates account for archives and setup; low space blocks starting',async t=>{
+  const dir=await fixture(t);t.mock.method(fs,'statfs',async()=>({bavail:500,bsize:1024}));
+  assert.equal(sizeBytes('1.5 GB'),1500000000);assert.equal(sizeBytes('1 GiB'),1024**3);
+  const info=await storageInfo(dir,100,{multiplier:3,reserve:0});assert.equal(info.required,300);assert.equal(info.hasSpace,true);
+  await assert.rejects(ensureSpace(dir,1024**3),error=>error.code==='ENOSPC');
+});
+test('pausing a transfer retains its queue entry and does not convert it to cancelled',async t=>{
+  const dir=await fixture(t);const downloads=new Downloads(dir,async()=>({}),{},{});
+  const job={id:'11111111-1111-4111-8111-111111111111',status:'queued',name:'Fixture'};downloads.jobs=[job];
+  downloads.execute=async(job,signal)=>{await downloads.update(job,{status:'downloading'});await new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true}));};
+  const pumping=downloads.pump();await new Promise(resolve=>setTimeout(resolve,20));await downloads.pause(job.id);await pumping;
+  assert.equal(job.status,'paused');assert.equal(downloads.jobs.length,1);assert.equal(job.stage,'downloading');
+});
+test('language and release preferences guide ranking without hiding alternatives',()=>{
+  const options=[{release:'Example [ENG] Portable',cached:true,sources:['a']},{release:'Example [RUS] Repack',cached:true,sources:['b']}];
+  assert.match(rankOptions(options,{preferredLanguage:'russian',preferredRelease:'repack'})[0].release,/RUS/);assert.equal(rankOptions(options).length,2);
+});
+test('issue messages redact credentials and links; diagnostics contain only safe categories',()=>{
+  const issues=new Issues(),secret='super-secret-fixture-token';const item=issues.add(Error('401 '+secret+' https://example.com/private?token='+secret),'downloads',[secret]);
+  assert.equal(item.code,'authentication');assert.ok(!item.message.includes(secret));assert.ok(!item.message.includes('example.com'));
+  const exported=JSON.stringify(issues.diagnostics());assert.ok(!exported.includes(secret));assert.ok(!exported.includes('message'));issues.resolve(item.id);assert.equal(issues.items[0].resolved,true);
+});

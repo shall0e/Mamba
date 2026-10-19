@@ -16,3 +16,6 @@ vendor/7zip/*
 !vendor/7zip/readme.txt
 
 game-identities.json*
+
+library-state.json*
+issues.json*

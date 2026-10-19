@@ -26,6 +26,23 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 contextBridge.exposeInMainWorld('mamba', {
+  details: id => ipcRenderer.invoke('game:details',id),
+  pause: id => ipcRenderer.invoke('downloads:pause',id),
+  stopSync: () => ipcRenderer.invoke('catalog:cancel'),
+  favorite: (id,value) => ipcRenderer.invoke('library:favorite',id,value),
+  saveView: view => ipcRenderer.invoke('config:view',view),
+  importGame: () => ipcRenderer.invoke('library:import'),
+  chooseLauncher: id => ipcRenderer.invoke('library:choose-launcher',id),
+  removeGame: id => ipcRenderer.invoke('library:remove',id),
+  storage: () => ipcRenderer.invoke('storage:check'),
+  activity: () => ipcRenderer.invoke('app:activity'),
+  resolveIssue: id => ipcRenderer.invoke('issues:resolve',id),
+  reportIssue: message => ipcRenderer.invoke('issues:report',message),
+  restartTasks: () => ipcRenderer.invoke('background:restart'),
+  exportDiagnostics: () => ipcRenderer.invoke('app:export-diagnostics'),
+  onIssues: callback => subscribe('issues:changed',callback),
+  onNotice: callback => subscribe('app:notice',callback),
+  onNavigate: callback => subscribe('app:navigate',callback),
   updateState: () => ipcRenderer.invoke('app:updates'),
   checkUpdates: () => ipcRenderer.invoke('app:check-updates'),
   installUpdate: () => ipcRenderer.invoke('app:install-update'),

@@ -7,6 +7,7 @@
   <title>Mamba · TorBox</title>
   <link rel="stylesheet" href="style.css">
   <script src="app.js" defer></script>
+  <script src="experience.js" defer></script>
 </head>
 <body>
   <div class="window-drag-area" aria-hidden="true"></div>
@@ -103,6 +104,20 @@
   <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
 </svg>
 <span>Library</span></button>
+<button class="nav-button" id="activity-open" data-page="activity" type="button" aria-label="Activity" title="Activity"><svg aria-hidden="true" class="lucide lucide-activity"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
+</svg>
+<span>Activity</span><i class="nav-count" id="activity-count" hidden></i></button>
     </nav>
     <div class="sidebar-bottom">
   <button class="nav-button" id="settings-open" type="button" aria-label="Open settings" data-page="settings" title="Settings"><svg aria-hidden="true"
@@ -176,8 +191,16 @@
 </span></button>
       </div>      <section class="search-results" id="search-results" aria-label="Search results" hidden><div id="results-browse"><div class="results-heading"><p id="results-status" role="status"></p><button class="text-button" id="sync-catalog" type="button">Sync sources</button></div><p class="field-hint" id="catalog-status" role="status"></p><div id="results-list"></div><button class="text-button load-more" id="results-more" type="button" hidden>Load more</button></div><section id="game-detail" class="game-detail" aria-label="Game downloads" hidden></section></section>
     </section>
+<section class="page content-page" id="game-page" aria-labelledby="game-title" hidden><div id="game-content"></div></section>
+<section class="page content-page activity-page" id="activity-page" aria-labelledby="activity-title" hidden>
+<div class="page-heading"><div><p class="page-eyebrow">EVERYTHING IN PROGRESS</p><h1 id="activity-title" tabindex="-1">Activity</h1><p class="page-description">Downloads, system health, and help when you need it.</p></div><button class="secondary-button" id="export-diagnostics" type="button">Export diagnostics</button></div>
+<div id="system-health" class="health-grid" aria-live="polite"></div>
+<div class="activity-controls"><button class="text-button" id="refresh-activity" type="button">Refresh status</button><button class="text-button" id="check-storage" type="button">Check storage</button><button class="text-button" id="stop-sync" type="button">Stop source sync</button><button class="text-button" id="restart-tasks" type="button">Restart background tasks</button></div><p class="field-hint" id="storage-status" role="status"></p>
+<div id="activity-transfers"></div><div id="activity-empty" class="quiet-state"><h2>You're all caught up</h2><p>Your downloads will appear here, with progress and controls for every stage.</p></div>
+<section class="issues-section" aria-labelledby="issues-title"><div class="settings-card-heading"><h2 id="issues-title">Needs attention</h2><span id="issue-count" class="connection-badge">0 open</span></div><div id="issues-list"></div></section>
+</section>
     <section class="page content-page" id="library-page" aria-labelledby="library-title" hidden>
-      <div class="page-heading"><div><p class="page-eyebrow">YOUR COLLECTION</p><h1 id="library-title" tabindex="-1">Library</h1><p class="page-description">Your installed games, all in one place.</p></div><div class="library-heading-actions"><span id="game-count" class="game-count">0 games</span><button class="text-button" id="refresh-library" type="button">Refresh</button></div></div>
+      <div class="page-heading"><div><p class="page-eyebrow">YOUR COLLECTION</p><h1 id="library-title" tabindex="-1">Library</h1><p class="page-description">Your installed games, all in one place.</p></div><div class="library-heading-actions"><button class="text-button" id="import-game" type="button">Add existing game</button><span id="game-count" class="game-count">0 games</span><button class="text-button" id="refresh-library" type="button">Refresh</button></div></div>
 <section id="transfers" class="transfers" aria-labelledby="transfers-title" hidden><div class="settings-card-heading"><h2 id="transfers-title">Downloads</h2><span id="transfer-count" class="connection-badge"></span><button id="clear-finished" type="button" class="text-button">Clear finished</button></div><div id="transfer-list"></div></section>
       <div class="library-toolbar" id="library-toolbar" hidden><label class="library-filter"><svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -334,7 +357,11 @@ Export config</button></div><p class="field-hint">Exports include every saved se
 </svg>
 
 Check for updates</button><button id="install-update" type="button" class="primary-button" hidden>Restart and install</button></div></section>
-        <div class="settings-footer"><div class="settings-feedback"><p id="settings-state" class="settings-state" aria-live="polite">All changes saved</p><p class="save-status" id="save-status" role="status" aria-live="polite"></p></div><div class="dialog-actions"><button class="text-button" id="settings-cancel" type="button">Discard</button><button class="primary-button" id="settings-save" type="submit" title="Save changes (Ctrl+S)">Save changes</button></div>
+        <section class="settings-card" aria-labelledby="experience-settings-title"><div class="settings-card-heading"><div><h2 id="experience-settings-title">Make it yours</h2><p>Choose how Mamba finds downloads and keeps you informed.</p></div></div>
+<div class="preference-grid"><label class="field-label" for="preferred-language">Preferred language<select class="settings-input" id="preferred-language"><option value="english">English / multilingual</option><option value="any">No preference</option><option value="russian">Russian / multilingual</option><option value="spanish">Spanish / multilingual</option><option value="french">French / multilingual</option><option value="german">German / multilingual</option></select></label><label class="field-label" for="preferred-release">Preferred release<select class="settings-input" id="preferred-release"><option value="any">Best available</option><option value="repack">Repack</option><option value="portable">Portable / Steam rip</option><option value="original">Original release</option></select></label></div>
+<p class="field-hint">Preferences guide recommendations. Labels supplied by sources may be incomplete; every version stays available in game details.</p>
+<label class="switch-row"><span><strong>Desktop notifications</strong><small>Let me know when a game is ready or needs attention.</small></span><input id="notifications" type="checkbox" role="switch"></label><button class="text-button" id="open-troubleshooting" type="button">Open Activity and troubleshooting</button></section>
+<div class="settings-footer"><div class="settings-feedback"><p id="settings-state" class="settings-state" aria-live="polite">All changes saved</p><p class="save-status" id="save-status" role="status" aria-live="polite"></p></div><div class="dialog-actions"><button class="text-button" id="settings-cancel" type="button">Discard</button><button class="primary-button" id="settings-save" type="submit" title="Save changes (Ctrl+S)">Save changes</button></div>
         </div>
       </form>
     </div>
@@ -454,7 +481,207 @@ Check for updates</button><button id="install-update" type="button" class="prima
   <path d="M7 7h10v10" />
   <path d="M7 17 17 7" />
 </svg>
-</template></body>
+</template><template id="icon-activity"><svg aria-hidden="true" class="lucide lucide-activity"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
+</svg>
+</template>
+<template id="icon-star"><svg aria-hidden="true" class="lucide lucide-star"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
+</svg>
+</template>
+<template id="icon-pause"><svg aria-hidden="true" class="lucide lucide-pause"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect x="14" y="4" width="4" height="16" rx="1" />
+  <rect x="6" y="4" width="4" height="16" rx="1" />
+</svg>
+</template>
+<template id="icon-trash-2"><svg aria-hidden="true" class="lucide lucide-trash-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M3 6h18" />
+  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+  <line x1="10" x2="10" y1="11" y2="17" />
+  <line x1="14" x2="14" y1="11" y2="17" />
+</svg>
+</template>
+<template id="icon-circle-alert"><svg aria-hidden="true" class="lucide lucide-circle-alert"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="10" />
+  <line x1="12" x2="12" y1="8" y2="12" />
+  <line x1="12" x2="12.01" y1="16" y2="16" />
+</svg>
+</template>
+<template id="icon-circle-check"><svg aria-hidden="true" class="lucide lucide-circle-check"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="10" />
+  <path d="m9 12 2 2 4-4" />
+</svg>
+</template>
+<template id="icon-folder-plus"><svg aria-hidden="true" class="lucide lucide-folder-plus"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 10v6" />
+  <path d="M9 13h6" />
+  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+</svg>
+</template>
+<template id="icon-x"><svg aria-hidden="true" class="lucide lucide-x"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M18 6 6 18" />
+  <path d="m6 6 12 12" />
+</svg>
+</template>
+<template id="icon-info"><svg aria-hidden="true" class="lucide lucide-info"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M12 16v-4" />
+  <path d="M12 8h.01" />
+</svg>
+</template>
+<template id="icon-settings-2"><svg aria-hidden="true" class="lucide lucide-settings-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M20 7h-9" />
+  <path d="M14 17H5" />
+  <circle cx="17" cy="17" r="3" />
+  <circle cx="7" cy="7" r="3" />
+</svg>
+</template>
+<template id="icon-arrow-right"><svg aria-hidden="true" class="lucide lucide-arrow-right"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" />
+</svg>
+</template>
+<template id="icon-bell"><svg aria-hidden="true" class="lucide lucide-bell"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+  <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+</svg>
+</template>
+<template id="icon-check"><svg aria-hidden="true" class="lucide lucide-check"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M20 6 9 17l-5-5" />
+</svg>
+</template>
+</body>
 </html>
 
 

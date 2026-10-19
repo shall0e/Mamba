@@ -1,8 +1,13 @@
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess, Notification } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('./palette-defaults.json');
 const { within } = require('./lib/library.cjs');
+const {authorizeGame}=require('./lib/experience.cjs');
+const {Issues}=require('./lib/issues.cjs');
+const issues=new Issues();let issueQueue=Promise.resolve();
+let configSecrets=[];
+function reportIssue(error,context='app'){const issue=issues.add(error,context,configSecrets);broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});return issue;}
 const { registerHelperRuntime, openGameHelper } = require('./lib/game-helper.cjs');
 const { validateSettings, decodeConfig, encodeConfig } = require('./lib/config-transfer.cjs');
 const { Updates } = require('./lib/updates.cjs');
@@ -11,15 +16,19 @@ const { spawn } = require('node:child_process');
 let updates, background, configWatcher, watchTimer, resolvedDataDirectory;
 let installedGames = [], downloadJobs = [];
 let catalogState = { phase: 'loading', message: 'Starting background service…', count: 0, errors: [] };
-function task(method, ...args) {
+async function task(method, ...args) {
   if (!background) return Promise.reject(new Error('Mamba is starting. Try again shortly.'));
-  return background.request(method, ...args);
+  try { return await background.request(method, ...args); } catch(error) { reportIssue(error,method);throw error; }
 }
 async function refreshBackgroundConfig() {
   if (!background) return;
   const config = await readConfig();
+  const previous=background.options.initialize.config;
+  const changed=JSON.stringify([previous.sourceUrls,previous.torboxApiKey,previous.cachedOnly])!==JSON.stringify([config.sourceUrls,config.torboxApiKey,config.cachedOnly]);
+  configSecrets=[config.torboxApiKey,config.archivePassword];
   background.options.initialize.config = config;
   await task('configure', config);
+  if(changed)task('catalog:sync').catch(()=>{});
 }
 function dataDirectory() {
   if (resolvedDataDirectory) return resolvedDataDirectory;
@@ -35,7 +44,7 @@ function dataDirectory() {
   if (require('node:fs').existsSync(path.join(legacyData, 'config.json'))) return resolvedDataDirectory = legacyData;
   return resolvedDataDirectory = app.getPath('userData');
 }
-const publicConfig = (config) => ({ configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
+const publicConfig = (config) => ({ librarySort:config.librarySort||'name',libraryFavoritesOnly:!!config.libraryFavoritesOnly,notifications:config.notifications!==false,preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any', configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
 
 function readPalette(palette) {
   return Object.fromEntries(Object.entries(defaultPalette).map(([name, fallback]) => [
@@ -57,12 +66,22 @@ async function readConfig() {
       autoInstall: config.autoInstall !== false,
       keepArchives: config.keepArchives === true,
       automaticUpdates: config.automaticUpdates !== false,
+      notifications:config.notifications!==false,
+      preferredLanguage:['any','english','russian','spanish','french','german'].includes(config.preferredLanguage)?config.preferredLanguage:'english',
+      preferredRelease:['any','repack','portable','original'].includes(config.preferredRelease)?config.preferredRelease:'any',
+      librarySort:['name','recent','installed'].includes(config.librarySort)?config.librarySort:'name',
+      libraryFavoritesOnly:config.libraryFavoritesOnly===true,
       cachedOnly: config.cachedOnly !== false,
       transferTimeoutMinutes: Math.max(5, Math.min(1440, Number(config.transferTimeoutMinutes) || 120)),
       torboxApiKey: typeof config.torboxApiKey === 'string' ? config.torboxApiKey : '',
       sourceUrls: Array.isArray(config.sourceUrls) ? config.sourceUrls.filter((url) => typeof url === 'string') : []
     };
   } catch (error) {
+    if(error instanceof SyntaxError || error.message==='Invalid config.json. Expected an object.') {
+      await fs.rename(configFile(),configFile()+'.invalid-'+Date.now()+'.backup');
+      reportIssue(new Error('The settings file was unreadable. It was backed up and defaults were restored. Open Settings to reconnect TorBox and choose your Games folder.'),'config');
+      return readConfig();
+    }
     if (error.code !== 'ENOENT') throw error;
     // Preserve the existing API key when upgrading from encrypted storage.
     let torboxApiKey = '';
@@ -74,7 +93,7 @@ async function readConfig() {
     } catch (legacyError) {
       if (legacyError.code !== 'ENOENT') throw legacyError;
     }
-    return { torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, keepArchives: false, automaticUpdates: true, transferTimeoutMinutes: 120 };
+    return { notifications:true,preferredLanguage:'english',preferredRelease:'any',librarySort:'name',libraryFavoritesOnly:false,torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, keepArchives: false, automaticUpdates: true, transferTimeoutMinutes: 120 };
   }
 }
 
@@ -134,7 +153,7 @@ ipcMain.handle('config:save', async (_event, settings) => {
   if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
   if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
   if (typeof settings.archivePassword === 'string') config.archivePassword = settings.archivePassword;
-  Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
+  Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette','notifications','preferredLanguage','preferredRelease'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
   });
   task('library:scan').catch(() => {});
   return saved;
@@ -181,11 +200,58 @@ ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
 ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
 ipcMain.handle('downloads:clear-finished', () => task('downloads:clear-finished'));
 ipcMain.handle('library:scan', () => task('library:scan'));
+ipcMain.handle('game:details', (_event,id)=>task('game:details',String(id)));
+ipcMain.handle('downloads:pause', (_event,id)=>task('downloads:pause',String(id)));
+ipcMain.handle('catalog:cancel', ()=>task('catalog:cancel'));
+ipcMain.handle('library:favorite', (_event,id,value)=>task('library:favorite',String(id),!!value));
+ipcMain.handle('config:view', (_event,view)=>updateConfig(config=>{
+  if(view.librarySort!==undefined){if(!['name','recent','installed'].includes(view.librarySort))throw Error('Invalid library sort.');config.librarySort=view.librarySort;}
+  if(view.libraryFavoritesOnly!==undefined)config.libraryFavoritesOnly=!!view.libraryFavoritesOnly;
+}));
+ipcMain.handle('storage:check', ()=>task('storage:check'));
+ipcMain.handle('library:import', async event=>{
+  const chosen=await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{title:'Choose an existing game installation',properties:['openDirectory']});
+  if(chosen.canceled||!chosen.filePaths[0])return null;
+  return task('library:import',chosen.filePaths[0]);
+});
+ipcMain.handle('library:choose-launcher', async (event,id)=>{
+  const game=await task('library:get',String(id));if(!game)throw Error('Game not found.');
+  const chosen=await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{title:'Choose the file that starts '+game.name,defaultPath:game.folder,properties:['openFile'],filters:[{name:'Game launchers',extensions:['exe','com','cmd','bat','ps1','lnk']}]});
+  if(chosen.canceled||!chosen.filePaths[0])return null;
+  return task('library:launcher',game.id,chosen.filePaths[0]);
+});
+ipcMain.handle('library:remove', async (event,id)=>{
+  const game=await task('library:get',String(id));if(!game)throw Error('Game not found.');
+  if(await task('library:busy',game.id))throw Error('Finish or cancel the active download before removing this installation.');
+  if(downloadJobs.some(job=>job.folder===game.folder&&['preparing','downloading','extracting','installing'].includes(job.status)))throw Error('Finish or cancel the active download before removing this installation.');
+  const config=await readConfig();authorizeGame(config,game.imported?[game.folder]:[],game);
+  if(game.imported)return task('library:forget',game.folder);
+  const selected=await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender),{type:'warning',title:'Uninstall '+game.name+'?',message:'Move this installation to the Recycle Bin?',detail:game.folder+'\n\nOther installations will remain. Saved games outside this folder are not removed. Steam and Xbox shortcuts may need to be removed from those apps.',buttons:['Keep game','Uninstall'],defaultId:0,cancelId:0,noLink:true});
+  if(selected.response!==1)return false;
+  if((await fs.lstat(game.folder)).isSymbolicLink())throw Error('The game folder changed. Refresh the library.');
+  await shell.trashItem(game.folder);await task('library:scan');return true;
+});
+function activityStatus(){return {version:app.getVersion(),worker:{connected:!!background?.child,pid:background?.child?.pid||null,pending:background?.pending.size||0,lastHeartbeat:background?.lastHeartbeat||null},catalog:{phase:catalogState.phase,count:catalogState.count||0,unavailableSources:catalogState.errors?.length||0,message:catalogState.message},libraryCount:installedGames.length,jobs:downloadJobs,issues:issues.items};}
+ipcMain.handle('app:activity',()=>activityStatus());
+ipcMain.handle('issues:resolve',(_event,id)=>{issues.resolve(String(id));broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});return true;});
+ipcMain.handle('issues:report',(_event,message)=>reportIssue(new Error(String(message).slice(0,700)),'interface'));
+ipcMain.handle('background:restart',async event=>{
+  if(downloadJobs.some(job=>['extracting','installing'].includes(job.status)))throw Error('Wait for extraction or installation to finish before restarting background tasks.');
+  if(downloadJobs.some(job=>['queued','preparing','downloading'].includes(job.status))){const answer=await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender),{type:'question',message:'Restart background tasks?',detail:'Active downloads will pause. Resume them after the service reconnects.',buttons:['Keep running','Restart tasks'],defaultId:0,cancelId:0});if(answer.response!==1)return false;}
+  await background.restart();return true;
+});
+ipcMain.handle('app:export-diagnostics',async event=>{
+  const chosen=await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{defaultPath:'Mamba-diagnostics.json',filters:[{name:'Diagnostics',extensions:['json']}]});
+  if(chosen.canceled||!chosen.filePath)return false;
+  const status=activityStatus();
+  const report={schemaVersion:1,createdAt:new Date().toISOString(),version:status.version,platform:process.platform,architecture:process.arch,electron:process.versions.electron,worker:{connected:status.worker.connected,pending:status.worker.pending},catalog:{phase:status.catalog.phase,count:status.catalog.count,unavailableSources:status.catalog.unavailableSources},libraryCount:status.libraryCount,tasks:downloadJobs.map(({status,progress,total,received})=>({status,progress,total,received})),issues:issues.diagnostics()};
+  await fs.writeFile(chosen.filePath,JSON.stringify(report,null,2),'utf8');return true;
+});
 ipcMain.handle('library:action', async (_event, id, action) => {
   const game = await task('library:get', id);
   if (!game) throw new Error('Game not found. Refresh your library.');
   const config = await readConfig();
-  within(config.downloadPath, game.folder);
+  authorizeGame(config,game.imported?[game.folder]:[],game);
   if (action === 'launcher') { await openGameHelper(game.folder); return; }
   if (action === 'folder') { const error = await shell.openPath(game.folder); if (error) throw new Error(error); return; }
   const target = action === 'setup' ? game.installer : action === 'play' && game.status === 'installed' ? game.executable : null;
@@ -193,11 +259,12 @@ ipcMain.handle('library:action', async (_event, id, action) => {
   within(game.folder, target);
   if (!(await fs.lstat(target)).isFile()) throw new Error('The executable is no longer available.');
   if (action === 'setup') { const error = await shell.openPath(target); if (error) throw new Error(error); return; }
-  if (!/\.(exe|com)$/i.test(target)) { const error = await shell.openPath(target); if (error) throw new Error(error); return; }
+  if (!/\.(exe|com)$/i.test(target)) { const error = await shell.openPath(target); if (error) throw new Error(error); await task('library:played',id).catch(()=>{}); return; }
   await new Promise((resolve, reject) => {
     const child = spawn(target, [], { cwd: path.dirname(target), detached: true, stdio: 'ignore', shell: false, windowsHide: true });
     child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); });
   });
+  await task('library:played',id);
 });
 ipcMain.handle('folder:choose', async (event) => {
   const config = await readConfig();
@@ -257,12 +324,29 @@ app.whenReady().then(async () => {
   background = new BackgroundClient(() => utilityProcess.fork(path.join(__dirname, 'background.cjs'), [], {
     serviceName: 'Mamba Background Tasks', stdio: 'ignore'
   }), {initialize:{directory:dataDirectory(), config:await readConfig(), resourcesPath:process.resourcesPath}});
-  background.on('catalog:changed', state => { catalogState = state; broadcast('catalog:changed', state); });
+  background.on('catalog:changed', state => { catalogState = state; broadcast('catalog:changed', state);if(state.phase==='error')reportIssue(new Error(state.message),'catalog:sync'); });
   background.on('library:changed', games => { installedGames = games; broadcast('library:changed', games); });
-  background.on('downloads:changed', jobs => { downloadJobs = jobs; broadcast('downloads:changed', jobs); });
+  const previousStatuses=new Map();
+  background.on('downloads:changed', jobs => {
+    for(const job of jobs){
+      const previous=previousStatuses.get(job.id);
+      if(previous && previous!==job.status && ['completed','needs-setup','failed'].includes(job.status)) {
+        if(job.status==='failed')reportIssue(new Error(job.message),'downloads');
+        broadcast('app:notice',{jobId:job.id,name:job.name,status:job.status});
+        if(background.options.initialize.config.notifications!==false && Notification.isSupported()) {
+          try { const notice=new Notification({title:job.status==='completed'?'Ready to play':job.status==='needs-setup'?'Installation needs review':'Download needs attention',body:job.name});
+          notice.on('error',()=>{});notice.on('click',()=>{const window=BrowserWindow.getAllWindows()[0];if(!window)return;window.show();if(window.isMinimized())window.restore();window.focus();broadcast('app:navigate',{id:job.gameId,folder:job.folder,page:job.status==='failed'?'activity':'game'});});notice.show(); } catch { /* In-app notices remain available if Windows blocks notifications. */ }
+        }
+      }
+      previousStatuses.set(job.id,job.status);
+    }
+    downloadJobs=jobs;broadcast('downloads:changed',jobs);
+  });
+  background.on('service:issue',issue=>reportIssue(new Error(issue.message),issue.context));
   background.on('interrupted', ({code}) => {
     downloadJobs = downloadJobs.map(job => ['queued','preparing','downloading','extracting','installing'].includes(job.status) ? {...job,status:'paused',speed:0,message:'Background service interrupted. Retry after it reconnects.'} : job);
     broadcast('downloads:changed', downloadJobs);
+    reportIssue(new Error('The background service stopped. Unfinished downloads are paused.'),'background');
     catalogState = {...catalogState,phase:'interrupted',message:'Background service restarting. Unfinished tasks are paused.'};
     broadcast('catalog:changed',catalogState);
     // Log the exit code only; never write API keys, request payloads or download URLs.
@@ -272,6 +356,8 @@ app.whenReady().then(async () => {
     catalogState = {...catalogState,phase:'error',message:'Background service could not recover. Restart Mamba.'};
     broadcast('catalog:changed',catalogState);
   });
+  configSecrets=[background.options.initialize.config.torboxApiKey,background.options.initialize.config.archivePassword];
+  try{const saved=JSON.parse(await fs.readFile(path.join(dataDirectory(),'issues.json'),'utf8'));if(Array.isArray(saved))issues.items=saved.slice(0,50);}catch{}
   createWindow();
   await registerHelperRuntime();
   background.start().catch(() => {});
@@ -279,7 +365,7 @@ app.whenReady().then(async () => {
   configWatcher = require('node:fs').watch(path.dirname(configFile()), (_type, filename) => {
     if (String(filename) !== 'config.json') return;
     clearTimeout(watchTimer);
-    watchTimer = setTimeout(() => refreshBackgroundConfig().then(() => task('catalog:sync')).catch(() => {}), 1000);
+    watchTimer = setTimeout(() => refreshBackgroundConfig().catch(() => {}), 1000);
   });
   configWatcher.on('error', () => {});
   updates.start();
@@ -293,6 +379,6 @@ app.on('before-quit', event => {
   if (closing) return;
   closing = true; event.preventDefault();
   updates?.stop(); clearTimeout(watchTimer); configWatcher?.close();
-  Promise.resolve(background?.close()).finally(() => app.quit());
+  Promise.resolve(background?.close()).catch(()=>{}).finally(() => app.quit());
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

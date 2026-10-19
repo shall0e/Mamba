@@ -288,3 +288,77 @@ button { transition: background 140ms ease, color 140ms ease, transform 140ms ea
 .game-editions summary { list-style: none; padding: 4px; border-radius: 6px; }
 .game-editions summary::-webkit-details-marker { display: none; }
 .game-editions summary:hover, .game-editions summary:focus-visible { background: var(--color-hover); }
+
+/* Shared surfaces for game details, activity and recovery. */
+select { font: inherit; color-scheme: dark; border: 0; outline: 0; cursor: pointer; }
+select:focus-visible, summary:focus-visible { outline: 0; background: var(--color-focus); color: var(--color-text); }
+button svg { flex-shrink: 0; }
+.nav-count { position: absolute; top: 4px; right: 3px; min-width: 16px; padding: 2px 4px; border-radius: 6px; font: 10px/1.2 inherit; font-style: normal; background: var(--color-button); color: var(--color-buttonText); }
+.game-card { position: relative; min-width: 0; }
+.library-cover { width: 100%; padding: 0; }
+.favorite-button { position: absolute; top: 17px; right: 17px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--color-surface); color: var(--color-textSecondary); }
+.favorite-button svg { width: 17px; height: 17px; }
+.favorite-button:hover { background: var(--color-selection); color: var(--color-text); }
+.is-favorite svg { fill: var(--color-text); color: var(--color-text); }
+.game-card .game-actions { margin: 12px 4px 4px; }
+.game-card .game-secondary { font-size: 10px; line-height: 1.5; }
+.library-view-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.library-sort { width: auto; min-width: 150px; height: 40px; }
+.library-view-controls [aria-pressed='true'] { background: var(--color-selection); color: var(--color-text); }
+.library-toolbar, .library-heading-actions, .detail-primary { flex-wrap: wrap; }
+#game-page, #activity-page { max-width: 1400px; width: 100%; }
+#game-content > .text-button { margin-bottom: 24px; }
+.detail-hero { display: grid; grid-template-columns: minmax(230px,360px) minmax(0,1fr); gap: 32px; align-items: center; margin-top: 4px; }
+.detail-art { width: 100%; aspect-ratio: 460/215; }
+.detail-intro h1 { font-size: clamp(24px,3vw,36px); line-height: 1.2; margin: 8px 0 12px; overflow-wrap: anywhere; }
+.detail-intro .page-description { line-height: 1.7; }
+.detail-primary { display: flex; gap: 8px; margin-top: 22px; }
+.detail-primary button, .activity-controls button, .game-actions button, #export-diagnostics, #import-game, #open-troubleshooting { display: inline-flex; gap: 8px; align-items: center; justify-content: center; }
+.detail-primary svg, .activity-controls svg, #export-diagnostics svg, #import-game svg, #open-troubleshooting svg { width: 16px; height: 16px; }
+.game-description { max-width: 880px; color: var(--color-textSecondary); font-size: 14px; line-height: 1.85; margin: 28px 0; }
+.detail-section { margin-top: 32px; }
+.detail-section > h2 { font-size: 18px; margin: 0 0 8px; }
+.installation-card, .issue-card { padding: 22px; border-radius: 16px; background: var(--color-surface); margin: 14px 0; }
+.installation-card h3 { font-size: 14px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
+.installation-status { color: var(--color-textSecondary); font-size: 12px; }
+.installation-fields { display: grid; grid-template-columns: 125px minmax(0,1fr); gap: 10px 18px; margin: 20px 0; font-size: 12px; line-height: 1.6; }
+.installation-fields dt { color: var(--color-textMuted); }
+.installation-fields dd { margin: 0; overflow-wrap: anywhere; color: var(--color-textSecondary); }
+.danger-action { color: var(--color-danger); }
+.content-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--color-surface); border-radius: 10px; padding: 10px 16px; margin-top: 8px; font-size: 13px; }
+.storage-note { background: var(--color-inputInset); padding: 14px 18px; border-radius: 10px; color: var(--color-textSecondary); font-size: 12px; line-height: 1.7; }
+.health-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.health-card { padding: 18px; border-radius: 14px; background: var(--color-surface); min-width: 0; }
+.health-card h2 { font-size: 20px; margin: 8px 0; text-transform: capitalize; overflow-wrap: anywhere; }
+.health-card p { margin: 0; }
+.activity-controls { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; }
+#activity-transfers .transfers { max-width: none; }
+.quiet-state { padding: 32px 22px; margin-top: 18px; background: var(--color-surface); border-radius: 16px; }
+.quiet-state h2 { font-size: 17px; margin: 0 0 10px; }
+.quiet-state p { color: var(--color-textMuted); font-size: 13px; line-height: 1.7; margin: 0; }
+.issues-section { margin-top: 28px; }
+.issue-card h3 { display: flex; gap: 9px; align-items: center; margin: 0; font-size: 14px; }
+.issue-card h3 svg { width: 18px; height: 18px; color: var(--color-danger); }
+.issue-advice { color: var(--color-textSecondary); font-size: 13px; line-height: 1.7; }
+.issue-details { padding: 12px; border-radius: 10px; background: var(--color-inputInset); margin: 14px 0; font-size: 12px; line-height: 1.7; color: var(--color-textMuted); overflow-wrap: anywhere; }
+.issue-details summary { list-style: none; cursor: pointer; }
+.issue-details summary::-webkit-details-marker { display: none; }
+.transfer-stages { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); list-style: none; padding: 0; gap: 6px; margin: 16px 0; }
+.transfer-stages li { color: var(--color-textMuted); background: var(--color-inputInset); border-radius: 7px; padding: 8px 4px; font-size: 10px; text-align: center; }
+.transfer-stages .stage-current { color: var(--color-text); background: var(--color-selection); }
+.transfer-stages .stage-done { color: var(--color-textSecondary); background: var(--color-hover); }
+.transfer-row .transfer-message { margin-bottom: 12px; }
+.transfer-row[data-status='failed'] .transfer-message { color: var(--color-danger); }
+.preference-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 16px 0 10px; }
+.preference-grid select { display: block; margin-top: 10px; }
+@media(max-width:850px) { .detail-hero { grid-template-columns: 1fr; gap: 20px; } .detail-art { max-width: 460px; } .health-grid { grid-template-columns: 1fr; } .library-toolbar { align-items: flex-start; flex-direction: column; } }
+@media(max-width:520px) { .installation-fields { grid-template-columns: 1fr; gap: 3px; } .installation-fields dd { margin-bottom: 10px; } .preference-grid { grid-template-columns: 1fr; } .transfer-stages { gap: 3px; } .transfer-stages li { font-size: 9px; padding-inline: 1px; } .installation-card,.issue-card { padding: 16px; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition: none !important; animation: none !important; } }
+
+.transfer-row { display: block; margin: 12px 0; background: var(--color-inputInset); }
+.transfer-row .transfer-actions { margin-top: 14px; }
+.transfer-stages li { background: var(--color-surface); }
+.transfer-stages .stage-current { background: var(--color-selection); }
+.transfer-stages .stage-done { background: var(--color-hover); }
+
+button[aria-busy="true"] { cursor: progress; }
