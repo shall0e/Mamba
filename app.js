@@ -11,6 +11,29 @@ let catalogState = {};
 let detailGeneration = 0;
 const cardJobs = new Map();
 
+async function loadSteamBackdrop() {
+  const backdrop = document.querySelector('#steam-backdrop');
+  if (!window.mamba?.featuredGames || !backdrop) return;
+  try {
+    const games = await window.mamba.featuredGames();
+    if (!Array.isArray(games) || !games.length) return;
+    const fragment = document.createDocumentFragment();
+    for (let index = 0; index < 12; index++) {
+      const game = games[index % games.length];
+      const image = document.createElement('img');
+      image.src = game.image;
+      image.alt = '';
+      image.loading = 'eager';
+      image.decoding = 'async';
+      image.setAttribute('aria-hidden', 'true');
+      fragment.append(image);
+    }
+    backdrop.replaceChildren(fragment);
+  } catch { /* The search page remains usable when Steam artwork is offline. */ }
+}
+loadSteamBackdrop();
+setInterval(loadSteamBackdrop, 30 * 60 * 1000);
+
 function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button'); control.type = 'button'; control.className = className;
@@ -160,6 +183,7 @@ document.querySelector('#clear-finished').addEventListener('click', async () => 
 function showPage(name) {
   const pages = { search: '#search-page', library: '#library-page', settings: '#settings-backdrop',game:'#game-page',activity:'#activity-page' };
   if(!pages[name])return;
+  document.body.classList.toggle('home-active', name === 'search');
   for (const [page, selector] of Object.entries(pages)) {
     document.querySelector(selector).hidden = page !== name;
   }
@@ -268,6 +292,7 @@ let keyConfigured = false;
 let toastTimer;
 let configLoaded = false;
 let settingsBusy = false;
+let settingsSaveTimer;
 let installedGames = [];
 let settingsInitialized = false;
 
@@ -277,6 +302,15 @@ function sourceLines() {
 
 function hasSettingsChanges() {
   return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(Object.entries(readDownloadPreferences()).sort(([a],[b])=>a.localeCompare(b))) !== JSON.stringify(Object.entries(downloadPreferences).sort(([a],[b])=>a.localeCompare(b)));
+}
+
+function scheduleSettingsSave(delay = 500) {
+  clearTimeout(settingsSaveTimer);
+  updateSettingsState();
+  if (!configLoaded) return;
+  settingsSaveTimer = setTimeout(() => {
+    if (hasSettingsChanges()) document.querySelector('#settings-form').requestSubmit();
+  }, delay);
 }
 
 function updateSearchState() {
@@ -299,18 +333,12 @@ function updateSettingsState() {
   keyInput.placeholder = keyConfigured ? 'Saved · enter a new key to replace' : 'Paste your API key';
   const count = new Set(sourceLines()).size;
   document.querySelector('#source-count').textContent = `${count} ${count === 1 ? 'source' : 'sources'}`;
-  for (const control of [keyInput, sourceUrlsInput, visibility, document.querySelector('#settings-save')]) {
+  for (const control of [keyInput, sourceUrlsInput, visibility]) {
     control.disabled = !configLoaded || settingsBusy;
   }
   for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config')) control.disabled = !configLoaded || settingsBusy;
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
   document.querySelector('#remove-key').hidden = configLoaded && !keyConfigured;
-  document.querySelector('#settings-save').disabled = !configLoaded || settingsBusy || !hasSettingsChanges();
-  document.querySelector('#settings-cancel').disabled = !configLoaded || settingsBusy || !hasSettingsChanges();
-  document.querySelector('#settings-save').textContent = settingsBusy ? 'Saving…' : 'Save changes';
-  document.querySelector('#settings-state').textContent = !configLoaded ? 'Loading settings…' : settingsBusy ? 'Saving changes…' : hasSettingsChanges() ? 'Unsaved changes' : 'All changes saved';
-  document.querySelector('#settings-state').classList.toggle('dirty', configLoaded && hasSettingsChanges());
-  document.querySelector('#settings-state').hidden = Boolean(saveStatus.textContent);
 }
 updateSettingsState();
 const configReady = window.torboxSettings
@@ -320,7 +348,6 @@ const configReady = window.torboxSettings
   : Promise.reject(new Error('Open Mamba in the desktop app to access config.json.'));
 configReady.catch((error) => {
   document.querySelector('#key-status').textContent = 'Unavailable';
-  document.querySelector('#settings-state').textContent = 'Settings could not be loaded';
   saveStatus.classList.add('error');
   saveStatus.textContent = error.message || 'Could not read config.json.';
   showToast(error.message || 'Could not read config.json.');
@@ -344,17 +371,6 @@ function openSettings() {
   keyInput.type = 'password';
   updateSettingsState();
   showPage('settings');
-}
-
-function closeSettings() {
-  keyInput.value = '';
-  keyInput.type = 'password';
-  sourceUrlsInput.value = urls.join('\n');
-  populateDownloadPreferences();
-  sourceUrlsInput.setAttribute('aria-invalid', 'false');
-  document.querySelector('#source-error').hidden = true;
-  saveStatus.textContent = '';
-  updateSettingsState();
 }
 
 function showToast(message) {
@@ -385,10 +401,6 @@ document.addEventListener('keydown', (event) => {
     showPage('search');
     document.querySelector('#main-search').select();
   }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && !backdrop.hidden) {
-    event.preventDefault();
-    if (!document.querySelector('#settings-save').disabled) document.querySelector('#settings-form').requestSubmit();
-  }
   if (event.key === 'Escape' && document.activeElement === document.querySelector('#main-search')) {
     document.querySelector('#main-search').value = '';
     updateSearchState();
@@ -396,14 +408,13 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-document.querySelector('#settings-cancel').addEventListener('click', closeSettings);
 sourceUrlsInput.addEventListener('input', () => {
   sourceUrlsInput.setAttribute('aria-invalid', 'false');
   document.querySelector('#source-error').hidden = true;
   saveStatus.textContent = '';
-  updateSettingsState();
+  scheduleSettingsSave(900);
 });
-keyInput.addEventListener('input', () => { saveStatus.textContent = ''; updateSettingsState(); });
+keyInput.addEventListener('input', () => { saveStatus.textContent = ''; scheduleSettingsSave(700); });
 document.querySelector('#key-visibility').addEventListener('click', () => {
   const showing = keyInput.type === 'text';
   keyInput.type = showing ? 'password' : 'text';
@@ -446,12 +457,13 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
     sourceUrlsInput.value = urls.join('\n');
     keyInput.value = '';
     keyInput.type = 'password';
-    saveStatus.textContent = 'Changes saved.';
+    saveStatus.textContent = 'Settings saved.';
     updateSearchState();
     keyInput.placeholder = keyConfigured ? 'Saved · enter a new key to replace' : 'Paste your API key';
   } catch (error) {
     saveStatus.textContent = error.message || 'Could not save settings.';
     saveStatus.classList.add('error');
+    showToast(saveStatus.textContent);
   } finally {
     settingsBusy = false;
     updateSettingsState();
@@ -469,7 +481,7 @@ function applyLoadedConfig(config) {
     const label=document.createElement('label');label.className='palette-field';
     const input=document.createElement('input');input.type='color';input.value=color;input.dataset.palette=name;input.setAttribute('aria-label',name.replace(/([A-Z])/g,' $1'));
     const text=document.createElement('span');text.textContent=name.replace(/([A-Z])/g,' $1');label.append(input,text);fields.append(label);
-    input.addEventListener('input',()=>{saveStatus.textContent='';applyPalette(readDownloadPreferences().palette);updateSettingsState();});
+    input.addEventListener('input',()=>{saveStatus.textContent='';applyPalette(readDownloadPreferences().palette);scheduleSettingsSave(650);});
   }
   applyPalette(downloadPreferences.palette);populateDownloadPreferences();renderLibrary(config.installedGames||installedGames);
   window.MambaExperience?.configure(config);
@@ -492,10 +504,14 @@ function populateDownloadPreferences() {
   for(const input of document.querySelectorAll('[data-palette]'))input.value=downloadPreferences.palette[input.dataset.palette];
   applyPalette(downloadPreferences.palette);
 }
-for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications')) control.addEventListener('input',()=>{saveStatus.textContent='';updateSettingsState();});
+for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications')) {
+  const save = () => { saveStatus.textContent=''; scheduleSettingsSave(control.matches('input[type="text"], input[type="password"], input[type="number"]') ? 800 : 350); };
+  control.addEventListener('input', save);
+  control.addEventListener('change', save);
+}
 
 document.querySelector('#browse-folder').addEventListener('click', async () => {
-  try { const folder = await window.mamba.chooseFolder(); if (folder) { document.querySelector('#download-path').value = folder; updateSettingsState(); } }
+  try { const folder = await window.mamba.chooseFolder(); if (folder) { document.querySelector('#download-path').value = folder; scheduleSettingsSave(150); } }
   catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); }
 });
 if (window.mamba) {

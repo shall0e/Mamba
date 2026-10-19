@@ -3,15 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data: https://*.steamstatic.com;">
   <title>Mamba · TorBox</title>
   <link rel="icon" type="image/png" href="assets/mamba.png">
   <link rel="stylesheet" href="style.css">
   <script src="app.js" defer></script>
   <script src="experience.js" defer></script>
 </head>
-<body>
+<body class="home-active">
   <div class="window-drag-area" aria-hidden="true"></div>
+  <div class="steam-backdrop" id="steam-backdrop" aria-hidden="true"></div>
+  <div class="ambient-edge-glow" aria-hidden="true"></div>
   <div class="window-controls" role="group" aria-label="Window controls">
     <button class="window-button" id="window-minimize" type="button" aria-label="Minimize" title="Minimize"><svg aria-hidden="true" class="lucide lucide-minus"
   xmlns="http://www.w3.org/2000/svg"
@@ -361,8 +363,7 @@ Check for updates</button><button id="install-update" type="button" class="prima
 <div class="preference-grid"><label class="field-label" for="preferred-language">Preferred language<select class="settings-input" id="preferred-language"><option value="english">English / multilingual</option><option value="any">No preference</option><option value="russian">Russian / multilingual</option><option value="spanish">Spanish / multilingual</option><option value="french">French / multilingual</option><option value="german">German / multilingual</option></select></label><label class="field-label" for="preferred-release">Preferred release<select class="settings-input" id="preferred-release"><option value="any">Best available</option><option value="repack">Repack</option><option value="portable">Portable / Steam rip</option><option value="original">Original release</option></select></label></div>
 <p class="field-hint">Preferences guide recommendations. Labels supplied by sources may be incomplete; every version stays available in game details.</p>
 <label class="switch-row"><span><strong>Desktop notifications</strong><small>Let me know when a game is ready or needs attention.</small></span><input id="notifications" type="checkbox" role="switch"></label><button class="text-button" id="open-troubleshooting" type="button">Open Activity and troubleshooting</button></section>
-<div class="settings-footer"><div class="settings-feedback"><p id="settings-state" class="settings-state" aria-live="polite">All changes saved</p><p class="save-status" id="save-status" role="status" aria-live="polite"></p></div><div class="dialog-actions"><button class="text-button" id="settings-cancel" type="button">Discard</button><button class="primary-button" id="settings-save" type="submit" title="Save changes (Ctrl+S)">Save changes</button></div>
-        </div>
+<p class="sr-only" id="save-status" role="status" aria-live="polite"></p>
       </form>
     </div>
   </section>

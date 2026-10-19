@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('mamba', {
   search: (query, offset) => ipcRenderer.invoke('catalog:search', query, offset),
   resolveGame: (id) => ipcRenderer.invoke('catalog:resolve', id),
   artwork: (id) => ipcRenderer.invoke('catalog:artwork', id),
+  featuredGames: () => ipcRenderer.invoke('home:featured'),
   downloadBest: (id) => ipcRenderer.invoke('downloads:best', id),
   jobs: () => ipcRenderer.invoke('downloads:list'),
   download: (id, option, game) => ipcRenderer.invoke('downloads:start', id, option, game),

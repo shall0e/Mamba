@@ -193,6 +193,7 @@ ipcMain.handle('catalog:sync', () => task('catalog:sync', true));
 ipcMain.handle('catalog:search', (_event, query, offset) => task('catalog:search', String(query || '').slice(0, 300), offset));
 ipcMain.handle('catalog:resolve', (_event, id) => task('catalog:resolve', String(id)));
 ipcMain.handle('catalog:artwork', (_event, id) => task('catalog:artwork', String(id)));
+ipcMain.handle('home:featured', () => task('home:featured'));
 ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
 ipcMain.handle('downloads:list', () => downloadJobs);
 ipcMain.handle('downloads:start', (_event, id, option, game) => task('downloads:start', id, option, game));
