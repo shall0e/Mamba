@@ -115,10 +115,11 @@ Restart is blocked while downloads or installation are active. Development runs
 show their version but do not self-update. Use the Windows installer to enable
 updating; loose unpacked builds are intended for development/testing.
 
-To publish: update package.json/package-lock.json with `npm version patch`, then
-push the commit and version tag (`git push --follow-tags`). The release workflow
-builds Mamba-Setup-VERSION.exe, its blockmap, and latest.yml, and publishes them
-in the matching GitHub Release. The tag must match the package version.
+Releases are manual only. Do not create/push release tags, dispatch the release
+workflow, or publish a GitHub release without an explicit user request. Version
+bumps, source pushes and local builds do not publish a release. Once publishing
+is authorized, run the Publish Windows release workflow manually to build the
+installer, blockmap and latest.yml from the approved source.
 
 Load config accepts a raw config.json or Mamba's versioned export. Export config
 writes every saved setting, including keys/passwords and unknown future settings.

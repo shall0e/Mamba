@@ -7,3 +7,5 @@
 - Keep the sidebar permanently collapsed with icons only, accessible button names, and hover labels at every window width.
 - Keep the sidebar slim: 64px wide with 48px navigation buttons and 24px Lucide icons.
 - Source all UI colors from the palette in config.json through CSS custom properties. Use palette-defaults.json for defaults. The selected sidebar item should use a lighter gray than the primary background.
+
+- Do not publish releases, create/push release tags, or dispatch release workflows unless the user explicitly requests publishing. Version bumps and local builds do not authorize publishing.
