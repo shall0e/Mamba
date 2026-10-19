@@ -136,6 +136,8 @@ ipcMain.handle('downloads:list', () => downloads.snapshot());
 ipcMain.handle('downloads:start', (_event, id, option) => downloads.start(id, option));
 ipcMain.handle('downloads:cancel', (_event, id) => downloads.cancel(id));
 ipcMain.handle('downloads:retry', (_event, id) => downloads.retry(id));
+ipcMain.handle('downloads:remove', (_event, id) => downloads.remove(String(id)));
+ipcMain.handle('downloads:clear-finished', () => downloads.clearFinished());
 ipcMain.handle('library:scan', async () => { const games = await library.scan(); broadcast('library:changed', games); return games; });
 ipcMain.handle('library:action', async (_event, id, action) => {
   const game = library.get(id);

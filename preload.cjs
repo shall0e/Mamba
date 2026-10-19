@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('mamba', {
   download: (id, option) => ipcRenderer.invoke('downloads:start', id, option),
   cancel: (id) => ipcRenderer.invoke('downloads:cancel', id),
   retry: (id) => ipcRenderer.invoke('downloads:retry', id),
+  removeDownload: (id) => ipcRenderer.invoke('downloads:remove', id),
+  clearFinished: () => ipcRenderer.invoke('downloads:clear-finished'),
   library: () => ipcRenderer.invoke('library:scan'),
   gameAction: (id, action) => ipcRenderer.invoke('library:action', id, action),
   chooseFolder: () => ipcRenderer.invoke('folder:choose'),

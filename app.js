@@ -132,6 +132,12 @@ async function openGame(game) {
   }
 }
 function renderJobs(jobs) {
+  const jobIds = new Set(jobs.map((job) => job.id));
+  for (const [gameId, jobId] of cardJobs) if (!jobIds.has(jobId)) cardJobs.delete(gameId);
+  for (const control of document.querySelectorAll('button[data-job-id]')) {
+    if (jobIds.has(control.dataset.jobId)) continue;
+    delete control.dataset.jobId; control.dataset.locked = 'false'; control.disabled = false; control.lastChild.textContent = 'Download';
+  }
   for (const job of jobs) {
     const controls = [...document.querySelectorAll('button[data-job-id]')].filter((control) => control.dataset.jobId === job.id);
     const failed = ['failed', 'cancelled'].includes(job.status);
@@ -144,6 +150,8 @@ function renderJobs(jobs) {
   document.querySelector('#transfers').hidden = !jobs.length;
   document.querySelector('#transfer-count').textContent = `${jobs.filter((job) => !['completed', 'cancelled', 'needs-setup', 'failed', 'paused'].includes(job.status)).length} active`;
   const list = document.querySelector('#transfer-list');
+  for (const row of list.children) if (!jobIds.has(row.id.slice('transfer-'.length))) row.remove();
+  document.querySelector('#clear-finished').disabled = !jobs.some((job) => ['completed', 'needs-setup', 'cancelled', 'failed', 'paused'].includes(job.status));
   for (const job of jobs) {
     let row = document.getElementById(`transfer-${job.id}`);
     if (!row) {
@@ -154,16 +162,20 @@ function renderJobs(jobs) {
       const actions = document.createElement('div'); actions.className = 'transfer-actions';
       row.append(name, message, bar, actions); list.append(row);
     }
-    row.querySelector('.transfer-message').textContent = job.message + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)}` : '');
+    row.querySelector('.transfer-message').textContent = job.message + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s` : '');
     row.querySelector('progress').value = job.progress || 0;
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
       actions.replaceChildren(); row.dataset.status = job.status;
       if (['failed', 'cancelled', 'paused'].includes(job.status)) actions.append(button('Retry', () => window.mamba.retry(job.id), 'rotate-ccw'));
       else if (!['completed', 'needs-setup'].includes(job.status)) actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
+      actions.append(button('Remove', () => window.mamba.removeDownload(job.id), 'x'));
     }
   }
 }
+document.querySelector('#clear-finished').addEventListener('click', async () => {
+  try { await window.mamba.clearFinished(); } catch (error) { showToast(error.message); }
+});
 
 function showPage(name) {
   const pages = { search: '#search-page', library: '#library-page', settings: '#settings-backdrop' };
