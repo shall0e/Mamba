@@ -4,6 +4,17 @@ const { createSearchIndex, rankedSearch } = require('../lib/search.cjs');
 const { Catalog } = require('../lib/catalog.cjs');
 const game = (id, name, hash, sources = ['Source']) => ({ id, name, fileSize: '6 GB', sources, links: [{ uri: `magnet:?xt=urn:btih:${hash.repeat(40)}`, kind: 'torrents', cached: true }] });
 
+test('store, platform, early access and magnet labels share a single game card', () => {
+  const names = ['Project Zomboid','Project Zomboid PC','Project Zomboid (Early Access)','Project Zomboid License GOG','Project Zomboid Magnet Link','Project Zomboid РС'];
+  const index = createSearchIndex(names.map((name, i) => game('release'+i, name, String(i), ['Source'+i])));
+  const results = rankedSearch(index, 'project zomboid');
+  assert.equal(results.total, 1); assert.equal(results.items[0].name, 'Project Zomboid');
+  assert.equal(results.items[0].options.length, 6); assert.equal(results.items[0].sources.length, 6);
+  assert.deepEqual(results.items[0].options.map(option => option.release), names);
+  const separate = createSearchIndex(['Project Zomboid','Project Zomboid 2','Project Zomboid Remastered','PC Building Simulator'].map((name,i)=>game('g'+i,name,String(i))));
+  assert.equal(separate.length, 4); assert.equal(separate[3].name, 'PC Building Simulator');
+});
+
 test('numeric queries match title words and ignore metadata versions, years, and language counts', () => {
   const index = createSearchIndex([
     game('exact', 'Call of Duty: Modern Warfare 4 [P] (2026, FPS) (25909941, Campaign Only)', 'a'),

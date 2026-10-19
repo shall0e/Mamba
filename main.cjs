@@ -1,36 +1,25 @@
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('./palette-defaults.json');
-const { Catalog } = require('./lib/catalog.cjs');
-const { Library, within, finalizeInstallation, atomicJson } = require('./lib/library.cjs');
-const { registerSteam } = require('./lib/shortcuts.cjs');
-const { registerXbox } = require('./lib/xbox.cjs');
+const { within } = require('./lib/library.cjs');
 const { registerHelperRuntime, openGameHelper } = require('./lib/game-helper.cjs');
-const { addGame } = require('./tools/add-game.cjs');
 const { validateSettings, decodeConfig, encodeConfig } = require('./lib/config-transfer.cjs');
 const { Updates } = require('./lib/updates.cjs');
-let updates;
-const { Downloads } = require('./lib/downloads.cjs');
-const { Artwork } = require('./lib/artwork.cjs');
-const { Metadata } = require('./lib/metadata.cjs');
-const { GameIdentity } = require('./lib/game-identity.cjs');
+const { BackgroundClient } = require('./lib/background-client.cjs');
 const { spawn } = require('node:child_process');
-let catalog, library, downloads, artwork, metadata, gameIdentity, configWatcher, watchTimer, steamTimer, resolvedDataDirectory;
-async function addXboxGame(game) {
-  const group = catalog.searchIndex?.find(entry => entry.name === game.name);
-  const image = group ? await artwork.get(group.id).catch(() => null) : null;
-  return registerXbox({ ...game, image });
+let updates, background, configWatcher, watchTimer, resolvedDataDirectory;
+let installedGames = [], downloadJobs = [];
+let catalogState = { phase: 'loading', message: 'Starting background service…', count: 0, errors: [] };
+function task(method, ...args) {
+  if (!background) return Promise.reject(new Error('Mamba is starting. Try again shortly.'));
+  return background.request(method, ...args);
 }
-async function syncXboxLibrary() {
-  for (const game of library.items) {
-    if (!game.executable || game.status !== 'installed') continue;
-    const file = path.join(game.folder, '.mamba-game.json');
-    const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
-    if (!manifest.name || manifest.xbox?.status === 'added') continue;
-    const xbox = await addXboxGame(game).catch(error => ({ status: 'pending', message: error.message }));
-    await atomicJson(file, { ...manifest, xbox });
-  }
+async function refreshBackgroundConfig() {
+  if (!background) return;
+  const config = await readConfig();
+  background.options.initialize.config = config;
+  await task('configure', config);
 }
 function dataDirectory() {
   if (resolvedDataDirectory) return resolvedDataDirectory;
@@ -101,7 +90,8 @@ function updateConfig(update) {
     const config = await readConfig();
     await update(config);
     await writeConfig(config);
-    return { ...publicConfig(config), installedGames: library?.items || [] };
+    await refreshBackgroundConfig();
+    return { ...publicConfig(config), installedGames: installedGames };
   });
   configQueue = pending.catch(() => {});
   return pending;
@@ -146,7 +136,7 @@ ipcMain.handle('config:save', async (_event, settings) => {
   if (typeof settings.archivePassword === 'string') config.archivePassword = settings.archivePassword;
   Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
   });
-  library?.scan().then((games) => broadcast('library:changed', games)).catch(() => {});
+  task('library:scan').catch(() => {});
   return saved;
 });
 ipcMain.handle('torbox:clear-key', () => updateConfig((config) => { config.torboxApiKey = ''; }));
@@ -165,7 +155,7 @@ ipcMain.handle('config:import', async event => {
     await fs.writeFile(configFile()+'.backup-'+Date.now(),JSON.stringify(config,null,2)+'\n',{mode:0o600});
     Object.assign(config, imported, {legacyUrlsMigrated:true});
   });
-  library.scan().then(games=>broadcast('library:changed',games)).catch(()=>{});
+  task('library:scan').catch(()=>{});
   return result;
 });
 ipcMain.handle('app:updates', () => ({...updates.state}));
@@ -173,23 +163,26 @@ ipcMain.handle('app:check-updates', () => updates.check(true));
 ipcMain.handle('app:install-update', () => updates.install());
 
 function broadcast(channel, data) {
-  for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(channel, data);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) continue;
+    try { window.webContents.send(channel, data); } catch { /* A window may close during delivery. */ }
+  }
 }
-ipcMain.handle('catalog:status', () => catalog?.state);
-ipcMain.handle('catalog:sync', () => { catalog.sync(true).catch(() => {}); return catalog.state; });
-ipcMain.handle('catalog:search', (_event, query, offset) => metadata.search(String(query || '').slice(0, 300), offset));
-ipcMain.handle('catalog:resolve', (_event, id) => catalog.resolveGame(String(id)));
-ipcMain.handle('catalog:artwork', (_event, id) => artwork.get(String(id)));
-ipcMain.handle('downloads:best', (_event, id) => downloads.startBest(String(id)));
-ipcMain.handle('downloads:list', () => downloads.snapshot());
-ipcMain.handle('downloads:start', (_event, id, option) => downloads.start(id, option));
-ipcMain.handle('downloads:cancel', (_event, id) => downloads.cancel(id));
-ipcMain.handle('downloads:retry', (_event, id) => downloads.retry(id));
-ipcMain.handle('downloads:remove', (_event, id) => downloads.remove(String(id)));
-ipcMain.handle('downloads:clear-finished', () => downloads.clearFinished());
-ipcMain.handle('library:scan', async () => { const games = await library.scan(); await syncXboxLibrary().catch(() => {}); broadcast('library:changed', games); return games; });
+ipcMain.handle('catalog:status', () => catalogState);
+ipcMain.handle('catalog:sync', () => task('catalog:sync', true));
+ipcMain.handle('catalog:search', (_event, query, offset) => task('catalog:search', String(query || '').slice(0, 300), offset));
+ipcMain.handle('catalog:resolve', (_event, id) => task('catalog:resolve', String(id)));
+ipcMain.handle('catalog:artwork', (_event, id) => task('catalog:artwork', String(id)));
+ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
+ipcMain.handle('downloads:list', () => downloadJobs);
+ipcMain.handle('downloads:start', (_event, id, option) => task('downloads:start', id, option));
+ipcMain.handle('downloads:cancel', (_event, id) => task('downloads:cancel', id));
+ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
+ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
+ipcMain.handle('downloads:clear-finished', () => task('downloads:clear-finished'));
+ipcMain.handle('library:scan', () => task('library:scan'));
 ipcMain.handle('library:action', async (_event, id, action) => {
-  const game = library.get(id);
+  const game = await task('library:get', id);
   if (!game) throw new Error('Game not found. Refresh your library.');
   const config = await readConfig();
   within(config.downloadPath, game.folder);
@@ -243,75 +236,63 @@ function createWindow() {
   const notifyWindowState = () => window.webContents.send('window:maximized', window.isMaximized());
   window.on('maximize', notifyWindowState);
   window.on('unmaximize', notifyWindowState);
+  let rendererRestarts = [];
+  window.webContents.on('render-process-gone', (_event, details) => {
+    if (closing || details.reason === 'clean-exit' || window.isDestroyed()) return;
+    const now = Date.now(); rendererRestarts = rendererRestarts.filter(at => now - at < 60000);
+    fs.appendFile(path.join(dataDirectory(),'background-crashes.log'),new Date().toISOString()+' window exit '+details.reason+'\n').catch(()=>{});
+    if (rendererRestarts.length >= 2) {
+      dialog.showErrorBox('Mamba window stopped', 'The window could not recover. Restart Mamba. Background downloads are still handled separately.');
+      return;
+    }
+    rendererRestarts.push(now);
+    window.loadFile(path.join(__dirname, 'index.html')).catch(() => {});
+  });
   window.loadFile(path.join(__dirname, 'index.html'));
 }
 
 app.whenReady().then(async () => {
-  updates = new Updates(require('electron-updater').autoUpdater, { version:app.getVersion(), packaged:app.isPackaged, getConfig:readConfig, canInstall:()=>!downloads?.jobs.some(job=>['queued','preparing','downloading','extracting','installing'].includes(job.status)) });
+  updates = new Updates(require('electron-updater').autoUpdater, { version:app.getVersion(), packaged:app.isPackaged, getConfig:readConfig, canInstall:()=>!downloadJobs.some(job=>['queued','preparing','downloading','extracting','installing'].includes(job.status)) });
   updates.on('change',state=>broadcast('app:updated',state));
-  await registerHelperRuntime();
-  catalog = new Catalog(dataDirectory(), readConfig);
-  library = new Library(readConfig, { identify: (name,hints) => gameIdentity.identify(name,hints), repair: async ({ folder, manifest }) => {
-    if (downloads.jobs.some(job => job.folder === folder && downloads.controllers.has(job.id))) return null;
-    const name = await metadata.resolveName(manifest.name);
-    const result = await finalizeInstallation(folder, name, { releaseId: manifest.releaseId, status: 'installed' });
-    await addGame({ name, file: result.executable, folder: result.folder, xbox: addXboxGame });
-    result.manifest = JSON.parse(await fs.readFile(path.join(result.folder, '.mamba-game.json'), 'utf8'));
-    for (const job of downloads.jobs.filter(job => job.folder === folder)) await downloads.update(job, { folder: result.folder, name, status: 'completed', message: 'Ready to play' });
-    return result;
-  } });
-  downloads = new Downloads(dataDirectory(), readConfig, catalog, library, { resolveName: name => metadata.resolveName(name), registerGame: registerSteam, registerXbox: addXboxGame, setupGame: game => addGame({ ...game, resolveName: name => metadata.resolveName(name), xbox: addXboxGame }), reviewSetup: openGameHelper });
-  catalog.library = library;
-  artwork = new Artwork(dataDirectory(), catalog);
-  catalog.on('status', (state) => broadcast('catalog:changed', state));
-  let lastLibrary = '';
-  downloads.on('change', (jobs) => {
-    broadcast('downloads:changed', jobs);
-    const snapshot = JSON.stringify(library.items);
-    if (snapshot !== lastLibrary) { lastLibrary = snapshot; broadcast('library:changed', library.items); }
+  background = new BackgroundClient(() => utilityProcess.fork(path.join(__dirname, 'background.cjs'), [], {
+    serviceName: 'Mamba Background Tasks', stdio: 'ignore'
+  }), {initialize:{directory:dataDirectory(), config:await readConfig(), resourcesPath:process.resourcesPath}});
+  background.on('catalog:changed', state => { catalogState = state; broadcast('catalog:changed', state); });
+  background.on('library:changed', games => { installedGames = games; broadcast('library:changed', games); });
+  background.on('downloads:changed', jobs => { downloadJobs = jobs; broadcast('downloads:changed', jobs); });
+  background.on('interrupted', ({code}) => {
+    downloadJobs = downloadJobs.map(job => ['queued','preparing','downloading','extracting','installing'].includes(job.status) ? {...job,status:'paused',speed:0,message:'Background service interrupted. Retry after it reconnects.'} : job);
+    broadcast('downloads:changed', downloadJobs);
+    catalogState = {...catalogState,phase:'interrupted',message:'Background service restarting. Unfinished tasks are paused.'};
+    broadcast('catalog:changed',catalogState);
+    // Log the exit code only; never write API keys, request payloads or download URLs.
+    fs.appendFile(path.join(dataDirectory(),'background-crashes.log'),new Date().toISOString()+' background exit '+String(code)+'\n').catch(()=>{});
   });
-  await catalog.load();
-  metadata = new Metadata(dataDirectory(), catalog);
-  await metadata.load();
-  gameIdentity = new GameIdentity(dataDirectory());
-  await gameIdentity.load();
-  await downloads.load();
-  const initialLibraryScan = library.scan();
+  background.on('unavailable', () => {
+    catalogState = {...catalogState,phase:'error',message:'Background service could not recover. Restart Mamba.'};
+    broadcast('catalog:changed',catalogState);
+  });
+  createWindow();
+  await registerHelperRuntime();
+  background.start().catch(() => {});
   await fs.mkdir(path.dirname(configFile()), { recursive: true });
   configWatcher = require('node:fs').watch(path.dirname(configFile()), (_type, filename) => {
     if (String(filename) !== 'config.json') return;
     clearTimeout(watchTimer);
-    watchTimer = setTimeout(() => catalog.sync().catch(() => {}), 1000);
+    watchTimer = setTimeout(() => refreshBackgroundConfig().then(() => task('catalog:sync')).catch(() => {}), 1000);
   });
-  createWindow();
-  initialLibraryScan.then(async games => { broadcast('library:changed', games); await syncXboxLibrary().catch(() => {}); }).catch(() => {});
+  configWatcher.on('error', () => {});
   updates.start();
-  let steamBusy = false;
-  steamTimer = setInterval(async () => {
-    if (steamBusy) return;
-    steamBusy = true;
-    try {
-      if (library.items.some(game => game.repairPending)) {
-        await library.scan(); broadcast('library:changed', library.items);
-      }
-      await syncXboxLibrary();
-      for (const game of library.items) {
-        const file = path.join(game.folder, '.mamba-game.json');
-        const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
-        if (manifest.steam?.status !== 'pending' || !game.executable) continue;
-        const steam = await registerSteam(game).catch(error => ({ status: 'pending', message: error.message }));
-        await atomicJson(file, { ...manifest, steam });
-      }
-    } catch {} finally { steamBusy = false; }
-  }, 30000);
-  catalog.sync().catch(() => {});
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+}).catch(error => {
+  dialog.showErrorBox('Mamba could not start', 'Check your config.json and games folder. '+error.message);
+  app.quit();
 });
-app.on('before-quit', () => { updates?.stop(); clearInterval(steamTimer); clearTimeout(watchTimer); clearTimeout(catalog?.retryTimer); configWatcher?.close(); catalog?.controller?.abort(); downloads?.stop(); });
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+let closing = false;
+app.on('before-quit', event => {
+  if (closing) return;
+  closing = true; event.preventDefault();
+  updates?.stop(); clearTimeout(watchTimer); configWatcher?.close();
+  Promise.resolve(background?.close()).finally(() => app.quit());
 });
-
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
