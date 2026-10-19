@@ -13,6 +13,8 @@
   "build": {
     "files": [
       "**/*",
+      "!dist/**",
+      "!dist-preview/**",
       "!catalog.json*",
       "!artwork/**",
       "!game-metadata.json*",

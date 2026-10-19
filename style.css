@@ -37,12 +37,11 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-l
 #steam-backdrop img.visible { opacity: 1; animation: steam-slide-drift 13s ease-out both; }
 #steam-backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 42%, transparent), color-mix(in srgb, var(--color-primary) 30%, transparent)); }
 body:not(.home-active) #steam-backdrop { opacity: 0; }
-.ambient-edge-glow { position: fixed; inset: -55px; z-index: 1; pointer-events: none; filter: blur(48px); mix-blend-mode: screen; opacity: .88; transition: opacity 700ms ease; }
-.ambient-edge-glow span { position: absolute; width: clamp(330px, 43vw, 720px); height: clamp(300px, 45vh, 560px); offset-path: inset(0 round 100px); offset-anchor: center; offset-rotate: 0deg; background: radial-gradient(ellipse, color-mix(in srgb, var(--glow-color) 90%, transparent), transparent 68%); animation: ambient-edge-flow 28s linear infinite; }
-.ambient-edge-glow span:nth-child(1) { --glow-color: var(--color-ambientBlue); animation-delay: -3s; }
-.ambient-edge-glow span:nth-child(2) { --glow-color: var(--color-ambientViolet); animation-delay: -10s; }
-.ambient-edge-glow span:nth-child(3) { --glow-color: var(--color-ambientPink); animation-delay: -17s; }
-.ambient-edge-glow span:nth-child(4) { --glow-color: var(--color-ambientCyan); animation-delay: -24s; }
+@property --ambient-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.ambient-edge-glow { position: fixed; inset: 0; z-index: 1; pointer-events: none; filter: blur(16px); mix-blend-mode: screen; opacity: .84; transition: opacity 650ms cubic-bezier(.4, 0, .2, 1); }
+#ambient-art { position: absolute; inset: -12px; mask-image: linear-gradient(to bottom, #000, transparent 100px), linear-gradient(to top, #000, transparent 100px), linear-gradient(to right, #000, transparent 95px), linear-gradient(to left, #000, transparent 95px); }
+#ambient-art span { position: absolute; inset: 0; opacity: 0; transition: opacity 2600ms ease-in-out; background: conic-gradient(from var(--ambient-angle), var(--art-glow-0, var(--color-ambientBlue)), var(--art-glow-1, var(--color-ambientCyan)) 65deg, transparent 130deg, var(--art-glow-2, var(--color-ambientViolet)) 200deg, var(--art-glow-0, var(--color-ambientPink)) 265deg, transparent 315deg, var(--art-glow-0, var(--color-ambientBlue))); animation: ambient-edge-flow 18s linear infinite; }
+#ambient-art span.visible { opacity: 1; }
 body:not(.home-active) .ambient-edge-glow { opacity: 0; }
 .window-controls { position: fixed; top: 5px; right: 6px; z-index: 30; display: flex; gap: 3px; -webkit-app-region: no-drag; }
 .window-button { display: grid; place-items: center; width: 36px; height: 28px; padding: 0; border-radius: 7px; background: transparent; color: var(--color-textMuted); }
@@ -121,15 +120,9 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @keyframes page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes settings-enter { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes ambient-edge-flow { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@keyframes ambient-edge-flow { from { --ambient-angle: 0deg; } to { --ambient-angle: 360deg; } }
 @keyframes steam-slide-drift { from { transform: scale(1.04); } to { transform: scale(1.12); } }
-body:not(.home-active) .ambient-edge-glow span { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .ambient-edge-glow span:nth-child(1) { offset-distance: 10%; }
-  .ambient-edge-glow span:nth-child(2) { offset-distance: 35%; }
-  .ambient-edge-glow span:nth-child(3) { offset-distance: 60%; }
-  .ambient-edge-glow span:nth-child(4) { offset-distance: 85%; }
-}
+body:not(.home-active) #ambient-art span { animation-play-state: paused; }
 @media (max-width: 600px) { .content-page { padding: 30px 20px 28px; } .search-page { padding: 40px 20px; } .main-input { height: 62px; padding: 0 19px; font-size: 15px; border-radius: 19px; } .settings-card { padding: 18px; } .page-heading { align-items: flex-start; } h1 { font-size: 26px; } .settings-card-heading { align-items: flex-start; } .connection-badge { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
@@ -386,3 +379,52 @@ button[aria-busy="true"] { cursor: progress; }
 .search-wordmark span { font-size: 26px; letter-spacing: -.065em; }
 #updates-title { display: flex; align-items: center; gap: 10px; }
 .settings-brand-icon { object-fit: contain; border-radius: 8px; }
+
+/* A shared motion rhythm: quick feedback, soft arrivals, restrained spring. */
+button { color: var(--button-ink, var(--color-text)) !important; }
+button svg { color: inherit !important; }
+.is-favorite svg { fill: currentColor; }
+:root {
+  --ease-smooth: cubic-bezier(.4, 0, .2, 1);
+  --ease-spring: cubic-bezier(.22, 1.25, .36, 1);
+  --ease-settle: cubic-bezier(.16, 1, .3, 1);
+}
+button { transition: background 200ms var(--ease-smooth), color 200ms var(--ease-smooth), opacity 200ms var(--ease-smooth), transform 360ms var(--ease-spring), scale 360ms var(--ease-spring); }
+button:active:not(:disabled) { transform: none; scale: .96; transition-duration: 90ms; }
+button:disabled { scale: 1; }
+.nav-button:hover:not(:disabled) { transform: translateY(-2px); }
+.nav-button:active:not(:disabled) { transform: none; scale: .92; }
+.nav-button.active svg { animation: nav-settle 420ms var(--ease-settle); }
+.nav-button span { transition: opacity 160ms var(--ease-smooth), transform 320ms var(--ease-spring), visibility 160ms; }
+.sidebar { transition: background 650ms var(--ease-smooth); }
+.page { animation: page-enter 380ms var(--ease-settle); }
+.settings-page { animation: settings-enter 420ms var(--ease-settle); }
+@keyframes page-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes settings-enter { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+@keyframes nav-settle { 0% { scale: .88; } 55% { scale: 1.08; } 100% { scale: 1; } }
+@keyframes surface-enter { from { opacity: 0; translate: 0 12px; scale: .985; } to { opacity: 1; translate: 0 0; scale: 1; } }
+.game-card, .result-card.game-cover-card { transition: background 220ms var(--ease-smooth), transform 420ms var(--ease-spring), box-shadow 320ms var(--ease-smooth); }
+.game-card:hover, .result-card.game-cover-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px color-mix(in srgb, var(--color-focus) 24%, transparent); }
+.game-card:focus-within, .result-card.game-cover-card:focus-within { background: var(--color-hover); }
+.game-cover img, .game-art img { transition: transform 650ms var(--ease-settle), opacity 300ms var(--ease-smooth); }
+.game-card:hover .game-art img, .game-cover-card:hover .game-cover img { transform: scale(1.035); }
+.game-cover:active:not(:disabled), .library-cover:active:not(:disabled) { scale: .985; }
+.game-list > .game-card, #results-list > .game-cover-card, .settings-card, .detail-hero, .installation-card, .issue-card { animation: surface-enter 420ms var(--ease-settle) backwards; }
+.game-list > :nth-child(2), #results-list > :nth-child(2), .settings-card:nth-child(2) { animation-delay: 30ms; }
+.game-list > :nth-child(3), #results-list > :nth-child(3), .settings-card:nth-child(3) { animation-delay: 60ms; }
+.game-list > :nth-child(n+4), #results-list > :nth-child(n+4), .settings-card:nth-child(n+4) { animation-delay: 90ms; }
+.search-field { transition: background 250ms var(--ease-smooth), box-shadow 400ms var(--ease-smooth), scale 450ms var(--ease-spring); }
+body.home-active .search-field:focus-within { scale: 1.012; }
+.search-wordmark img { transition: transform 550ms var(--ease-spring); }
+.search-wordmark:hover img { transform: translateY(-3px) rotate(-3deg); }
+.switch-row input { transition: background 250ms var(--ease-smooth); }
+.switch-row input::after { transition: transform 350ms var(--ease-spring), background 250ms var(--ease-smooth); }
+.appearance-card summary svg { transition: transform 350ms var(--ease-spring); }
+.appearance-card[open] summary svg { transform: rotate(180deg); }
+.appearance-card[open] .palette-fields { animation: surface-enter 350ms var(--ease-settle); }
+.toast { transition: opacity 220ms var(--ease-smooth), transform 420ms var(--ease-spring); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .game-card:hover, .result-card.game-cover-card:hover, .nav-button:hover, .search-wordmark:hover img { transform: none; }
+  button:active:not(:disabled), body.home-active .search-field:focus-within { scale: 1; }
+}

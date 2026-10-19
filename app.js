@@ -6,6 +6,7 @@ const toast = document.querySelector('#toast');
 let downloadPreferences = { downloadPath: '', autoInstall: true, cachedOnly: true, archivePassword: '', keepArchives:false, transferTimeoutMinutes:120, automaticUpdates:true, palette:{} };
 let searchGeneration = 0;
 let searchTimer;
+let searchLayoutAnimation;
 let searchOffset = 0;
 let catalogState = {};
 let detailGeneration = 0;
@@ -15,6 +16,39 @@ let steamSlides = [];
 let steamSlideIndex = -1;
 let steamSlideBusy = false;
 const reducedBackdropMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function thumbnailGlowColors(image) {
+  try {
+    const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 20;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0, 32, 20);
+    const pixels = context.getImageData(0, 0, 32, 20).data;
+    const bins = new Map();
+    for (let index = 0; index < pixels.length; index += 4) {
+      const rgb = [...pixels.slice(index, index + 3)];
+      const max = Math.max(...rgb), min = Math.min(...rgb);
+      if (max < 45 || min > 225 || max - min < 22) continue;
+      const key = rgb.map(channel => channel >> 5).join(',');
+      const bin = bins.get(key) || { rgb: [0, 0, 0], count: 0, weight: 0 };
+      rgb.forEach((channel, i) => bin.rgb[i] += channel); bin.count++;
+      bin.weight += (max - min) / max;
+      bins.set(key, bin);
+    }
+    const candidates = [...bins.values()].sort((a, b) => b.weight - a.weight).map(bin => bin.rgb.map(channel => channel / bin.count));
+    const chosen = [];
+    for (const rgb of candidates) {
+      if (chosen.some(other => rgb.reduce((sum, value, i) => sum + (value - other[i]) ** 2, 0) < 5500)) continue;
+      chosen.push(rgb);
+      if (chosen.length === 3) break;
+    }
+    if (!chosen.length) return ['#c8c8c8', '#eeeeee', '#a8a8a8'];
+    return Array.from({ length: 3 }, (_, i) => {
+      const rgb = chosen[i % chosen.length];
+      const factor = 235 / Math.max(...rgb);
+      return '#' + rgb.map(channel => Math.round(Math.min(255, channel * factor)).toString(16).padStart(2, '0')).join('');
+    });
+  } catch { return null; }
+}
 
 async function advanceSteamBackdrop() {
   const backdrop = document.querySelector('#steam-backdrop');
@@ -27,17 +61,29 @@ async function advanceSteamBackdrop() {
       const game = steamSlides[steamSlideIndex];
       if (backdrop.lastElementChild?.dataset.appId === String(game.id)) return;
       const image = document.createElement('img');
+      image.crossOrigin = 'anonymous';
       image.src = game.image;
       image.alt = '';
       image.decoding = 'async';
       image.dataset.appId = game.id;
-      try { await image.decode(); } catch { continue; }
+      try { await image.decode(); } catch {
+        image.removeAttribute('crossorigin'); image.src = game.image;
+        try { await image.decode(); } catch { continue; }
+      }
       if (document.hidden || !document.body.classList.contains('home-active')) return;
       const previous = [...backdrop.children];
+      const ambient = document.querySelector('#ambient-art');
+      const previousGlow = [...ambient.children];
+      const glow = document.createElement('span');
+      thumbnailGlowColors(image)?.forEach((color, index) => glow.style.setProperty('--art-glow-' + index, color));
       backdrop.append(image);
-      requestAnimationFrame(() => requestAnimationFrame(() => image.classList.add('visible')));
+      ambient.append(glow);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        image.classList.add('visible');
+        glow.classList.add('visible');
+      }));
       // Retain the previous slide until the incoming artwork has fully faded in.
-      setTimeout(() => previous.forEach(slide => slide.remove()), 2800);
+      setTimeout(() => [...previous, ...previousGlow].forEach(slide => slide.remove()), 2800);
       return;
     }
   } finally { steamSlideBusy = false; }
@@ -109,7 +155,20 @@ async function runSearch(more = false) {
   document.querySelector('#game-detail').hidden = true;
   document.querySelector('#results-browse').hidden = false;
   const page = document.querySelector('#search-page');
-  page.classList.toggle('has-results', Boolean(query));
+  const content = page.querySelector('.search-content');
+  const layoutChanged = page.classList.contains('has-results') !== Boolean(query);
+  if (layoutChanged) {
+    searchLayoutAnimation?.cancel();
+    const before = content.getBoundingClientRect();
+    page.classList.toggle('has-results', Boolean(query));
+    const after = content.getBoundingClientRect();
+    if (!reducedBackdropMotion.matches && !page.hidden) {
+      searchLayoutAnimation = content.animate([
+        { translate: `${before.x - after.x}px ${before.y - after.y}px` },
+        { translate: '0 0' }
+      ], { duration: 480, easing: 'cubic-bezier(.22, 1.08, .36, 1)' });
+    }
+  }
   document.querySelector('#search-results').hidden = !query;
   if (!query || !window.mamba) return;
   if (!more) { searchOffset = 0; document.querySelector('#results-list').replaceChildren(); }
@@ -501,7 +560,59 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
 
 function applyPalette(palette) {
   for (const [name,color] of Object.entries(palette || {})) if (/^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty('--color-'+name,color);
+  queueButtonContrast(document);
 }
+
+// Resolve translucent fills against their parent surfaces before choosing ink.
+const contrastCanvas = document.createElement('canvas'); contrastCanvas.width = contrastCanvas.height = 1;
+const contrastContext = contrastCanvas.getContext('2d', { willReadFrequently: true });
+const contrastColors = new Map();
+const pendingContrastButtons = new Set();
+let contrastFrame;
+function queueButtonContrast(root) {
+  if (root.matches?.('button')) pendingContrastButtons.add(root);
+  root.querySelectorAll?.('button').forEach(button => pendingContrastButtons.add(button));
+  if (contrastFrame) return;
+  contrastFrame = requestAnimationFrame(() => {
+    contrastFrame = null;
+    for (const button of pendingContrastButtons) {
+      if (!button.isConnected || !button.getClientRects().length) continue;
+      let alpha = 0; const rgb = [0, 0, 0];
+      for (let node = button; node && alpha < .999; node = node.parentElement) {
+        const fill = getComputedStyle(node).backgroundColor;
+        let pixel = contrastColors.get(fill);
+        if (!pixel) {
+          contrastContext.clearRect(0, 0, 1, 1); contrastContext.fillStyle = fill;
+          contrastContext.fillRect(0, 0, 1, 1);
+          pixel = [...contrastContext.getImageData(0, 0, 1, 1).data];
+          contrastColors.set(fill, pixel);
+          if (contrastColors.size > 256) contrastColors.clear();
+        }
+        const weight = pixel[3] / 255 * (1 - alpha);
+        for (let i = 0; i < 3; i++) rgb[i] += pixel[i] * weight;
+        alpha += weight;
+      }
+      const linear = rgb.map(value => { const channel = value / 255; return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4; });
+      const luminance = linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
+      const ink = luminance > .179 ? '#000000' : '#ffffff';
+      if (button.style.getPropertyValue('--button-ink') !== ink) button.style.setProperty('--button-ink', ink);
+    }
+    pendingContrastButtons.clear();
+  });
+}
+new MutationObserver(records => {
+  for (const record of records) {
+    if (record.type === 'attributes') queueButtonContrast(record.target);
+    for (const node of record.addedNodes) if (node.nodeType === 1) queueButtonContrast(node);
+  }
+}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'aria-pressed'] });
+for (const name of ['pointerover', 'pointerdown', 'pointerup', 'focusin']) document.addEventListener(name, event => {
+  const button = event.target.closest?.('button'); if (button) queueButtonContrast(button);
+});
+document.addEventListener('transitionend', event => {
+  if (event.propertyName === 'background-color') queueButtonContrast(event.target);
+});
+queueButtonContrast(document);
 function applyLoadedConfig(config) {
   urls=config.sourceUrls; keyConfigured=config.configured; keyInput.value='';
   downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{},preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any',notifications:config.notifications!==false};
