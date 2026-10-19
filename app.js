@@ -3,7 +3,7 @@ const keyInput = document.querySelector('#api-key');
 const sourceUrlsInput = document.querySelector('#source-urls');
 const saveStatus = document.querySelector('#save-status');
 const toast = document.querySelector('#toast');
-let downloadPreferences = { downloadPath: '', autoInstall: true, cachedOnly: true, archivePassword: '' };
+let downloadPreferences = { downloadPath: '', autoInstall: true, cachedOnly: true, archivePassword: '', keepArchives:false, transferTimeoutMinutes:120, automaticUpdates:true, palette:{} };
 let searchGeneration = 0;
 let searchTimer;
 let searchOffset = 0;
@@ -224,6 +224,11 @@ function renderLibrary(games = installedGames) {
     const source = document.querySelector('#library-empty svg');
     mark.append(source.cloneNode(true));
     mark.className = 'game-art';
+    if (window.mamba && game.id) window.mamba.artwork(game.id).then(image => {
+      if (!image || !mark.isConnected) return;
+      const cover = document.createElement('img'); cover.src = image; cover.alt = game.name + ' cover'; cover.loading = 'lazy'; cover.decoding = 'async';
+      cover.addEventListener('load', () => mark.classList.add('has-cover')); cover.addEventListener('error', () => cover.remove()); mark.append(cover);
+    }).catch(() => {});
 
     const name = document.createElement('h2');
     name.textContent = game.name;
@@ -280,11 +285,7 @@ function sourceLines() {
 }
 
 function hasSettingsChanges() {
-  return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls)
-    || document.querySelector('#download-path').value !== downloadPreferences.downloadPath
-    || document.querySelector('#auto-install').checked !== downloadPreferences.autoInstall
-    || document.querySelector('#cached-only').checked !== downloadPreferences.cachedOnly
-    || document.querySelector('#archive-password').value !== downloadPreferences.archivePassword;
+  return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(readDownloadPreferences()) !== JSON.stringify(downloadPreferences);
 }
 
 function updateSearchState() {
@@ -310,7 +311,7 @@ function updateSettingsState() {
   for (const control of [keyInput, sourceUrlsInput, visibility, document.querySelector('#settings-save')]) {
     control.disabled = !configLoaded || settingsBusy;
   }
-  for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #browse-folder')) control.disabled = !configLoaded || settingsBusy;
+  for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, [data-palette], #import-config, #export-config')) control.disabled = !configLoaded || settingsBusy;
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
   document.querySelector('#remove-key').hidden = configLoaded && !keyConfigured;
   document.querySelector('#settings-save').disabled = !configLoaded || settingsBusy || !hasSettingsChanges();
@@ -323,20 +324,7 @@ function updateSettingsState() {
 updateSettingsState();
 const configReady = window.torboxSettings
   ? window.torboxSettings.loadConfig(urls).then((config) => {
-    for (const [name, color] of Object.entries(config.palette || {})) {
-      if (/^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty(`--color-${name}`, color);
-    }
-    urls = config.sourceUrls;
-    downloadPreferences = { downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '' };
-    populateDownloadPreferences();
-    renderLibrary(config.installedGames || []);
-    keyConfigured = config.configured;
-    configLoaded = true;
-    localStorage.removeItem(STORAGE_KEY);
-    sourceUrlsInput.value = urls.join('\n');
-    settingsInitialized = true;
-    updateSettingsState();
-    updateSearchState();
+    applyLoadedConfig(config);
   })
   : Promise.reject(new Error('Open Mamba in the desktop app to access config.json.'));
 configReady.catch((error) => {
@@ -459,6 +447,7 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
     const preferences = readDownloadPreferences();
     const result = await window.torboxSettings.saveConfig({ apiKey: keyInput.value, sourceUrls: nextUrls, ...preferences });
     downloadPreferences = preferences;
+    applyPalette(preferences.palette);
     keyConfigured = result.configured;
 
     urls = result.sourceUrls;
@@ -478,16 +467,38 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
   }
 });
 
+function applyPalette(palette) {
+  for (const [name,color] of Object.entries(palette || {})) if (/^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty('--color-'+name,color);
+}
+function applyLoadedConfig(config) {
+  urls=config.sourceUrls; keyConfigured=config.configured; keyInput.value='';
+  downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{}};
+  const fields=document.querySelector('#palette-fields');fields.replaceChildren();
+  for(const [name,color]of Object.entries(downloadPreferences.palette)){
+    const label=document.createElement('label');label.className='palette-field';
+    const input=document.createElement('input');input.type='color';input.value=color;input.dataset.palette=name;input.setAttribute('aria-label',name.replace(/([A-Z])/g,' $1'));
+    const text=document.createElement('span');text.textContent=name.replace(/([A-Z])/g,' $1');label.append(input,text);fields.append(label);
+    input.addEventListener('input',()=>{saveStatus.textContent='';applyPalette(readDownloadPreferences().palette);updateSettingsState();});
+  }
+  applyPalette(downloadPreferences.palette);populateDownloadPreferences();renderLibrary(config.installedGames||installedGames);
+  configLoaded=true;settingsInitialized=true;localStorage.removeItem(STORAGE_KEY);sourceUrlsInput.value=urls.join('\n');updateSettingsState();updateSearchState();
+}
 function readDownloadPreferences() {
-  return { downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value };
+  return { downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value, keepArchives:document.querySelector('#keep-archives').checked,transferTimeoutMinutes:Number(document.querySelector('#transfer-timeout').value),automaticUpdates:document.querySelector('#automatic-updates').checked,palette:Object.fromEntries([...document.querySelectorAll('[data-palette]')].map(input=>[input.dataset.palette,input.value])) };
 }
 function populateDownloadPreferences() {
   document.querySelector('#download-path').value = downloadPreferences.downloadPath || '';
   document.querySelector('#auto-install').checked = downloadPreferences.autoInstall;
   document.querySelector('#cached-only').checked = downloadPreferences.cachedOnly;
   document.querySelector('#archive-password').value = downloadPreferences.archivePassword;
+  document.querySelector('#keep-archives').checked = downloadPreferences.keepArchives;
+  document.querySelector('#transfer-timeout').value = downloadPreferences.transferTimeoutMinutes;
+  document.querySelector('#automatic-updates').checked = downloadPreferences.automaticUpdates;
+  for(const input of document.querySelectorAll('[data-palette]'))input.value=downloadPreferences.palette[input.dataset.palette];
+  applyPalette(downloadPreferences.palette);
 }
-for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password')) control.addEventListener('input', updateSettingsState);
+for (const control of document.querySelectorAll('#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates')) control.addEventListener('input',()=>{saveStatus.textContent='';updateSettingsState();});
+
 document.querySelector('#browse-folder').addEventListener('click', async () => {
   try { const folder = await window.mamba.chooseFolder(); if (folder) { document.querySelector('#download-path').value = folder; updateSettingsState(); } }
   catch (error) { showToast(error.message); }
@@ -525,3 +536,18 @@ document.querySelector('#remove-key').addEventListener('click', async () => {
 
 
 
+
+for(const action of ['import','export'])document.querySelector('#'+action+'-config').addEventListener('click',async()=>{
+  if(settingsBusy)return;settingsBusy=true;updateSettingsState();
+  try{const result=await window.torboxSettings[action+'Config']();if(result){if(action==='import'){applyLoadedConfig(result);runSearch();}showToast(action==='import'?'Configuration loaded.':'Complete configuration exported.');}}catch(error){showToast(error.message);}finally{settingsBusy=false;updateSettingsState();}
+});
+function renderUpdate(state){
+  document.querySelector('#app-version').textContent='v'+state.version;
+  document.querySelector('#update-status').textContent=state.message;
+  document.querySelector('#update-badge').textContent=({ready:'Ready to install',current:'Up to date',checking:'Checking',downloading:'Downloading',error:'Unavailable',development:'Development',idle:'Stable'})[state.status]||'Stable';
+  document.querySelector('#check-updates').disabled=['checking','downloading','ready'].includes(state.status);
+  document.querySelector('#install-update').hidden=state.status!=='ready';
+}
+document.querySelector('#check-updates').addEventListener('click',async()=>{try{renderUpdate(await window.mamba.checkUpdates());}catch(error){showToast(error.message);}});
+document.querySelector('#install-update').addEventListener('click',async()=>{try{await window.mamba.installUpdate();}catch(error){showToast(error.message);}});
+if(window.mamba){window.mamba.onUpdate(renderUpdate);window.mamba.updateState().then(renderUpdate).catch(error=>showToast(error.message));}

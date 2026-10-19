@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('windowControls', {
 contextBridge.exposeInMainWorld('torboxSettings', {
   loadConfig: (legacyUrls) => ipcRenderer.invoke('config:load', legacyUrls),
   saveConfig: (settings) => ipcRenderer.invoke('config:save', settings),
+  importConfig: () => ipcRenderer.invoke('config:import'),
+  exportConfig: () => ipcRenderer.invoke('config:export'),
   clearKey: () => ipcRenderer.invoke('torbox:clear-key')
 });
 
@@ -24,6 +26,10 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 contextBridge.exposeInMainWorld('mamba', {
+  updateState: () => ipcRenderer.invoke('app:updates'),
+  checkUpdates: () => ipcRenderer.invoke('app:check-updates'),
+  installUpdate: () => ipcRenderer.invoke('app:install-update'),
+  onUpdate: (callback) => subscribe('app:updated', callback),
   catalogStatus: () => ipcRenderer.invoke('catalog:status'),
   sync: () => ipcRenderer.invoke('catalog:sync'),
   search: (query, offset) => ipcRenderer.invoke('catalog:search', query, offset),

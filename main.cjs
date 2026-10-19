@@ -8,6 +8,9 @@ const { registerSteam } = require('./lib/shortcuts.cjs');
 const { registerXbox } = require('./lib/xbox.cjs');
 const { registerHelperRuntime, openGameHelper } = require('./lib/game-helper.cjs');
 const { addGame } = require('./tools/add-game.cjs');
+const { validateSettings, decodeConfig, encodeConfig } = require('./lib/config-transfer.cjs');
+const { Updates } = require('./lib/updates.cjs');
+let updates;
 const { Downloads } = require('./lib/downloads.cjs');
 const { Artwork } = require('./lib/artwork.cjs');
 const { Metadata } = require('./lib/metadata.cjs');
@@ -38,9 +41,11 @@ function dataDirectory() {
     const metadata = JSON.parse(require('node:fs').readFileSync(path.join(project, 'package.json'), 'utf8'));
     if (metadata.name === 'minimal-downloader' && require('node:fs').existsSync(path.join(project, 'main.cjs')) && require('node:fs').existsSync(path.join(project, 'config.json'))) return resolvedDataDirectory = project;
   } catch {}
+  const legacyData = path.join(app.getPath('appData'), 'minimal-downloader');
+  if (require('node:fs').existsSync(path.join(legacyData, 'config.json'))) return resolvedDataDirectory = legacyData;
   return resolvedDataDirectory = app.getPath('userData');
 }
-const publicConfig = (config) => ({ configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '' });
+const publicConfig = (config) => ({ configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
 
 function readPalette(palette) {
   return Object.fromEntries(Object.entries(defaultPalette).map(([name, fallback]) => [
@@ -60,6 +65,8 @@ async function readConfig() {
       palette: readPalette(config.palette),
       downloadPath: typeof config.downloadPath === 'string' && path.isAbsolute(config.downloadPath) ? path.resolve(config.downloadPath) : path.join(app.getPath('downloads'), 'Mamba'),
       autoInstall: config.autoInstall !== false,
+      keepArchives: config.keepArchives === true,
+      automaticUpdates: config.automaticUpdates !== false,
       cachedOnly: config.cachedOnly !== false,
       transferTimeoutMinutes: Math.max(5, Math.min(1440, Number(config.transferTimeoutMinutes) || 120)),
       torboxApiKey: typeof config.torboxApiKey === 'string' ? config.torboxApiKey : '',
@@ -77,7 +84,7 @@ async function readConfig() {
     } catch (legacyError) {
       if (legacyError.code !== 'ENOENT') throw legacyError;
     }
-    return { torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, transferTimeoutMinutes: 120 };
+    return { torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, keepArchives: false, automaticUpdates: true, transferTimeoutMinutes: 120 };
   }
 }
 
@@ -136,11 +143,33 @@ ipcMain.handle('config:save', async (_event, settings) => {
   if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
   if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
   if (typeof settings.archivePassword === 'string') config.archivePassword = settings.archivePassword;
+  Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
   });
   library?.scan().then((games) => broadcast('library:changed', games)).catch(() => {});
   return saved;
 });
 ipcMain.handle('torbox:clear-key', () => updateConfig((config) => { config.torboxApiKey = ''; }));
+ipcMain.handle('config:export', async event => {
+  const chosen = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), { defaultPath: 'Mamba-config.json', filters: [{name:'JSON settings',extensions:['json']}] });
+  if (chosen.canceled || !chosen.filePath) return null;
+  await fs.writeFile(chosen.filePath, encodeConfig(await readConfig(), app.getVersion()), { mode: 0o600 });
+  return true;
+});
+ipcMain.handle('config:import', async event => {
+  const chosen = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { properties:['openFile'], filters:[{name:'JSON settings',extensions:['json']}] });
+  if (chosen.canceled || !chosen.filePaths.length) return null;
+  if ((await fs.stat(chosen.filePaths[0])).size > 2*1024*1024) throw new Error('Config files must be smaller than 2 MB.');
+  const imported = decodeConfig(await fs.readFile(chosen.filePaths[0], 'utf8'));
+  const result = await updateConfig(async config => {
+    await fs.writeFile(configFile()+'.backup-'+Date.now(),JSON.stringify(config,null,2)+'\n',{mode:0o600});
+    Object.assign(config, imported, {legacyUrlsMigrated:true});
+  });
+  library.scan().then(games=>broadcast('library:changed',games)).catch(()=>{});
+  return result;
+});
+ipcMain.handle('app:updates', () => ({...updates.state}));
+ipcMain.handle('app:check-updates', () => updates.check(true));
+ipcMain.handle('app:install-update', () => updates.install());
 
 function broadcast(channel, data) {
   for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(channel, data);
@@ -217,6 +246,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  updates = new Updates(require('electron-updater').autoUpdater, { version:app.getVersion(), packaged:app.isPackaged, getConfig:readConfig, canInstall:()=>!downloads?.jobs.some(job=>['queued','preparing','downloading','extracting','installing'].includes(job.status)) });
+  updates.on('change',state=>broadcast('app:updated',state));
   await registerHelperRuntime();
   catalog = new Catalog(dataDirectory(), readConfig);
   library = new Library(readConfig, { repair: async ({ folder, manifest }) => {
@@ -229,6 +260,7 @@ app.whenReady().then(async () => {
     return result;
   } });
   downloads = new Downloads(dataDirectory(), readConfig, catalog, library, { resolveName: name => metadata.resolveName(name), registerGame: registerSteam, registerXbox: addXboxGame, setupGame: game => addGame({ ...game, resolveName: name => metadata.resolveName(name), xbox: addXboxGame }), reviewSetup: openGameHelper });
+  catalog.library = library;
   artwork = new Artwork(dataDirectory(), catalog);
   catalog.on('status', (state) => broadcast('catalog:changed', state));
   let lastLibrary = '';
@@ -250,6 +282,7 @@ app.whenReady().then(async () => {
     watchTimer = setTimeout(() => catalog.sync().catch(() => {}), 1000);
   });
   createWindow();
+  updates.start();
   let steamBusy = false;
   steamTimer = setInterval(async () => {
     if (steamBusy) return;
@@ -273,7 +306,7 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-app.on('before-quit', () => { clearInterval(steamTimer); clearTimeout(watchTimer); clearTimeout(catalog?.retryTimer); configWatcher?.close(); catalog?.controller?.abort(); downloads?.stop(); });
+app.on('before-quit', () => { updates?.stop(); clearInterval(steamTimer); clearTimeout(watchTimer); clearTimeout(catalog?.retryTimer); configWatcher?.close(); catalog?.controller?.abort(); downloads?.stop(); });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

@@ -28,5 +28,7 @@
   "cachedOnly": true,
   "transferTimeoutMinutes": 120,
   "archivePassword": "",
-  "downloadUrls": []
+  "downloadUrls": [],
+  "keepArchives": false,
+  "automaticUpdates": true
 }

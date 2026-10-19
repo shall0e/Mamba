@@ -104,3 +104,25 @@ After installation Mamba automatically runs the same helper logic using the
 name, game root and launcher it detected, including desktop, Steam and Xbox
 registration. No terminal is opened when those defaults work. If the launcher
 cannot be detected or setup fails, the interactive helper opens for correction.
+
+## Updates and releases
+
+Mamba's public repository is https://github.com/shall0e/Mamba. Settings shows the
+installed version and update status. The NSIS installer checks GitHub Releases on
+startup and every six hours when automatic updates are enabled. Updates download
+in the background and install when Mamba closes, or through Restart and install.
+Restart is blocked while downloads or installation are active. Development runs
+show their version but do not self-update. Use the Windows installer to enable
+updating; loose unpacked builds are intended for development/testing.
+
+To publish: update package.json/package-lock.json with `npm version patch`, then
+push the commit and version tag (`git push --follow-tags`). The release workflow
+builds Mamba-Setup-VERSION.exe, its blockmap, and latest.yml, and publishes them
+in the matching GitHub Release. The tag must match the package version.
+
+Load config accepts a raw config.json or Mamba's versioned export. Export config
+writes every saved setting, including keys/passwords and unknown future settings.
+Imports are validated before changes; the prior effective configuration is saved
+as config.json.backup-TIMESTAMP. Backups and credentials are excluded from Git and
+installer packages. Form controls expose archive retention, timeout, automatic
+updates and all shared palette colors in addition to connection/download settings.
