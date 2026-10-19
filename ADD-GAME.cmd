@@ -1,12 +1,10 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-set "ELECTRON_RUN_AS_NODE=1"
 if exist "%~dp0resources\app.asar" (
-  "%~dp0minimal-downloader.exe" "%~dp0resources\app.asar\tools\add-game.cjs"
+  powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0MambaHelper.ps1" -RuntimeExe "%~dp0minimal-downloader.exe" -HelperScript "%~dp0resources\app.asar\tools\add-game.cjs"
 ) else if exist "%~dp0node_modules\electron\dist\electron.exe" (
-  "%~dp0node_modules\electron\dist\electron.exe" "%~dp0tools\add-game.cjs"
+  powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0helper\run.ps1" -RuntimeExe "%~dp0node_modules\electron\dist\electron.exe" -HelperScript "%~dp0tools\add-game.cjs"
 ) else (
-  node "%~dp0tools\add-game.cjs"
+  echo Open Mamba once, then run ADD-GAME.cmd inside the game folder.
 )
 pause

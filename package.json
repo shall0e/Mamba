@@ -23,7 +23,7 @@
       "!test/**",
       "!vendor/**"
     ],
-    "extraFiles": [{ "from": "ADD-GAME.cmd", "to": "ADD-GAME.cmd" }],
+    "extraFiles": [{ "from": "ADD-GAME.cmd", "to": "ADD-GAME.cmd" }, { "from": "helper/run.ps1", "to": "MambaHelper.ps1" }],
     "extraResources": [
       {
         "from": "vendor/7zip",

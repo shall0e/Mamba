@@ -37,7 +37,11 @@ async function addGame({ file, folder, name, resolveName = async value => value,
 }
 async function main() {
   const input = readline.createInterface({input:process.stdin,output:process.stdout});
-  const ask = async prompt => (await input.question(prompt)).trim().replace(/^"|"$/g,'');
+  const ask = async prompt => {
+    const bridge = process.env.MAMBA_HELPER_BRIDGE === '1';
+    if (bridge) console.log('__MAMBA_PROMPT__' + JSON.stringify(prompt));
+    return (await input.question(bridge ? '' : prompt)).trim().replace(/^"|"$/g,'');
+  };
   try {
     console.log('Mamba - choose a launcher, create a desktop shortcut and add it to Steam and Xbox PC.\n');
     const defaultFolder = process.env.MAMBA_GAME_FOLDER || '';
