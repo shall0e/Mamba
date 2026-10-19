@@ -16,5 +16,9 @@
   "buttonText": "#181818",
   "danger": "#ef9a92",
   "dangerHover": "#c42b36",
-  "success": "#a9df7c"
+  "success": "#a9df7c",
+  "ambientBlue": "#4285f4",
+  "ambientViolet": "#a78bfa",
+  "ambientPink": "#f68acb",
+  "ambientCyan": "#67e8f9"
 }

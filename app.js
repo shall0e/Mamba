@@ -11,28 +11,56 @@ let catalogState = {};
 let detailGeneration = 0;
 const cardJobs = new Map();
 
-async function loadSteamBackdrop() {
+let steamSlides = [];
+let steamSlideIndex = -1;
+let steamSlideBusy = false;
+const reducedBackdropMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+async function advanceSteamBackdrop() {
   const backdrop = document.querySelector('#steam-backdrop');
-  if (!window.mamba?.featuredGames || !backdrop) return;
+  if (!backdrop || !steamSlides.length || steamSlideBusy || document.hidden || !document.body.classList.contains('home-active')) return;
+  if (reducedBackdropMotion.matches && backdrop.childElementCount) return;
+  steamSlideBusy = true;
   try {
-    const games = await window.mamba.featuredGames();
-    if (!Array.isArray(games) || !games.length) return;
-    const fragment = document.createDocumentFragment();
-    for (let index = 0; index < 12; index++) {
-      const game = games[index % games.length];
+    for (let attempt = 0; attempt < steamSlides.length; attempt++) {
+      steamSlideIndex = (steamSlideIndex + 1) % steamSlides.length;
+      const game = steamSlides[steamSlideIndex];
+      if (backdrop.lastElementChild?.dataset.appId === String(game.id)) return;
       const image = document.createElement('img');
       image.src = game.image;
       image.alt = '';
-      image.loading = 'eager';
       image.decoding = 'async';
-      image.setAttribute('aria-hidden', 'true');
-      fragment.append(image);
+      image.dataset.appId = game.id;
+      try { await image.decode(); } catch { continue; }
+      if (document.hidden || !document.body.classList.contains('home-active')) return;
+      const previous = [...backdrop.children];
+      backdrop.append(image);
+      requestAnimationFrame(() => requestAnimationFrame(() => image.classList.add('visible')));
+      // Retain the previous slide until the incoming artwork has fully faded in.
+      setTimeout(() => previous.forEach(slide => slide.remove()), 2800);
+      return;
     }
-    backdrop.replaceChildren(fragment);
+  } finally { steamSlideBusy = false; }
+}
+
+async function loadSteamBackdrop() {
+  if (!window.mamba?.featuredGames) return;
+  try {
+    const games = await window.mamba.featuredGames();
+    if (!Array.isArray(games) || !games.length) return;
+    steamSlides = games;
+    await advanceSteamBackdrop();
   } catch { /* The search page remains usable when Steam artwork is offline. */ }
 }
 loadSteamBackdrop();
+setInterval(advanceSteamBackdrop, 10000);
 setInterval(loadSteamBackdrop, 30 * 60 * 1000);
+
+function updateHomeBackdrop() {
+  const home = !document.querySelector('#search-page').hidden && !document.querySelector('#main-search').value.trim();
+  document.body.classList.toggle('home-active', home);
+  if (home && !document.querySelector('#steam-backdrop').childElementCount) advanceSteamBackdrop();
+}
 
 function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }
 function button(label, action, iconName, className = 'text-button') {
@@ -183,10 +211,10 @@ document.querySelector('#clear-finished').addEventListener('click', async () => 
 function showPage(name) {
   const pages = { search: '#search-page', library: '#library-page', settings: '#settings-backdrop',game:'#game-page',activity:'#activity-page' };
   if(!pages[name])return;
-  document.body.classList.toggle('home-active', name === 'search');
   for (const [page, selector] of Object.entries(pages)) {
     document.querySelector(selector).hidden = page !== name;
   }
+  updateHomeBackdrop();
   document.querySelector(pages[name]).scrollTop = 0;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === (name === 'game' ? window.MambaExperience?.origin || 'search' : name);
@@ -314,6 +342,7 @@ function scheduleSettingsSave(delay = 500) {
 }
 
 function updateSearchState() {
+  updateHomeBackdrop();
   const populated = Boolean(document.querySelector('#main-search').value);
   document.querySelector('#search-clear').hidden = !populated;
   document.querySelector('#search-shortcut').hidden = populated;
