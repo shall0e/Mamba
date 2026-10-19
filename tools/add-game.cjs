@@ -23,7 +23,8 @@ async function main() {
   const ask = async prompt => (await input.question(prompt)).trim().replace(/^"|"$/g,'');
   try {
     console.log('Mamba - choose a launcher, create a desktop shortcut and add it to Steam and Xbox PC.\n');
-    const supplied = path.resolve(await ask('Game folder OR full path to the EXE / BAT / CMD / PS1 / shortcut: '));
+    const defaultFolder = process.env.MAMBA_GAME_FOLDER || '';
+    const supplied = path.resolve(await ask(`Game folder OR full launcher path${defaultFolder ? ' [' + defaultFolder + ']' : ''}: `) || defaultFolder);
     const stat = await fs.lstat(supplied);let file=supplied, suggestedFolder=stat.isDirectory()?supplied:path.dirname(supplied);
     if(stat.isDirectory()) {
       const found = await detect(supplied);
