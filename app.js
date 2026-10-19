@@ -27,6 +27,16 @@ function formatBytes(bytes) {
   const unit = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
   return `${(bytes / 1024 ** unit).toFixed(unit ? 1 : 0)} ${['B', 'KB', 'MB', 'GB'][unit]}`;
 }
+function remainingTime(job) {
+  const speed = Number(job.speed), total = Number(job.total), received = Number(job.received);
+  if (!(speed > 0) || !(total > 0)) return 'Estimating time…';
+  const seconds = Math.ceil(Math.max(0, total - received) / speed);
+  if (!seconds) return 'Finishing download…';
+  if (seconds < 60) return `${seconds}s remaining`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes}m remaining`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m remaining`;
+}
 function renderCatalog(state) {
   if (!state) return;
   const previousCount = catalogState.count;
@@ -162,7 +172,7 @@ function renderJobs(jobs) {
       const actions = document.createElement('div'); actions.className = 'transfer-actions';
       row.append(name, message, bar, actions); list.append(row);
     }
-    row.querySelector('.transfer-message').textContent = job.message + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s` : '');
+    row.querySelector('.transfer-message').textContent = job.message + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s · ${remainingTime(job)}` : '');
     row.querySelector('progress').value = job.progress || 0;
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
