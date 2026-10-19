@@ -48,3 +48,24 @@ Unavailable or ambiguous matches retain their cleaned source title and fallback 
 `config.example.json` is a key-free example. Configure your own API key, sources,
 and download folder in Settings. Personal configuration, downloaded content,
 source catalogs, and caches are excluded from Git and packaged builds.
+
+## Installation cleanup and shortcuts
+
+After installation, Mamba lifts archive wrappers out of the game root and names
+its folder after the matched Steam title (with Windows-invalid characters
+replaced). Existing destination folders are preserved. Internal engine folders
+such as Binaries/Win64 and Engine remain intact. A single start/launch script
+is preferred when supplied by the game. Locked folders stay pending and retry
+while Mamba is open, or after restarting it.
+
+Double-click `ADD-GAME.cmd` in the project or beside the built application if a
+launcher or root needs manual selection. Enter a game folder or launcher path,
+select the actual game root, and confirm the name. It repairs the folder, saves
+the chosen launcher, creates a desktop shortcut, and registers a non-Steam game.
+EXE, COM, BAT, CMD, PS1, and Windows shortcuts are supported.
+
+New installations automatically register in the most recently active Steam
+account. Steam must be fully exited before its shortcut file can be updated;
+Mamba keeps pending registrations and retries every 30 seconds while open.
+Existing shortcuts are preserved and backed up before changes. Steam can then
+be reopened. This adds a non-Steam shortcut; it does not grant a Steam license.

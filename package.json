@@ -23,6 +23,7 @@
       "!test/**",
       "!vendor/**"
     ],
+    "extraFiles": [{ "from": "ADD-GAME.cmd", "to": "ADD-GAME.cmd" }],
     "extraResources": [
       {
         "from": "vendor/7zip",

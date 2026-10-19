@@ -3,12 +3,13 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('./palette-defaults.json');
 const { Catalog } = require('./lib/catalog.cjs');
-const { Library, within } = require('./lib/library.cjs');
+const { Library, within, finalizeInstallation, atomicJson } = require('./lib/library.cjs');
+const { registerSteam } = require('./lib/shortcuts.cjs');
 const { Downloads } = require('./lib/downloads.cjs');
 const { Artwork } = require('./lib/artwork.cjs');
 const { Metadata } = require('./lib/metadata.cjs');
 const { spawn } = require('node:child_process');
-let catalog, library, downloads, artwork, metadata, configWatcher, watchTimer, resolvedDataDirectory;
+let catalog, library, downloads, artwork, metadata, configWatcher, watchTimer, steamTimer, resolvedDataDirectory;
 function dataDirectory() {
   if (resolvedDataDirectory) return resolvedDataDirectory;
   if (!app.isPackaged) return resolvedDataDirectory = process.env.MAMBA_DATA_DIR ? path.resolve(process.env.MAMBA_DATA_DIR) : __dirname;
@@ -150,6 +151,7 @@ ipcMain.handle('library:action', async (_event, id, action) => {
   within(game.folder, target);
   if (!(await fs.lstat(target)).isFile()) throw new Error('The executable is no longer available.');
   if (action === 'setup') { const error = await shell.openPath(target); if (error) throw new Error(error); return; }
+  if (!/\.(exe|com)$/i.test(target)) { const error = await shell.openPath(target); if (error) throw new Error(error); return; }
   await new Promise((resolve, reject) => {
     const child = spawn(target, [], { cwd: path.dirname(target), detached: true, stdio: 'ignore', shell: false, windowsHide: true });
     child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); });
@@ -197,8 +199,17 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   catalog = new Catalog(dataDirectory(), readConfig);
-  library = new Library(readConfig);
-  downloads = new Downloads(dataDirectory(), readConfig, catalog, library);
+  library = new Library(readConfig, { repair: async ({ folder, manifest }) => {
+    if (downloads.jobs.some(job => job.folder === folder && downloads.controllers.has(job.id))) return null;
+    const name = await metadata.resolveName(manifest.name);
+    const result = await finalizeInstallation(folder, name, { releaseId: manifest.releaseId, status: 'installed' });
+    const steam = await registerSteam({ name, executable: result.executable, folder: result.folder }).catch(error => ({ status: 'pending', message: error.message }));
+    result.manifest.steam = steam;
+    await atomicJson(path.join(result.folder, '.mamba-game.json'), result.manifest);
+    for (const job of downloads.jobs.filter(job => job.folder === folder)) await downloads.update(job, { folder: result.folder, name, status: 'completed', message: 'Ready to play' });
+    return result;
+  } });
+  downloads = new Downloads(dataDirectory(), readConfig, catalog, library, { resolveName: name => metadata.resolveName(name), registerGame: registerSteam });
   artwork = new Artwork(dataDirectory(), catalog);
   catalog.on('status', (state) => broadcast('catalog:changed', state));
   let lastLibrary = '';
@@ -219,12 +230,29 @@ app.whenReady().then(async () => {
     watchTimer = setTimeout(() => catalog.sync().catch(() => {}), 1000);
   });
   createWindow();
+  let steamBusy = false;
+  steamTimer = setInterval(async () => {
+    if (steamBusy) return;
+    steamBusy = true;
+    try {
+      if (library.items.some(game => game.repairPending)) {
+        await library.scan(); broadcast('library:changed', library.items);
+      }
+      for (const game of library.items) {
+        const file = path.join(game.folder, '.mamba-game.json');
+        const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
+        if (manifest.steam?.status !== 'pending' || !game.executable) continue;
+        const steam = await registerSteam(game).catch(error => ({ status: 'pending', message: error.message }));
+        await atomicJson(file, { ...manifest, steam });
+      }
+    } catch {} finally { steamBusy = false; }
+  }, 30000);
   catalog.sync().catch(() => {});
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-app.on('before-quit', () => { clearTimeout(watchTimer); clearTimeout(catalog?.retryTimer); configWatcher?.close(); catalog?.controller?.abort(); downloads?.stop(); });
+app.on('before-quit', () => { clearInterval(steamTimer); clearTimeout(watchTimer); clearTimeout(catalog?.retryTimer); configWatcher?.close(); catalog?.controller?.abort(); downloads?.stop(); });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

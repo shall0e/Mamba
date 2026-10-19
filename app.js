@@ -228,7 +228,7 @@ function renderLibrary(games = installedGames) {
     const name = document.createElement('h2');
     name.textContent = game.name;
     const status = document.createElement('p');
-    status.textContent = game.status === 'installed' ? 'Ready to play' : 'Setup required';
+    status.textContent = game.repairPending ? 'Folder cleanup pending' : game.status === 'installed' ? 'Ready to play' : 'Setup required';
     card.append(mark, name, status);
     if (window.mamba && game.id) {
       const actions = document.createElement('div'); actions.className = 'game-actions';
