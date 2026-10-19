@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
   <title>Mamba · TorBox</title>
+  <link rel="icon" type="image/png" href="assets/mamba.png">
   <link rel="stylesheet" href="style.css">
   <script src="app.js" defer></script>
   <script src="experience.js" defer></script>
@@ -71,7 +72,7 @@
 </button>
   </div>
   <aside class="sidebar">
-    <div class="sidebar-brand" aria-label="Mamba">m<span>mamba</span></div>
+    <div class="sidebar-brand" aria-label="Mamba"><img src="assets/mamba.png" alt="Mamba" width="36" height="36"></div>
     <nav aria-label="Main navigation">
       <button class="nav-button active" id="search-open" type="button" aria-label="Search" title="Search" data-page="search" aria-current="page"><svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -138,7 +139,7 @@
   <main class="workspace">
     <section class="page search-page" id="search-page" aria-label="Search">
       <div class="search-content">
-        <p class="search-wordmark" aria-hidden="true">mamba</p>
+        <div class="search-wordmark" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="56" height="56"><span>mamba</span></div>
         <div class="search-field">
           <svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -339,7 +340,7 @@ Load config</button><button class="secondary-button" id="export-config" type="bu
 </svg>
 
 Export config</button></div><p class="field-hint">Exports include every saved setting, your API key, passwords, sources, and palette in plain text. Loading a config creates a backup first.</p></section>
-        <section class="settings-card" aria-labelledby="updates-title"><div class="settings-card-heading"><div><h2 id="updates-title">Mamba <span id="app-version" class="version-label"></span></h2><p>Updates from shall0e/Mamba on GitHub.</p></div><span id="update-badge" class="connection-badge">Checking version…</span></div><label class="switch-row"><span><strong>Automatic updates</strong><small>Check on startup, download new versions, and install when Mamba closes.</small></span><input id="automatic-updates" type="checkbox" role="switch"></label><p id="update-status" class="field-hint" role="status"></p><div class="settings-actions"><button id="check-updates" type="button" class="secondary-button"><svg aria-hidden="true" class="lucide lucide-refresh-cw"
+        <section class="settings-card" aria-labelledby="updates-title"><div class="settings-card-heading"><div><h2 id="updates-title"><img class="settings-brand-icon" src="assets/mamba.png" alt="" width="28" height="28">Mamba <span id="app-version" class="version-label"></span></h2><p>Updates from shall0e/Mamba on GitHub.</p></div><span id="update-badge" class="connection-badge">Checking version…</span></div><label class="switch-row"><span><strong>Automatic updates</strong><small>Check on startup, download new versions, and install when Mamba closes.</small></span><input id="automatic-updates" type="checkbox" role="switch"></label><p id="update-status" class="field-hint" role="status"></p><div class="settings-actions"><button id="check-updates" type="button" class="secondary-button"><svg aria-hidden="true" class="lucide lucide-refresh-cw"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
   height="24"

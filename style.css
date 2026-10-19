@@ -362,3 +362,9 @@ button svg { flex-shrink: 0; }
 .transfer-stages .stage-done { background: var(--color-hover); }
 
 button[aria-busy="true"] { cursor: progress; }
+
+.sidebar-brand img { display: block; width: 36px; height: 36px; object-fit: contain; border-radius: 10px; }
+.search-wordmark { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.search-wordmark img { width: 56px; height: 56px; object-fit: contain; border-radius: 16px; }
+#updates-title { display: flex; align-items: center; gap: 10px; }
+.settings-brand-icon { object-fit: contain; border-radius: 8px; }

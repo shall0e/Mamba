@@ -1,6 +1,6 @@
 {
   "name": "minimal-downloader",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "main": "main.cjs",
   "scripts": {
@@ -65,14 +65,18 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "Mamba-Setup-${version}.${ext}"
+      "artifactName": "Mamba-Setup-${version}.${ext}",
+      "icon": "assets/mamba.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/mamba.ico",
+      "uninstallerIcon": "assets/mamba.ico",
+      "installerHeaderIcon": "assets/mamba.ico"
     }
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 # Project preferences
 
+- Use the supplied serpent logo in assets/mamba.png and assets/mamba.ico for Mamba branding, executable, installer, shortcuts, and notifications. Brand artwork is the exception to the Lucide action-icon rule.
+
 - Use Lucide (https://lucide.dev) for every UI icon, including navigation, settings, window controls, actions, and empty states.
 - Use official Lucide SVGs or the Lucide library. Do not substitute emoji, text glyphs, or custom-drawn icons.
 - Bundle icons locally so they work offline with the application's Content Security Policy.
