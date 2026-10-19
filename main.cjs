@@ -151,7 +151,7 @@ ipcMain.handle('library:action', async (_event, id, action) => {
   if (!(await fs.lstat(target)).isFile()) throw new Error('The executable is no longer available.');
   if (action === 'setup') { const error = await shell.openPath(target); if (error) throw new Error(error); return; }
   await new Promise((resolve, reject) => {
-    const child = spawn(target, [], { cwd: path.dirname(target), detached: true, stdio: 'ignore', shell: false, windowsHide: false });
+    const child = spawn(target, [], { cwd: path.dirname(target), detached: true, stdio: 'ignore', shell: false, windowsHide: true });
     child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); });
   });
 });

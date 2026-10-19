@@ -1,6 +1,7 @@
 # Mamba
 
-Run `npm start`, or create a Windows app with `npm run build`.
+Double-click `START.vbs` to open Mamba without a terminal window, or create a
+Windows app with `npm run build`.
 
 Settings saves to `config.json`. The local build in `dist/win-unpacked` shares
 the project configuration and catalog. Moving the app elsewhere uses its own
@@ -34,8 +35,8 @@ availability can change.
 
 ## Development
 
-Install Node.js 22+, then run `npm ci` and `npm start`. Use `START.cmd` to
-compile and launch. `npm run build` produces `dist/win-unpacked`.
+Install Node.js 22+, then run `npm ci`. Double-click `START.vbs` to launch without
+a terminal; `START.cmd` forwards to the same launcher. `npm run build` produces `dist/win-unpacked`.
 GitHub Actions builds a Windows download on pushes to main and manual runs.
 
 Search uses Steam's public store search endpoint for official game names and
