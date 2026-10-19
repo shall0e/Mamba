@@ -70,9 +70,10 @@ test('complete queue downloads, extracts, flattens, and registers a portable gam
   const dir = await temp(); const config = { downloadPath: path.join(dir, 'Games'), torboxApiKey: 'fixture-key', cachedOnly: true, autoInstall: false, transferTimeoutMinutes: 5 };
   const archive = zip('Outer/Inner/Fixture.exe', 'fixture, never executed');
   const game = { id: 'fixture-game', name: 'Fixture Game', links: [{ uri: magnet }] };
-  const library = new Library(async () => config);
-  const jobs = new Downloads(dir, async () => config, { byId: new Map([[game.id, game]]) }, library, { transport: async () => new Response(archive, { headers: { 'Content-Length': String(archive.length) } }), apiFactory: () => ({ create: async () => ({ kind: 'torrents', id: 1 }), info: async () => ({ download_finished: true, files: [{ id: 0, name: 'release.zip', size: archive.length }] }), downloadLink: async () => 'https://cdn.test/archive' }) });
+  const library = new Library(async () => config); let automaticSettings;
+  const jobs = new Downloads(dir, async () => config, { byId: new Map([[game.id, game]]) }, library, { setupGame: async settings => { automaticSettings=settings; return {folder:settings.folder,executable:settings.file,steam:{status:'added'}}; }, reviewSetup:async()=>assert.fail('detected launcher should not need interactive setup'), transport: async () => new Response(archive, { headers: { 'Content-Length': String(archive.length) } }), apiFactory: () => ({ create: async () => ({ kind: 'torrents', id: 1 }), info: async () => ({ download_finished: true, files: [{ id: 0, name: 'release.zip', size: archive.length }] }), downloadLink: async () => 'https://cdn.test/archive' }) });
   const finished = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('Queue test timed out')), 15000); jobs.on('change', () => { if (['completed', 'failed'].includes(jobs.jobs[0]?.status)) { clearTimeout(timer); resolve(); } }); });
   await jobs.start(game.id); await finished;
+  assert.equal(automaticSettings.name,'Fixture Game'); assert.equal(automaticSettings.folder,path.join(config.downloadPath,'Fixture Game')); assert.equal(path.basename(automaticSettings.file),'Fixture.exe');
   assert.equal(jobs.jobs[0].status, 'completed', jobs.jobs[0].message); assert.equal(library.items.length, 1); assert.equal(library.items[0].status, 'installed'); assert.equal(path.basename(library.items[0].executable), 'Fixture.exe');
 });

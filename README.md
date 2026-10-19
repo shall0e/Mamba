@@ -93,3 +93,14 @@ up, and an unknown format is rejected without replacing it. Open/update Xbox
 once if its custom-library folder is missing. Reopen Xbox to refresh its tiles
 after registration if necessary. This adds a local PC launcher entry, with no
 Xbox license or achievement entitlement.
+
+The game-local helper offers Enter to keep the suggested startup file, a numbered
+launcher list, a full path, or B to browse for a file. The game root also has a
+folder picker. Invalid paths can be corrected without restarting the helper.
+Your selection is saved relative to the game folder in .mamba-helper.json, so it
+is reused when the folder moves. Library also has a Startup file action.
+
+After installation Mamba automatically runs the same helper logic using the
+name, game root and launcher it detected, including desktop, Steam and Xbox
+registration. No terminal is opened when those defaults work. If the launcher
+cannot be detected or setup fails, the interactive helper opens for correction.

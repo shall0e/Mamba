@@ -235,6 +235,7 @@ function renderLibrary(games = installedGames) {
       if (game.status === 'installed' && game.executable) actions.append(button('Play', () => window.mamba.gameAction(game.id, 'play'), 'play', 'primary-button'));
       else if (game.installer) actions.append(button('Set up', () => window.mamba.gameAction(game.id, 'setup'), 'play', 'primary-button'));
       actions.append(button('Folder', () => window.mamba.gameAction(game.id, 'folder'), 'folder-open'));
+      actions.append(button('Startup file', () => window.mamba.gameAction(game.id, 'launcher'), 'folder-open'));
       card.append(actions);
     }
     list.append(card);

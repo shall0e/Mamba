@@ -41,3 +41,9 @@ test('Steam reopens even when shortcut writing fails',async t=>{
  const dir=await temp(t),file=path.join(dir,'shortcuts.vdf');await write(file+'.mamba-lock');let running=true,reopened=false;
  await assert.rejects(registerSteam({name:'Test',executable:'C:\\test.exe',folder:'C:\\'}, {profile:async()=>file,running:async()=>running,shutdown:async()=>{running=false;},reopen:async()=>{reopened=true;}}),/EEXIST/);assert.equal(reopened,true);
 });
+test('saved manual startup file overrides detection and follows a moved game folder',async t=>{
+ const dir=await temp(t),root=path.join(dir,'Game');const chosen=path.join(root,'my-custom-start.cmd');await write(chosen);await write(path.join(root,'wrong.exe'));
+ const result=await addGame({file:chosen,folder:root,name:'Game',resolveName:async n=>n,desktop:async()=>{},steam:async()=>({status:'added'}),xbox:async()=>({status:'added'})});
+ const saved=JSON.parse(await fs.readFile(path.join(root,'.mamba-helper.json'),'utf8'));assert.equal(saved.launcher,'my-custom-start.cmd');const moved=path.join(dir,'Moved Game');await fs.rename(root,moved);const defaults=await require('../tools/add-game.cjs').suggestedSettings(moved);assert.equal(defaults.file,path.join(moved,'my-custom-start.cmd'));
+ const {Library}=require('../lib/library.cjs');const library=new Library(async()=>({downloadPath:dir}));await library.scan();assert.equal(library.items[0].executable,defaults.file);
+});
