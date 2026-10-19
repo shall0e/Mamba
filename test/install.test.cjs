@@ -18,9 +18,9 @@ test('Steam shortcut insertion preserves existing records and repeated registrat
  const one={name:'First',executable:'C:\\Games\\First\\game.exe',folder:'C:\\Games\\First'};const two={name:'Second',executable:'C:\\Games\\Second\\start.bat',folder:'C:\\Games\\Second'};
  const original=addShortcut(Buffer.alloc(0),one);const updated=addShortcut(original,two);const old=parseVdf(original)[0].value[0].raw;assert.ok(parseVdf(updated)[0].value[0].raw.equals(old));assert.equal(parseVdf(updated)[0].value.length,2);assert.ok(addShortcut(updated,two).equals(updated));assert.throws(()=>addShortcut(Buffer.from([0,1]),one));
 });
-test('Steam registration waits for Steam to close and makes a backup before adding',async t=>{
+test('Steam registration reports shutdown timeout and makes a backup before adding',async t=>{
  const dir=await temp(t),file=path.join(dir,'shortcuts.vdf');const game={name:'Test',executable:'C:\\Games\\Test\\game.exe',folder:'C:\\Games\\Test'};
- assert.equal((await registerSteam(game,{running:async()=>true,profile:()=>assert.fail('must not write')})).status,'pending');
+ let clock=0;assert.equal((await registerSteam(game,{running:async()=>true,profile:async()=>file,shutdown:async()=>{},reopen:()=>assert.fail('Steam is still running'),now:()=>clock+=50000})).status,'pending');assert.equal(await fs.access(file).then(()=>true,()=>false),false);
  await fs.writeFile(file,addShortcut(Buffer.alloc(0),{...game,name:'Other',executable:'C:\\other.exe'}));const before=await fs.readFile(file);
  assert.equal((await registerSteam(game,{running:async()=>false,profile:async()=>file})).status,'added');const backup=(await fs.readdir(dir)).find(name=>name.includes('mamba-backup'));assert.ok((await fs.readFile(path.join(dir,backup))).equals(before));assert.equal(parseVdf(await fs.readFile(file))[0].value.length,2);
 });
@@ -30,4 +30,14 @@ test('desktop shortcut points at the selected batch launcher without starting it
  const {execFile}=require('node:child_process');const exec=require('node:util').promisify(execFile);const link=path.join(dir,'Fixture Game.lnk');
  const payload=Buffer.from(link).toString('base64');const script=`$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')));@{target=$s.TargetPath;args=$s.Arguments;cwd=$s.WorkingDirectory}|ConvertTo-Json -Compress`;
  const {stdout}=await exec('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true});const shortcut=JSON.parse(stdout);assert.match(shortcut.target,/cmd.exe$/i);assert.ok(shortcut.args.includes(file));assert.equal(shortcut.cwd,dir);
+});
+test('running Steam closes normally and reopens after immediate registration; duplicates need no restart',async t=>{
+ const dir=await temp(t),file=path.join(dir,'shortcuts.vdf');const game={name:'Live Test',executable:'C:\\Games\\live.exe',folder:'C:\\Games'};let running=true;const events=[];
+ const options={profile:async()=>file,running:async()=>running,shutdown:async()=>{events.push('shutdown');running=false;},reopen:async()=>{assert.equal(parseVdf(await fs.readFile(file))[0].value.length,1);events.push('reopen');running=true;}};
+ assert.equal((await registerSteam(game,options)).status,'added');assert.deepEqual(events,['shutdown','reopen']);
+ assert.equal((await registerSteam(game,options)).status,'added');assert.deepEqual(events,['shutdown','reopen']);
+});
+test('Steam reopens even when shortcut writing fails',async t=>{
+ const dir=await temp(t),file=path.join(dir,'shortcuts.vdf');await write(file+'.mamba-lock');let running=true,reopened=false;
+ await assert.rejects(registerSteam({name:'Test',executable:'C:\\test.exe',folder:'C:\\'}, {profile:async()=>file,running:async()=>running,shutdown:async()=>{running=false;},reopen:async()=>{reopened=true;}}),/EEXIST/);assert.equal(reopened,true);
 });

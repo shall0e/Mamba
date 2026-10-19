@@ -65,7 +65,8 @@ the chosen launcher, creates a desktop shortcut, and registers a non-Steam game.
 EXE, COM, BAT, CMD, PS1, and Windows shortcuts are supported.
 
 New installations automatically register in the most recently active Steam
-account. Steam must be fully exited before its shortcut file can be updated;
-Mamba keeps pending registrations and retries every 30 seconds while open.
-Existing shortcuts are preserved and backed up before changes. Steam can then
-be reopened. This adds a non-Steam shortcut; it does not grant a Steam license.
+account. If Steam is running, Mamba requests a normal shutdown, saves the shortcut,
+and reopens Steam automatically. Existing identical shortcuts do not trigger a
+restart. If Steam refuses to close within 45 seconds, registration stays pending
+and reports the failure. Existing shortcuts are preserved and backed up.
+This adds a non-Steam shortcut; it does not grant a Steam license.

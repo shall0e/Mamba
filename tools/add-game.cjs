@@ -46,12 +46,6 @@ async function main() {
     const metadata=new Metadata(directory,{games:[],replace(){}});await metadata.load();
     const result=await addGame({file,folder,name,resolveName:value=>metadata.resolveName(value)});
     console.log(`\nDesktop shortcut created.\nGame folder: ${result.folder}\n${result.steam.message}`);
-    if(result.steam.status==='pending'){
-      await ask('Exit Steam completely, then press Enter to retry (or leave it for Mamba): ');
-      const steam=await registerSteam(result).catch(error=>({status:'pending',message:error.message}));
-      const manifestFile=path.join(result.folder,'.mamba-game.json');const saved=JSON.parse(await fs.readFile(manifestFile,'utf8'));
-      await atomicJson(manifestFile,{...saved,steam});console.log(steam.message);
-    }
     console.log('Refresh Library in Mamba to see the selected launcher.');
   } finally { input.close(); }
 }
