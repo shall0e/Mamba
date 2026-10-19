@@ -93,7 +93,7 @@
           const renderOption=(option,best)=>{
             const card=node('article',undefined,'download-choice'+(best?' recommended-choice':''));if(best)card.append(node('p','RECOMMENDED FOR YOU','choice-label'));
             card.append(node('h3',option.release),node('p',[option.fileSize,option.sources.join(', ')].filter(Boolean).join(' · '),'choice-meta'),node('p',option.reasons.join(' · '),'choice-reasons'));
-            const download=action(best?'Download best match':'Download this version',async()=>{await window.mamba.download(option.gameId,option.linkIndex);showToast('Added to downloads');showPage('activity');},'download',best?'primary-button':'secondary-button');download.disabled=!option.available||option.traits.incompatible||option.traits.partial;card.append(download);return card;
+            const download=action(best?'Download best match':'Download this version',async()=>{await window.mamba.download(option.gameId,option.linkIndex,data.catalogId);showToast('Added to downloads');showPage('activity');},'download',best?'primary-button':'secondary-button');download.disabled=!option.available||option.traits.incompatible||option.traits.partial;card.append(download);return card;
           };
           if(resolved.best)section.append(renderOption(resolved.best,true));
           const alternatives=resolved.options.filter(option=>!resolved.best||option.gameId!==resolved.best.gameId||option.linkIndex!==resolved.best.linkIndex);

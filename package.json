@@ -1,6 +1,6 @@
 {
   "name": "minimal-downloader",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "main": "main.cjs",
   "scripts": {
@@ -17,6 +17,7 @@
       "!artwork/**",
       "!game-metadata.json*",
       "!game-identities.json*",
+      "!steam-search.json*",
       "!library-state.json*",
       "!issues.json*",
       "!**/*.log",

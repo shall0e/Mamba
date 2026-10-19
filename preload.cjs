@@ -54,7 +54,7 @@ contextBridge.exposeInMainWorld('mamba', {
   artwork: (id) => ipcRenderer.invoke('catalog:artwork', id),
   downloadBest: (id) => ipcRenderer.invoke('downloads:best', id),
   jobs: () => ipcRenderer.invoke('downloads:list'),
-  download: (id, option) => ipcRenderer.invoke('downloads:start', id, option),
+  download: (id, option, game) => ipcRenderer.invoke('downloads:start', id, option, game),
   cancel: (id) => ipcRenderer.invoke('downloads:cancel', id),
   retry: (id) => ipcRenderer.invoke('downloads:retry', id),
   removeDownload: (id) => ipcRenderer.invoke('downloads:remove', id),
