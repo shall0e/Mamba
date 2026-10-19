@@ -11,7 +11,7 @@ test('preserves UE Binaries/Win64 and refuses folder-name collisions without ove
 });
 test('manual helper repairs root and remaps chosen batch launcher for desktop and Steam',async t=>{
  const parent=await temp(t),root=path.join(parent,'Release');const file=path.join(root,'Nested','launch.cmd');await write(file);let desktop,steam;
- const result=await addGame({file,folder:root,name:'source title',resolveName:async()=> 'Steam Title',desktop:async(...args)=>{desktop=args;},steam:async game=>{steam=game;return {status:'added'};}});
+ const result=await addGame({file,folder:root,name:'source title',xbox:async()=>({status:'added'}),resolveName:async()=> 'Steam Title',desktop:async(...args)=>{desktop=args;},steam:async game=>{steam=game;return {status:'added'};}});
  assert.equal(result.executable,path.join(parent,'Steam Title','launch.cmd'));assert.equal(desktop[1],result.executable);assert.equal(steam.executable,result.executable);assert.equal(JSON.parse(await fs.readFile(path.join(result.folder,'.mamba-game.json'))).steam.status,'added');assert.match(launchTarget(result.executable).args,/launch.cmd/);
 });
 test('Steam shortcut insertion preserves existing records and repeated registration is idempotent',async()=>{

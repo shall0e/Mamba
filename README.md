@@ -70,3 +70,17 @@ and reopens Steam automatically. Existing identical shortcuts do not trigger a
 restart. If Steam refuses to close within 45 seconds, registration stays pending
 and reports the failure. Existing shortcuts are preserved and backed up.
 This adds a non-Steam shortcut; it does not grant a Steam license.
+
+## Xbox PC library
+
+New installations and ADD-GAME.cmd also register the selected launcher in the
+Xbox PC app's custom library. Existing Mamba installations are imported on
+startup and Library refresh. EXE launchers are added directly; scripts use their
+Windows interpreter and arguments. Available cached artwork is copied locally.
+
+Registration uses the Xbox app's local CustomLibraryManagement.manifest format,
+which is not a published Microsoft API. Existing entries are preserved and backed
+up, and an unknown format is rejected without replacing it. Open/update Xbox
+once if its custom-library folder is missing. Reopen Xbox to refresh its tiles
+after registration if necessary. This adds a local PC launcher entry, with no
+Xbox license or achievement entitlement.

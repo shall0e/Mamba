@@ -5,11 +5,27 @@ const defaultPalette = require('./palette-defaults.json');
 const { Catalog } = require('./lib/catalog.cjs');
 const { Library, within, finalizeInstallation, atomicJson } = require('./lib/library.cjs');
 const { registerSteam } = require('./lib/shortcuts.cjs');
+const { registerXbox } = require('./lib/xbox.cjs');
 const { Downloads } = require('./lib/downloads.cjs');
 const { Artwork } = require('./lib/artwork.cjs');
 const { Metadata } = require('./lib/metadata.cjs');
 const { spawn } = require('node:child_process');
 let catalog, library, downloads, artwork, metadata, configWatcher, watchTimer, steamTimer, resolvedDataDirectory;
+async function addXboxGame(game) {
+  const group = catalog.searchIndex?.find(entry => entry.name === game.name);
+  const image = group ? await artwork.get(group.id).catch(() => null) : null;
+  return registerXbox({ ...game, image });
+}
+async function syncXboxLibrary() {
+  for (const game of library.items) {
+    if (!game.executable || game.status !== 'installed') continue;
+    const file = path.join(game.folder, '.mamba-game.json');
+    const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
+    if (!manifest.name || manifest.xbox?.status === 'added') continue;
+    const xbox = await addXboxGame(game).catch(error => ({ status: 'pending', message: error.message }));
+    await atomicJson(file, { ...manifest, xbox });
+  }
+}
 function dataDirectory() {
   if (resolvedDataDirectory) return resolvedDataDirectory;
   if (!app.isPackaged) return resolvedDataDirectory = process.env.MAMBA_DATA_DIR ? path.resolve(process.env.MAMBA_DATA_DIR) : __dirname;
@@ -139,7 +155,7 @@ ipcMain.handle('downloads:cancel', (_event, id) => downloads.cancel(id));
 ipcMain.handle('downloads:retry', (_event, id) => downloads.retry(id));
 ipcMain.handle('downloads:remove', (_event, id) => downloads.remove(String(id)));
 ipcMain.handle('downloads:clear-finished', () => downloads.clearFinished());
-ipcMain.handle('library:scan', async () => { const games = await library.scan(); broadcast('library:changed', games); return games; });
+ipcMain.handle('library:scan', async () => { const games = await library.scan(); await syncXboxLibrary().catch(() => {}); broadcast('library:changed', games); return games; });
 ipcMain.handle('library:action', async (_event, id, action) => {
   const game = library.get(id);
   if (!game) throw new Error('Game not found. Refresh your library.');
@@ -203,13 +219,14 @@ app.whenReady().then(async () => {
     if (downloads.jobs.some(job => job.folder === folder && downloads.controllers.has(job.id))) return null;
     const name = await metadata.resolveName(manifest.name);
     const result = await finalizeInstallation(folder, name, { releaseId: manifest.releaseId, status: 'installed' });
+    result.manifest.xbox = await addXboxGame({ name, executable: result.executable, folder: result.folder }).catch(error => ({ status: 'pending', message: error.message }));
     const steam = await registerSteam({ name, executable: result.executable, folder: result.folder }).catch(error => ({ status: 'pending', message: error.message }));
     result.manifest.steam = steam;
     await atomicJson(path.join(result.folder, '.mamba-game.json'), result.manifest);
     for (const job of downloads.jobs.filter(job => job.folder === folder)) await downloads.update(job, { folder: result.folder, name, status: 'completed', message: 'Ready to play' });
     return result;
   } });
-  downloads = new Downloads(dataDirectory(), readConfig, catalog, library, { resolveName: name => metadata.resolveName(name), registerGame: registerSteam });
+  downloads = new Downloads(dataDirectory(), readConfig, catalog, library, { resolveName: name => metadata.resolveName(name), registerGame: registerSteam, registerXbox: addXboxGame });
   artwork = new Artwork(dataDirectory(), catalog);
   catalog.on('status', (state) => broadcast('catalog:changed', state));
   let lastLibrary = '';
@@ -223,6 +240,7 @@ app.whenReady().then(async () => {
   await metadata.load();
   await downloads.load();
   await library.scan().catch(() => {});
+  await syncXboxLibrary().catch(() => {});
   await fs.mkdir(path.dirname(configFile()), { recursive: true });
   configWatcher = require('node:fs').watch(path.dirname(configFile()), (_type, filename) => {
     if (String(filename) !== 'config.json') return;
@@ -238,6 +256,7 @@ app.whenReady().then(async () => {
       if (library.items.some(game => game.repairPending)) {
         await library.scan(); broadcast('library:changed', library.items);
       }
+      await syncXboxLibrary();
       for (const game of library.items) {
         const file = path.join(game.folder, '.mamba-game.json');
         const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
