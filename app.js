@@ -210,7 +210,7 @@ function showPage(name) {
 function renderLibrary(games = installedGames) {
   installedGames = games.filter((game) => game && typeof game.name === 'string');
   const query = document.querySelector('#library-filter').value.trim().toLowerCase();
-  const installed = installedGames.filter((game) => game.name.toLowerCase().includes(query));
+  const installed = installedGames.filter((game) => [game.name, ...(game.installations || []).map(item => item.sourceName || item.name), ...(game.dlcs || []).map(item => item.name)].join(' ').toLowerCase().includes(query));
   const list = document.querySelector('#game-list');
   list.replaceChildren();
   document.querySelector('#library-empty').hidden = installedGames.length > 0;
@@ -233,8 +233,26 @@ function renderLibrary(games = installedGames) {
     const name = document.createElement('h2');
     name.textContent = game.name;
     const status = document.createElement('p');
-    status.textContent = game.repairPending ? 'Folder cleanup pending' : game.status === 'installed' ? 'Ready to play' : 'Setup required';
+    status.textContent = game.repairPending ? 'Folder cleanup pending' : game.status === 'base-missing' ? 'Base game not installed' : game.status === 'installed' ? 'Ready to play' : 'Setup required';
     card.append(mark, name, status);
+    const identity = document.createElement('p'); identity.textContent = game.verified ? 'Verified on Steam' : 'Steam match unavailable'; card.append(identity);
+    const alternatives = game.installations || [];
+    if (alternatives.length > 1 || game.dlcs?.length || game.demos?.length) {
+      const details = document.createElement('details'); details.className = 'game-editions';
+      const summary = document.createElement('summary'); summary.textContent = [alternatives.length > 1 ? alternatives.length + ' installations' : '', game.dlcs?.length ? game.dlcs.length + ' DLC' : '', game.demos?.length ? game.demos.length + ' demos' : ''].filter(Boolean).join(' · '); details.append(summary);
+      for (const item of alternatives.length > 1 ? alternatives : []) {
+        const label = document.createElement('p'); label.textContent = item.sourceName || item.name; label.title = item.folder; details.append(label);
+        const actions = document.createElement('div'); actions.className = 'game-actions';
+        if (item.status === 'installed' && item.executable) actions.append(button('Play', () => window.mamba.gameAction(item.id, 'play'), 'play'));
+        actions.append(button('Folder', () => window.mamba.gameAction(item.id, 'folder'), 'folder-open'));
+        actions.append(button('Startup file', () => window.mamba.gameAction(item.id, 'launcher'), 'folder-open')); details.append(actions);
+      }
+      for (const item of [...(game.dlcs || []), ...(game.demos || [])]) {
+        const label = document.createElement('p'); label.textContent = item.name; details.append(label);
+        details.append(button('Folder', () => window.mamba.gameAction(item.id, 'folder'), 'folder-open'));
+      }
+      card.append(details);
+    }
     if (window.mamba && game.id) {
       const actions = document.createElement('div'); actions.className = 'game-actions';
       if (game.status === 'installed' && game.executable) actions.append(button('Play', () => window.mamba.gameAction(game.id, 'play'), 'play', 'primary-button'));

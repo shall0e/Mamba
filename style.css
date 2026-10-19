@@ -280,3 +280,11 @@ button { transition: background 140ms ease, color 140ms ease, transform 140ms ea
 .game-art.has-cover > svg { visibility: hidden; }
 .game-card h2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .transfer-row progress { display: block; width: 100%; height: 6px; margin: 14px 0; }
+
+.game-editions { width: 100%; padding: 10px; border-radius: 10px; background: var(--color-inputInset); }
+.game-editions summary { cursor: pointer; color: var(--color-textSecondary); font-size: 12px; }
+.game-editions p { overflow-wrap: anywhere; }
+
+.game-editions summary { list-style: none; padding: 4px; border-radius: 6px; }
+.game-editions summary::-webkit-details-marker { display: none; }
+.game-editions summary:hover, .game-editions summary:focus-visible { background: var(--color-hover); }

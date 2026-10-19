@@ -14,8 +14,9 @@ let updates;
 const { Downloads } = require('./lib/downloads.cjs');
 const { Artwork } = require('./lib/artwork.cjs');
 const { Metadata } = require('./lib/metadata.cjs');
+const { GameIdentity } = require('./lib/game-identity.cjs');
 const { spawn } = require('node:child_process');
-let catalog, library, downloads, artwork, metadata, configWatcher, watchTimer, steamTimer, resolvedDataDirectory;
+let catalog, library, downloads, artwork, metadata, gameIdentity, configWatcher, watchTimer, steamTimer, resolvedDataDirectory;
 async function addXboxGame(game) {
   const group = catalog.searchIndex?.find(entry => entry.name === game.name);
   const image = group ? await artwork.get(group.id).catch(() => null) : null;
@@ -250,7 +251,7 @@ app.whenReady().then(async () => {
   updates.on('change',state=>broadcast('app:updated',state));
   await registerHelperRuntime();
   catalog = new Catalog(dataDirectory(), readConfig);
-  library = new Library(readConfig, { repair: async ({ folder, manifest }) => {
+  library = new Library(readConfig, { identify: (name,hints) => gameIdentity.identify(name,hints), repair: async ({ folder, manifest }) => {
     if (downloads.jobs.some(job => job.folder === folder && downloads.controllers.has(job.id))) return null;
     const name = await metadata.resolveName(manifest.name);
     const result = await finalizeInstallation(folder, name, { releaseId: manifest.releaseId, status: 'installed' });
@@ -272,9 +273,10 @@ app.whenReady().then(async () => {
   await catalog.load();
   metadata = new Metadata(dataDirectory(), catalog);
   await metadata.load();
+  gameIdentity = new GameIdentity(dataDirectory());
+  await gameIdentity.load();
   await downloads.load();
-  await library.scan().catch(() => {});
-  await syncXboxLibrary().catch(() => {});
+  const initialLibraryScan = library.scan();
   await fs.mkdir(path.dirname(configFile()), { recursive: true });
   configWatcher = require('node:fs').watch(path.dirname(configFile()), (_type, filename) => {
     if (String(filename) !== 'config.json') return;
@@ -282,6 +284,7 @@ app.whenReady().then(async () => {
     watchTimer = setTimeout(() => catalog.sync().catch(() => {}), 1000);
   });
   createWindow();
+  initialLibraryScan.then(async games => { broadcast('library:changed', games); await syncXboxLibrary().catch(() => {}); }).catch(() => {});
   updates.start();
   let steamBusy = false;
   steamTimer = setInterval(async () => {

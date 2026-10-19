@@ -14,3 +14,5 @@ vendor/7zip/*
 !vendor/7zip/7z.dll
 !vendor/7zip/License.txt
 !vendor/7zip/readme.txt
+
+game-identities.json*
