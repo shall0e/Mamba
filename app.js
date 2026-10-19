@@ -31,7 +31,7 @@ function thumbnailGlowColors(image) {
       const key = rgb.map(channel => channel >> 5).join(',');
       const bin = bins.get(key) || { rgb: [0, 0, 0], count: 0, weight: 0 };
       rgb.forEach((channel, i) => bin.rgb[i] += channel); bin.count++;
-      bin.weight += (max - min) / max;
+      bin.weight += .7 + ((max - min) / max) * .3;
       bins.set(key, bin);
     }
     const candidates = [...bins.values()].sort((a, b) => b.weight - a.weight).map(bin => bin.rgb.map(channel => channel / bin.count));
@@ -44,7 +44,9 @@ function thumbnailGlowColors(image) {
     if (!chosen.length) return ['#c8c8c8', '#eeeeee', '#a8a8a8'];
     return Array.from({ length: 3 }, (_, i) => {
       const rgb = chosen[i % chosen.length];
-      const factor = 235 / Math.max(...rgb);
+      // Keep the sampled color soft; only lift very dim shades a little so
+      // they remain visible against darkened Steam artwork.
+      const factor = Math.min(1.16, 180 / Math.max(...rgb));
       return '#' + rgb.map(channel => Math.round(Math.min(255, channel * factor)).toString(16).padStart(2, '0')).join('');
     });
   } catch { return null; }
@@ -81,6 +83,7 @@ async function advanceSteamBackdrop() {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         image.classList.add('visible');
         glow.classList.add('visible');
+        updateAmbientTextContrast(image);
       }));
       // Retain the previous slide until the incoming artwork has fully faded in.
       setTimeout(() => [...previous, ...previousGlow].forEach(slide => slide.remove()), 2800);
@@ -106,6 +109,34 @@ function updateHomeBackdrop() {
   const home = !document.querySelector('#search-page').hidden && !document.querySelector('#main-search').value.trim();
   document.body.classList.toggle('home-active', home);
   if (home && !document.querySelector('#steam-backdrop').childElementCount) advanceSteamBackdrop();
+  if (home) {
+    const image = document.querySelector('#steam-backdrop img.visible');
+    if (image) updateAmbientTextContrast(image);
+  }
+}
+
+function updateAmbientTextContrast(image) {
+  const label = document.querySelector('#search-context');
+  if (!image?.naturalWidth || !label?.getClientRects().length || !document.body.classList.contains('home-active')) return;
+  try {
+    const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 20;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const rect = label.getBoundingClientRect();
+    const x = (rect.left + rect.width / 2 + 28) / (innerWidth + 56) * canvas.width;
+    const y = (rect.top + rect.height / 2 + 28) / (innerHeight + 56) * canvas.height;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let brightness = 0, samples = 0;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      const px = Math.max(0, Math.min(canvas.width - 1, Math.round(x + dx)));
+      const py = Math.max(0, Math.min(canvas.height - 1, Math.round(y + dy)));
+      const offset = (py * canvas.width + px) * 4;
+      const tinted = [0, 1, 2].map(channel => pixels[offset + channel] * .64 + parseInt(getComputedStyle(document.documentElement).getPropertyValue('--color-primary').slice(channel * 2 + 1, channel * 2 + 3), 16) * .36);
+      const linear = tinted.map(value => { const c = value / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
+      brightness += linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722; samples++;
+    }
+    label.style.setProperty('--ambient-ink', brightness / samples > .179 ? '#000000' : '#ffffff');
+  } catch { /* Cross-origin artwork can skip sampling without affecting the search UI. */ }
 }
 
 function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }

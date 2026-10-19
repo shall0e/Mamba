@@ -15,6 +15,7 @@
       "**/*",
       "!dist/**",
       "!dist-preview/**",
+      "!dist-preview-next/**",
       "!catalog.json*",
       "!artwork/**",
       "!game-metadata.json*",
