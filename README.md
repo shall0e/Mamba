@@ -64,6 +64,15 @@ select the actual game root, and confirm the name. It repairs the folder, saves
 the chosen launcher, creates a desktop shortcut, and registers a non-Steam game.
 EXE, COM, BAT, CMD, PS1, and Windows shortcuts are supported.
 
+Every downloaded game also receives an ADD-GAME.cmd automatically, including
+games that still need setup. Existing Mamba game folders receive it during a
+Library scan. The same command works for every game and Windows user: it derives
+the game folder from its own location and finds Mamba through the current user's
+runtime registration. No developer paths or usernames are embedded. Open Mamba
+once after installing or moving it to update that registration. The command
+leaves the game directory before starting the helper so folder cleanup is not
+blocked by its own working directory.
+
 New installations automatically register in the most recently active Steam
 account. If Steam is running, Mamba requests a normal shutdown, saves the shortcut,
 and reopens Steam automatically. Existing identical shortcuts do not trigger a

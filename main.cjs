@@ -6,6 +6,7 @@ const { Catalog } = require('./lib/catalog.cjs');
 const { Library, within, finalizeInstallation, atomicJson } = require('./lib/library.cjs');
 const { registerSteam } = require('./lib/shortcuts.cjs');
 const { registerXbox } = require('./lib/xbox.cjs');
+const { registerHelperRuntime } = require('./lib/game-helper.cjs');
 const { Downloads } = require('./lib/downloads.cjs');
 const { Artwork } = require('./lib/artwork.cjs');
 const { Metadata } = require('./lib/metadata.cjs');
@@ -214,6 +215,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  await registerHelperRuntime();
   catalog = new Catalog(dataDirectory(), readConfig);
   library = new Library(readConfig, { repair: async ({ folder, manifest }) => {
     if (downloads.jobs.some(job => job.folder === folder && downloads.controllers.has(job.id))) return null;
