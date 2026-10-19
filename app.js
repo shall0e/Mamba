@@ -139,14 +139,71 @@ function updateAmbientTextContrast(image) {
   } catch { /* Cross-origin artwork can skip sampling without affecting the search UI. */ }
 }
 
+function titleMatchTokens(value) {
+  const roman = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9' };
+  return String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[™®©]/g, '')
+    .toLocaleLowerCase().replace(/\b(?:iii|ii|iv|viii|vii|vi|v|ix)\b/g, token => roman[token])
+    .match(/[\p{L}\p{N}]+/gu) || [];
+}
+
+function confidentTitleMatch(query, name) {
+  const ignore = new Set(['a', 'an', 'and', 'of', 'the', 'for', 'on', 'edition', 'pc']);
+  const wanted = titleMatchTokens(query).filter(word => !ignore.has(word));
+  const title = titleMatchTokens(name).filter(word => !ignore.has(word));
+  if (wanted.length < 2 || !title.length) return 0;
+  const normalize = words => [...new Set(words)].sort().join(' ');
+  if (normalize(wanted) === normalize(title)) return 1;
+  const matches = wanted.filter(word => title.includes(word)).length;
+  if (matches !== wanted.length) return 0;
+  const queryPhrase = wanted.join(' ');
+  const titlePhrase = title.join(' ');
+  if (titlePhrase.includes(queryPhrase) && title.length - wanted.length <= 3) {
+    return .82 + .17 * (wanted.length / title.length);
+  }
+  const overlap = matches / new Set([...wanted, ...title]).size;
+  return overlap >= .76 ? overlap : 0;
+}
+
+function bestFeaturedMatch(query, games) {
+  const ranked = games.map(game => ({ game, score: confidentTitleMatch(query, game.name) }))
+    .filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+  if (!ranked.length) return null;
+  // Avoid guessing when a broad or shortened query matches several titles alike.
+  if (ranked.length > 1 && ranked[0].score < 1 && ranked[0].score - ranked[1].score < .12) return null;
+  return ranked[0].game;
+}
+
+function renderFeaturedGame(game) {
+  const banner = document.querySelector('#featured-game');
+  banner.replaceChildren();
+  banner.hidden = !game;
+  if (!game) return;
+  banner.dataset.gameId = String(game.id);
+  const cover = document.createElement('img'); cover.className = 'featured-art'; cover.alt = ''; cover.decoding = 'async';
+  window.mamba.artwork(game.id).then(image => { if (image && banner.isConnected && banner.dataset.gameId === String(game.id)) cover.src = image; }).catch(() => {});
+  cover.addEventListener('error', () => cover.remove());
+  const shade = document.createElement('div'); shade.className = 'featured-shade';
+  const content = document.createElement('div'); content.className = 'featured-content';
+  const badge = document.createElement('p'); badge.className = 'featured-badge'; badge.textContent = 'Best match';
+  const title = document.createElement('h2'); title.textContent = game.name;
+  const actions = document.createElement('div'); actions.className = 'featured-actions';
+  actions.append(button('Download', async () => {
+    const jobId = await window.mamba.downloadBest(game.id);
+    cardJobs.set(game.id, jobId); showToast(`${game.name} added to downloads`);
+  }, 'download', 'primary-button'));
+  actions.append(button('Details', () => openGame(game), 'info', 'secondary-button'));
+  content.append(badge, title, actions);
+  banner.append(cover, shade, content);
+}
+
 function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button'); control.type = 'button'; control.className = className;
   if (iconName) control.append(icon(iconName));
   control.append(document.createTextNode(label));
-  control.addEventListener('click', async () => {
+  control.addEventListener('click', async (event) => {
     control.disabled = true;control.setAttribute('aria-busy','true');
-    try { await action(); } catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); } finally { control.removeAttribute('aria-busy');control.disabled = control.dataset.locked === 'true'; }
+    try { await action(event); } catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); } finally { control.removeAttribute('aria-busy');control.disabled = control.dataset.locked === 'true'; }
   });
   return control;
 }
@@ -207,6 +264,7 @@ async function runSearch(more = false) {
   try {
     const result = await window.mamba.search(query, searchOffset);
     if (generation !== searchGeneration) return;
+    renderFeaturedGame(bestFeaturedMatch(query, result.items));
     for (const game of result.items) {
       const row = document.createElement('article'); row.className = 'result-card game-cover-card';
       const cover = document.createElement('button'); cover.type = 'button'; cover.className = 'game-cover'; cover.setAttribute('aria-label', `View ${game.name}`);
@@ -220,12 +278,11 @@ async function runSearch(more = false) {
       }).catch(() => {});
       const details = document.createElement('div'); details.className = 'result-info';
       const heading = document.createElement('h2'); heading.textContent = game.name;
-      const meta = document.createElement('p');
-      meta.textContent = `${game.options.length} ${game.options.length === 1 ? 'download option' : 'download options'} · ${game.sources.length} ${game.sources.length === 1 ? 'source' : 'sources'}`;
-      details.append(heading, meta);
+      details.append(heading);
       const actions = document.createElement('div'); actions.className = 'result-actions';
       actions.classList.add('game-result-action');
-      const download = button('Download', async () => {
+      const download = button('Download', async (event) => {
+        if (event.shiftKey) return openGame(game);
         download.lastChild.textContent = 'Finding best…';
         try {
           const jobId = await window.mamba.downloadBest(game.id);
@@ -234,13 +291,13 @@ async function runSearch(more = false) {
         } catch (error) { download.lastChild.textContent = 'Download'; throw error; }
       }, 'download', 'primary-button');
       if (cardJobs.has(game.id)) { download.dataset.jobId = cardJobs.get(game.id); download.dataset.locked = 'true'; download.disabled = true; download.lastChild.textContent = 'Queued'; }
-      actions.append(download, button('Options', () => openGame(game), null, 'text-button card-options'));
+      actions.append(download);
       row.append(cover, details, actions); document.querySelector('#results-list').append(row);
     }
     searchOffset += result.items.length;
     document.querySelector('#results-more').hidden = searchOffset >= result.total;
     document.querySelector('#results-status').textContent = result.total ? `${result.total.toLocaleString()} ${result.total === 1 ? 'game' : 'games'}` : ['fetching', 'merging', 'checking'].includes(catalogState.phase) ? 'The catalog is syncing. Results will appear when checks finish.' : 'No TorBox-ready games found. Try another name or sync your sources.';
-  } catch (error) { document.querySelector('#results-status').textContent = error.message; }
+  } catch (error) { renderFeaturedGame(null); document.querySelector('#results-status').textContent = error.message; }
 }
 async function openGame(game) { return window.MambaExperience.openGame(game); }
 function renderJobs(jobs) {

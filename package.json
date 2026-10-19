@@ -1,6 +1,6 @@
 {
   "name": "minimal-downloader",
-  "version": "0.3.2",
+  "version": "1.0.0",
   "private": true,
   "main": "main.cjs",
   "scripts": {
