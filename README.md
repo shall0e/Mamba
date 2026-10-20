@@ -25,17 +25,3 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 ## Features
 
 ### Game Discovery
-- **Extensive game catalog** - Bring all of your Hydra links over, Mamba sorts through the garbage.
-- **One-click downloads** - Just search and hit download.
-- **Centralized interface** - Discover available downloads from one application.
-
-### Download Management
-- **Download progress tracking** - Monitor active downloads and their progress.
-- **Download history** - Keep track of download activity.
-- **Download diagnostics** - Collect troubleshooting information when downloads fail.
-
-### Desktop Experience
-- **Minimalist interface** - Designed around simplicity rather than extensive navigation.
-- **Lightweight workflow** - Avoid the complexity of managing an entire gaming library.
-- **Focused functionality** - Download games without distractions or unnecessary extras.
-- **Customizability** - Make it yours and express yourself through color!
