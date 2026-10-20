@@ -42,11 +42,16 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 
 ## Mamba vs. Hydra
 
-| Area | Mamba | [Hydra](https://github.com/hydralauncher/hydra) |
-|---|---|---|
-| **Focus** | A lightweight, download-focused Windows game downloader. | An all-in-one platform for managing a gaming library. |
-| **Game library** | Browse and manage downloads through a centralized interface. | Add owned games to a library and manage what you play. |
-| **Discovery** | Search a catalog of available downloads. | Browse a catalog with recommendations and discover games. |
-| **Downloads** | One-click downloads with progress tracking, history, and diagnostics. | Built-in BitTorrent client for downloads. |
-| **Extra features** | Focused on the download workflow and customization. | Also lists profiles, cloud saves, and achievements. |
+| Feature | Mamba | [Hydra](https://github.com/hydralauncher/hydra) |
+|---|:---:|:---:|
+| Game library | ✅ | ✅ |
+| Game discovery | ✅ | ✅ |
+| One-click downloads | ✅ | ✅ |
+| Download progress tracking | ✅ | ✅ |
+| Download history | ✅ | ✅ |
+| Download diagnostics | ✅ | ❌ |
+| Built-in BitTorrent client | ❌ | ✅ |
+| Player profiles | ❌ | ✅ |
+| Cloud saves | ❌ | ✅ |
+| Achievements | ❌ | ✅ |
 
