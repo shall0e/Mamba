@@ -2,7 +2,7 @@
 
 # Mamba Launcher
 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/shall0e/Mamba/total?style=plastic) ![GitHub Release](https://img.shields.io/github/v/release/shall0e/Mamba)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/shall0e/Mamba/total?style=plastic) ![GitHub Release](https://img.shields.io/github/v/release/shall0e/Mamba) ![GitHub Repo stars](https://img.shields.io/github/stars/shall0e/Mamba) ![GitHub Issues](https://img.shields.io/github/issues/shall0e/Mamba)
 
 ## What if Hydra's heads never grew back?
 
