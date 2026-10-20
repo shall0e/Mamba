@@ -1,5 +1,7 @@
 # Mamba Launcher
 
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/shall0e/Mamba/total?style=plastic) ![GitHub Release](https://img.shields.io/github/v/release/shall0e/Mamba)
+
 ## What if Hydra's heads never grew back?
 
 ### A simpler, download-focused alternative to Hydra Launcher.
