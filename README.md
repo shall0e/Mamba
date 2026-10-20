@@ -16,11 +16,11 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 
 | Launcher | Game library |
 |---|---|
-| <img src="assets/screenshots/launcher.svg" alt="Mamba launcher" width="480"> | <img src="assets/screenshots/library.svg" alt="Mamba game library" width="480"> |
+| <img src="assets/screenshots/launcher.jpg" alt="Mamba launcher" width="480"> | <img src="assets/screenshots/library.jpg" alt="Mamba game library" width="480"> |
 
 | Game details | Activity |
 |---|---|
-| <img src="assets/screenshots/beamng-detail.svg" alt="BeamNG.drive game details" width="480"> | <img src="assets/screenshots/activity.svg" alt="Mamba activity dashboard" width="480"> |
+| <img src="assets/screenshots/beamng-detail.jpg" alt="BeamNG.drive game details" width="480"> | <img src="assets/screenshots/activity.jpg" alt="Mamba activity dashboard" width="480"> |
 
 ## Features
 
