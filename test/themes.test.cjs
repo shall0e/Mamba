@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const model=require('../theme-model.js');const {Themes}=require('../lib/themes.cjs');const {validateSettings,encodeConfig,decodeConfig}=require('../lib/config-transfer.cjs');
-test('built-in themes map the five color roles to the actual UI palette',()=>{
- assert.deepEqual(model.presets.map(theme=>theme.name),['Dark','Light','Modern Warfare 4']);
+test('Dark and Light map the five color roles to the actual UI palette',()=>{
+ assert.deepEqual(model.presets.map(theme=>theme.name),['Dark','Light']);
  for(const theme of model.presets){const palette=model.palette(theme);assert.equal(palette.primary,theme.colors.background);assert.equal(palette.surface,theme.colors.foreground);assert.equal(palette.input,theme.colors.input);assert.equal(palette.button,theme.colors.input);assert.equal(palette.playButton,theme.colors.icons);assert.equal(palette.icons,theme.colors.icons);for(const key of ['text','textSecondary','textMuted','textOnSelection','buttonText'])assert.equal(palette[key],theme.colors.text);assert.deepEqual(validateSettings({palette}).palette,palette);}
 });
 test('theme sharing whitelists appearance and never includes account or source settings',()=>{

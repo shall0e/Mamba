@@ -3,8 +3,7 @@
   const fontRoles={body:'Body text',headings:'Headings',buttons:'Buttons',inputs:'Inputs',navigation:'Sidebar',gameTitles:'Game titles',search:'Search'};
   const presets=[
     {schemaVersion:1,name:'Dark',colors:{background:'#181818',foreground:'#202020',input:'#303030',icons:'#dedee3',text:'#eeeeee'},glass:{opacity:.88,blur:22}},
-    {schemaVersion:1,name:'Light',colors:{background:'#eef0f4',foreground:'#ffffff',input:'#e0e5ee',icons:'#3e5bc7',text:'#222936'},glass:{opacity:.94,blur:22}},
-    {schemaVersion:1,name:'Modern Warfare 4',colors:{background:'#141916',foreground:'#1e2420',input:'#2b342d',icons:'#b7c96b',text:'#e7e9dd'},glass:{opacity:.9,blur:18}}
+    {schemaVersion:1,name:'Light',colors:{background:'#eef0f4',foreground:'#ffffff',input:'#e0e5ee',icons:'#3e5bc7',text:'#222936'},glass:{opacity:.94,blur:22}}
   ];
   function parse(value){
     if(!value||value.schemaVersion!==1)throw Error('This is not a supported Mamba theme.');
