@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createSearchIndex, rankedSearch } = require('../lib/search.cjs');
+const { createSearchIndex, rankedSearch, optionTraits } = require('../lib/search.cjs');
 const { Catalog } = require('../lib/catalog.cjs');
 const game = (id, name, hash, sources = ['Source']) => ({ id, name, fileSize: '6 GB', sources, links: [{ uri: `magnet:?xt=urn:btih:${hash.repeat(40)}`, kind: 'torrents', cached: true }] });
 
@@ -50,6 +50,13 @@ test('exact single-game matches precede collections and partial queries remain u
 test('search groups campaign and deluxe variants under the game, while remasters stay separate', () => {
   const index = createSearchIndex([game('base', 'Example Game', 'a'), game('campaign', 'Example Game Campaign [Repack]', 'b'), game('deluxe', 'Example Game - Deluxe Edition', 'c'), game('remaster', 'Example Game Remastered', 'd')]);
   const result = rankedSearch(index, 'example game'); assert.equal(result.total, 2); assert.equal(result.items[0].options.length, 3); assert.equal(result.items[0].name, 'Example Game');
+});
+
+test('Linux vendor tags are detected even without a trailing word boundary', () => {
+  assert.equal(optionTraits({ release: "Garry's Mod (v.build 25375506 17.09.26) [MULTi] [Goldberg] [LinuxRuleZ!]" }).incompatible, true);
+  assert.equal(optionTraits({ release: 'Example Game [LinuxRulez]' }).incompatible, true);
+  assert.equal(optionTraits({ release: 'Example Game [Linux ENG]' }).incompatible, true);
+  assert.equal(optionTraits({ release: 'Example Game [LinuxRuleZ!] [Windows]' }).incompatible, false);
 });
 
 test('opening a game rechecks availability and chooses a current English release over stale, Russian-only, patch, and Linux options', async () => {

@@ -4,11 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data: https://*.steamstatic.com;">
-  <title>Mamba · TorBox</title>
+  <title>Mamba</title>
   <link rel="icon" type="image/png" href="assets/mamba.png">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="interface.css">
   <script src="app.js" defer></script>
+  <script src="activity-metrics.js" defer></script>
+  <script src="game-presence.js" defer></script>
+  <script src="discovery.js" defer></script>
+  <script src="settings-menu.js" defer></script>
+  <script src="theme-model.js" defer></script>
+  <script src="appearance.js" defer></script>
   <script src="experience.js" defer></script>
+  <script src="scrollbar.js" defer></script>
 </head>
 <body class="home-active">
   <div class="window-drag-area" aria-hidden="true"></div>
@@ -140,7 +148,7 @@
   <main class="workspace">
     <section class="page search-page" id="search-page" aria-label="Search">
       <div class="search-content">
-        <div class="search-wordmark" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="56" height="56"><span>mamba</span></div>
+        <div class="search-wordmark" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="56" height="56"><div class="search-brand-line"><span>mamba</span><small id="search-version" class="search-version" hidden></small></div></div>
         <div class="search-field">
           <svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -156,7 +164,7 @@
   <path d="m21 21-4.34-4.34" />
   <circle cx="11" cy="11" r="8" />
 </svg>
-          <input class="main-input" id="main-search" type="text" aria-label="Search games" placeholder="What do you want today?" autocomplete="off" spellcheck="false" aria-describedby="search-context">
+          <input class="main-input" id="main-search" type="text" aria-label="Search games" placeholder="What do you want today?" autocomplete="off" spellcheck="false">
           <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" title="Clear search" hidden><svg aria-hidden="true" class="lucide lucide-x"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -175,7 +183,6 @@
 </button>
           <kbd class="search-shortcut" id="search-shortcut" aria-hidden="true">Ctrl K</kbd>
         </div>
-        <p class="search-context" id="search-context">Your next game starts here.</p>
         <button class="setup-link" id="search-setup" type="button" hidden>Set up your sources<span aria-hidden="true"><svg aria-hidden="true" class="lucide lucide-arrow-up-right"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -195,14 +202,15 @@
     </section>
 <section class="page content-page" id="game-page" aria-labelledby="game-title" hidden><div id="game-content"></div></section>
 <section class="page content-page activity-page" id="activity-page" aria-labelledby="activity-title" hidden>
-<div class="page-heading"><div><p class="page-eyebrow">EVERYTHING IN PROGRESS</p><h1 id="activity-title" tabindex="-1">Activity</h1><p class="page-description">Downloads, system health, and help when you need it.</p></div><button class="secondary-button" id="export-diagnostics" type="button">Export diagnostics</button></div>
+<div class="page-heading"><h1 id="activity-title" tabindex="-1">Activity</h1><button class="secondary-button" id="export-diagnostics" type="button">Export diagnostics</button></div>
+<div class="activity-overview"><section class="speed-card" aria-labelledby="speed-title"><div class="dashboard-card-heading"><h2 id="speed-title">Download speed</h2><span id="speed-state" class="field-hint">Idle</span></div><p id="current-speed" class="speed-value">0 <span>MB/s</span></p><div id="speed-chart" class="speed-chart"></div><div class="chart-caption"><span>Last 60 seconds</span><span id="download-remaining"></span></div></section><section class="recent-card" aria-labelledby="recent-title"><div class="dashboard-card-heading"><h2 id="recent-title">Recently played</h2></div><div id="recently-played"></div></section></div>
 <div id="system-health" class="health-grid" aria-live="polite"></div>
 <div class="activity-controls"><button class="text-button" id="refresh-activity" type="button">Refresh status</button><button class="text-button" id="check-storage" type="button">Check storage</button><button class="text-button" id="stop-sync" type="button">Stop source sync</button><button class="text-button" id="restart-tasks" type="button">Restart background tasks</button></div><p class="field-hint" id="storage-status" role="status"></p>
-<div id="activity-transfers"></div><div id="activity-empty" class="quiet-state"><h2>You're all caught up</h2><p>Your downloads will appear here, with progress and controls for every stage.</p></div>
+<div id="activity-transfers"></div><div id="activity-empty" class="quiet-state"><h2>No downloads</h2><p>New downloads appear here.</p></div>
 <section class="issues-section" aria-labelledby="issues-title"><div class="settings-card-heading"><h2 id="issues-title">Needs attention</h2><span id="issue-count" class="connection-badge">0 open</span></div><div id="issues-list"></div></section>
 </section>
     <section class="page content-page" id="library-page" aria-labelledby="library-title" hidden>
-      <div class="page-heading"><div><p class="page-eyebrow">YOUR COLLECTION</p><h1 id="library-title" tabindex="-1">Library</h1><p class="page-description">Your installed games, all in one place.</p></div><div class="library-heading-actions"><button class="text-button" id="import-game" type="button">Add existing game</button><span id="game-count" class="game-count">0 games</span><button class="text-button" id="refresh-library" type="button">Refresh</button></div></div>
+      <div class="page-heading"><h1 id="library-title" tabindex="-1">Library</h1><div class="library-heading-actions"><button class="text-button" id="import-game" type="button">Add game</button><span id="game-count" class="game-count">0 games</span><button class="text-button" id="refresh-library" type="button">Refresh</button></div></div>
 <section id="transfers" class="transfers" aria-labelledby="transfers-title" hidden><div class="settings-card-heading"><h2 id="transfers-title">Downloads</h2><span id="transfer-count" class="connection-badge"></span><button id="clear-finished" type="button" class="text-button">Clear finished</button></div><div id="transfer-list"></div></section>
       <div class="library-toolbar" id="library-toolbar" hidden><label class="library-filter"><svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -236,7 +244,7 @@
   <line x1="18" x2="18.01" y1="10" y2="10" />
   <path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" />
 </svg>
-<h2>No installed games yet</h2><p>A home for the games you keep coming back to.<br>Your installed games will appear here.</p><button class="primary-button" id="library-search" type="button">Go to Search</button></div>
+<h2>No installed games yet</h2><p>Download a game or add an existing installation.</p><button class="primary-button" id="library-search" type="button">Search games</button></div>
       <ul id="game-list" class="game-list" aria-label="Installed games"></ul>
     </section>
   <section class="page content-page settings-page" id="settings-backdrop" aria-labelledby="settings-title" hidden>
@@ -288,7 +296,7 @@
         <section class="settings-card" aria-labelledby="install-title">
           <div class="settings-card-heading"><div><h2 id="install-title">Downloads &amp; installation</h2><p>Automatically extract games and remove wrapper folders.</p></div></div>
           <label class="field-label" for="download-path">Games folder</label><div class="path-field"><input id="download-path" type="text" spellcheck="false" autocomplete="off"><button class="text-button" id="browse-folder" type="button">Browse</button></div>
-          <p class="field-hint">Downloads, extracted games, and installations stay inside this folder.</p>
+          <p class="field-hint">Downloads, extracted games, and installations stay inside this folder. On startup, unfinished download files are cleared after 24 hours without changes.</p>
           <label class="switch-row"><span><strong>Automatic setup</strong><small>Run recognized Inno Setup and NSIS installers. Other packages stay ready for manual setup.</small></span><input id="auto-install" type="checkbox" role="switch"></label>
           <label class="switch-row"><span><strong>Only cached TorBox downloads</strong><small>Exclude links that TorBox does not currently have cached.</small></span><input id="cached-only" type="checkbox" role="switch"></label>
           <label class="field-label" for="archive-password">Archive password (optional)</label><input class="settings-input" id="archive-password" type="password" autocomplete="off" placeholder="For password-protected archives">
@@ -340,7 +348,7 @@ Load config</button><button class="secondary-button" id="export-config" type="bu
   <path d="m7 10 5 5 5-5" />
 </svg>
 
-Export config</button></div><p class="field-hint">Exports include every saved setting, your API key, passwords, sources, and palette in plain text. Loading a config creates a backup first.</p></section>
+Export config</button></div><p class="field-hint">Exports include every saved setting, your API keys, passwords, sources, and palette in plain text. Loading a config creates a backup first.</p></section>
         <section class="settings-card" aria-labelledby="updates-title"><div class="settings-card-heading"><div><h2 id="updates-title"><img class="settings-brand-icon" src="assets/mamba.png" alt="" width="28" height="28">Mamba <span id="app-version" class="version-label"></span></h2><p>Updates from shall0e/Mamba on GitHub.</p></div><span id="update-badge" class="connection-badge">Checking version…</span></div><label class="switch-row"><span><strong>Automatic updates</strong><small>Check on startup, download new versions, and install when Mamba closes.</small></span><input id="automatic-updates" type="checkbox" role="switch"></label><p id="update-status" class="field-hint" role="status"></p><div class="settings-actions"><button id="check-updates" type="button" class="secondary-button"><svg aria-hidden="true" class="lucide lucide-refresh-cw"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -359,7 +367,7 @@ Export config</button></div><p class="field-hint">Exports include every saved se
 </svg>
 
 Check for updates</button><button id="install-update" type="button" class="primary-button" hidden>Restart and install</button></div></section>
-        <section class="settings-card" aria-labelledby="experience-settings-title"><div class="settings-card-heading"><div><h2 id="experience-settings-title">Make it yours</h2><p>Choose how Mamba finds downloads and keeps you informed.</p></div></div>
+        <section class="settings-card" aria-labelledby="experience-settings-title"><div class="settings-card-heading"><div><h2 id="experience-settings-title">Download preferences</h2><p>Set language, release, and notification preferences.</p></div></div>
 <div class="preference-grid"><label class="field-label" for="preferred-language">Preferred language<select class="settings-input" id="preferred-language"><option value="english">English / multilingual</option><option value="any">No preference</option><option value="russian">Russian / multilingual</option><option value="spanish">Spanish / multilingual</option><option value="french">French / multilingual</option><option value="german">German / multilingual</option></select></label><label class="field-label" for="preferred-release">Preferred release<select class="settings-input" id="preferred-release"><option value="any">Best available</option><option value="repack">Repack</option><option value="portable">Portable / Steam rip</option><option value="original">Original release</option></select></label></div>
 <p class="field-hint">Preferences guide recommendations. Labels supplied by sources may be incomplete; every version stays available in game details.</p>
 <label class="switch-row"><span><strong>Desktop notifications</strong><small>Let me know when a game is ready or needs attention.</small></span><input id="notifications" type="checkbox" role="switch"></label><button class="text-button" id="open-troubleshooting" type="button">Open Activity and troubleshooting</button></section>

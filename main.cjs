@@ -5,7 +5,9 @@ const defaultPalette = require('./palette-defaults.json');
 const brandIcon = path.join(__dirname,'assets','mamba.png');
 const { within } = require('./lib/library.cjs');
 const {authorizeGame}=require('./lib/experience.cjs');
-const {Issues}=require('./lib/issues.cjs');
+const {Issues,safeMessage}=require('./lib/issues.cjs');
+const {Themes}=require('./lib/themes.cjs');
+const {parse:parseTheme}=require('./theme-model.js');
 const issues=new Issues();let issueQueue=Promise.resolve();
 let configSecrets=[];
 function reportIssue(error,context='app'){const issue=issues.add(error,context,configSecrets);broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});return issue;}
@@ -25,8 +27,8 @@ async function refreshBackgroundConfig() {
   if (!background) return;
   const config = await readConfig();
   const previous=background.options.initialize.config;
-  const changed=JSON.stringify([previous.sourceUrls,previous.torboxApiKey,previous.cachedOnly])!==JSON.stringify([config.sourceUrls,config.torboxApiKey,config.cachedOnly]);
-  configSecrets=[config.torboxApiKey,config.archivePassword];
+  const changed=JSON.stringify([previous.sourceUrls,previous.torboxApiKey,previous.cachedOnly,previous.realDebridApiKey,previous.enabledDownloadServices,previous.disabledDownloadHosts,previous.disabledSourceUrls])!==JSON.stringify([config.sourceUrls,config.torboxApiKey,config.cachedOnly,config.realDebridApiKey,config.enabledDownloadServices,config.disabledDownloadHosts,config.disabledSourceUrls]);
+  configSecrets=[config.torboxApiKey,config.realDebridApiKey,config.archivePassword];
   background.options.initialize.config = config;
   await task('configure', config);
   if(changed)task('catalog:sync').catch(()=>{});
@@ -45,7 +47,7 @@ function dataDirectory() {
   if (require('node:fs').existsSync(path.join(legacyData, 'config.json'))) return resolvedDataDirectory = legacyData;
   return resolvedDataDirectory = app.getPath('userData');
 }
-const publicConfig = (config) => ({ librarySort:config.librarySort||'name',libraryFavoritesOnly:!!config.libraryFavoritesOnly,notifications:config.notifications!==false,preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any', configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
+const publicConfig = (config) => ({appearance:config.appearance||null,enabledDownloadServices:config.enabledDownloadServices||['torbox','direct'],preferredDownloadService:config.preferredDownloadService||'auto',disabledDownloadHosts:config.disabledDownloadHosts||[],disabledSourceUrls:config.disabledSourceUrls||[],realDebridConfigured:!!config.realDebridApiKey,librarySort:config.librarySort||'name',libraryFavoritesOnly:!!config.libraryFavoritesOnly,notifications:config.notifications!==false,preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any', configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
 
 function readPalette(palette) {
   return Object.fromEntries(Object.entries(defaultPalette).map(([name, fallback]) => [
@@ -54,6 +56,8 @@ function readPalette(palette) {
 }
 
 const configFile = () => path.join(dataDirectory(), 'config.json');
+let themeStore;
+const getThemeStore=()=>themeStore||(themeStore=new Themes(dataDirectory()));
 let configQueue = Promise.resolve();
 
 async function readConfig() {
@@ -75,6 +79,11 @@ async function readConfig() {
       cachedOnly: config.cachedOnly !== false,
       transferTimeoutMinutes: Math.max(5, Math.min(1440, Number(config.transferTimeoutMinutes) || 120)),
       torboxApiKey: typeof config.torboxApiKey === 'string' ? config.torboxApiKey : '',
+      realDebridApiKey:typeof config.realDebridApiKey==='string'?config.realDebridApiKey:'',
+      enabledDownloadServices:Array.isArray(config.enabledDownloadServices)?config.enabledDownloadServices.filter(id=>['torbox','realdebrid','direct'].includes(id)):['torbox','direct'],
+      preferredDownloadService:['auto','torbox','realdebrid','direct'].includes(config.preferredDownloadService)?config.preferredDownloadService:'auto',
+      disabledDownloadHosts:Array.isArray(config.disabledDownloadHosts)?config.disabledDownloadHosts.filter(host=>typeof host==='string'):[],
+      disabledSourceUrls:Array.isArray(config.disabledSourceUrls)?config.disabledSourceUrls.filter(uri=>typeof uri==='string'):[],
       sourceUrls: Array.isArray(config.sourceUrls) ? config.sourceUrls.filter((url) => typeof url === 'string') : []
     };
   } catch (error) {
@@ -146,6 +155,8 @@ ipcMain.handle('config:save', async (_event, settings) => {
     return url;
   });
   if (settings.apiKey.trim()) config.torboxApiKey = settings.apiKey.trim();
+  if(typeof settings.realDebridApiKey==='string'&&settings.realDebridApiKey.trim())config.realDebridApiKey=settings.realDebridApiKey.trim();
+  Object.assign(config,validateSettings(Object.fromEntries(['enabledDownloadServices','preferredDownloadService','disabledDownloadHosts','disabledSourceUrls'].filter(key=>settings[key]!==undefined).map(key=>[key,settings[key]]))));
   config.sourceUrls = [...new Set(urls)];
   if (settings.downloadPath !== undefined) {
     if (typeof settings.downloadPath !== 'string' || !path.isAbsolute(settings.downloadPath.trim())) throw new Error('Choose an absolute game folder path.');
@@ -154,12 +165,19 @@ ipcMain.handle('config:save', async (_event, settings) => {
   if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
   if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
   if (typeof settings.archivePassword === 'string') config.archivePassword = settings.archivePassword;
-  Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette','notifications','preferredLanguage','preferredRelease'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
+  Object.assign(config, validateSettings(Object.fromEntries(['keepArchives','transferTimeoutMinutes','automaticUpdates','palette','notifications','preferredLanguage','preferredRelease','appearance'].filter(key => settings[key] !== undefined).map(key => [key,settings[key]]))));
   });
   task('library:scan').catch(() => {});
   return saved;
 });
 ipcMain.handle('torbox:clear-key', () => updateConfig((config) => { config.torboxApiKey = ''; }));
+ipcMain.handle('service:clear-key',(_event,id)=>{if(id!=='realdebrid')throw Error('Unknown service.');return updateConfig(config=>{config.realDebridApiKey='';});});
+ipcMain.handle('catalog:download-options',()=>task('catalog:download-options'));
+ipcMain.handle('themes:font',async event=>{const selected=await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{filters:[{name:'Font',extensions:['ttf','otf','woff','woff2']}],properties:['openFile']});if(selected.canceled||!selected.filePaths[0])return null;const file=selected.filePaths[0];if((await fs.stat(file)).size>5*1024*1024)throw Error('Choose a font smaller than 5 MB.');const font={name:path.basename(file),data:(await fs.readFile(file)).toString('base64')};parseTheme({...require('./theme-model.js').presets[0],fonts:[font]});return font;});
+ipcMain.handle('themes:list',()=>getThemeStore().list());
+ipcMain.handle('themes:save',(_event,theme)=>getThemeStore().save(parseTheme(theme)));
+ipcMain.handle('themes:export',async(event,value)=>{const theme=parseTheme(value);const filename=require('./lib/library.cjs').safeName(theme.name)+'.mamba-theme.json';const chosen=await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{defaultPath:filename,filters:[{name:'Mamba theme',extensions:['json']}]});if(chosen.canceled||!chosen.filePath)return false;await fs.writeFile(chosen.filePath,JSON.stringify(theme,null,2)+'\n');return true;});
+ipcMain.handle('themes:import',async event=>{const selected=await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{filters:[{name:'Mamba theme',extensions:['json']}],properties:['openFile']});if(selected.canceled||!selected.filePaths[0])return null;const file=selected.filePaths[0];if((await fs.stat(file)).size>15*1024*1024)throw Error('Theme file is too large.');const theme=parseTheme(JSON.parse((await fs.readFile(file,'utf8')).replace(/^\uFEFF/,'')));return getThemeStore().save(theme);});
 ipcMain.handle('config:export', async event => {
   const chosen = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), { defaultPath: 'Mamba-config.json', filters: [{name:'JSON settings',extensions:['json']}] });
   if (chosen.canceled || !chosen.filePath) return null;
@@ -196,7 +214,7 @@ ipcMain.handle('catalog:artwork', (_event, id) => task('catalog:artwork', String
 ipcMain.handle('home:featured', () => task('home:featured'));
 ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
 ipcMain.handle('downloads:list', () => downloadJobs);
-ipcMain.handle('downloads:start', (_event, id, option, game) => task('downloads:start', id, option, game));
+ipcMain.handle('downloads:start', (_event, id, option, game, service) => task('downloads:start', id, option, game, service));
 ipcMain.handle('downloads:cancel', (_event, id) => task('downloads:cancel', id));
 ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
 ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
@@ -246,7 +264,7 @@ ipcMain.handle('app:export-diagnostics',async event=>{
   const chosen=await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{defaultPath:'Mamba-diagnostics.json',filters:[{name:'Diagnostics',extensions:['json']}]});
   if(chosen.canceled||!chosen.filePath)return false;
   const status=activityStatus();
-  const report={schemaVersion:1,createdAt:new Date().toISOString(),version:status.version,platform:process.platform,architecture:process.arch,electron:process.versions.electron,worker:{connected:status.worker.connected,pending:status.worker.pending},catalog:{phase:status.catalog.phase,count:status.catalog.count,unavailableSources:status.catalog.unavailableSources},libraryCount:status.libraryCount,tasks:downloadJobs.map(({status,progress,total,received})=>({status,progress,total,received})),issues:issues.diagnostics()};
+  const report={schemaVersion:1,createdAt:new Date().toISOString(),version:status.version,platform:process.platform,architecture:process.arch,electron:process.versions.electron,worker:{connected:status.worker.connected,pending:status.worker.pending},catalog:{phase:status.catalog.phase,count:status.catalog.count,unavailableSources:status.catalog.unavailableSources},libraryCount:status.libraryCount,tasks:downloadJobs.map(({status,stage,progress,total,received,message,downloadFailure})=>({status,stage,progress,total,received,message:safeMessage(message,configSecrets),downloadFailure})),issues:issues.diagnostics()};
   await fs.writeFile(chosen.filePath,JSON.stringify(report,null,2),'utf8');return true;
 });
 ipcMain.handle('library:action', async (_event, id, action) => {
@@ -362,7 +380,7 @@ app.whenReady().then(async () => {
     catalogState = {...catalogState,phase:'error',message:'Background service could not recover. Restart Mamba.'};
     broadcast('catalog:changed',catalogState);
   });
-  configSecrets=[background.options.initialize.config.torboxApiKey,background.options.initialize.config.archivePassword];
+  configSecrets=[background.options.initialize.config.torboxApiKey,background.options.initialize.config.realDebridApiKey,background.options.initialize.config.archivePassword];
   try{const saved=JSON.parse(await fs.readFile(path.join(dataDirectory(),'issues.json'),'utf8'));if(Array.isArray(saved))issues.items=saved.slice(0,50);}catch{}
   createWindow();
   await registerHelperRuntime();

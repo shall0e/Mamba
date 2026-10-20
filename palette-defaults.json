@@ -14,6 +14,8 @@
   "button": "#dddddd",
   "buttonHover": "#ffffff",
   "buttonText": "#181818",
+  "icons": "#eeeeee",
+  "playButton": "#eeeeee",
   "danger": "#ef9a92",
   "dangerHover": "#c42b36",
   "success": "#a9df7c",

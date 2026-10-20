@@ -51,7 +51,7 @@ test('extractor removes wrapper nesting and rejects path traversal before extrac
 
 test('rate limits preserve verified results and schedule a resumable catalog retry', async () => {
   const dir = await temp();
-  const config = { sourceUrls: ['https://sources.test/games.json'], torboxApiKey: 'fixture-key', cachedOnly: true };
+  const config = { sourceUrls: ['https://sources.test/games.json'], torboxApiKey: 'fixture-key', cachedOnly: true, enabledDownloadServices:['torbox'] };
   const catalog = new Catalog(dir, async () => config, {
     transport: async () => Response.json({ downloads: [{ title: 'Cached Game', uris: [magnet] }, { title: 'Web Game', uris: ['https://host.test/game.zip'] }] }),
     apiFactory: () => ({ cached: async (kind) => { if (kind === 'torrents') return new Set([hash]); const error = new Error('Rate limited'); error.status = 429; error.retryAfter = 60000; throw error; } })
@@ -65,6 +65,14 @@ test('download resumes a partial file and verifies its final length', async () =
   const dir = await temp(); const target = path.join(dir, 'part.bin'); await fs.writeFile(target + '.part', 'abc');
   await downloadFile('https://cdn.test/file', target, 6, undefined, () => {}, async (_url, options) => { assert.equal(options.headers.Range, 'bytes=3-'); return new Response('def', { status: 206, headers: { 'Content-Range': 'bytes 3-5/6', 'Content-Length': '3' } }); });
   assert.equal(await fs.readFile(target, 'utf8'), 'abcdef');
+});
+test('direct Pixeldrain queue downloads and installs a game without any TorBox account',async t=>{
+ const dir=await temp();t.after(()=>fs.rm(dir,{recursive:true,force:true}));const archive=zip('Wrapper/Fixture.exe','fixture, never executed');
+ const config={downloadPath:path.join(dir,'Games'),enabledDownloadServices:['direct'],cachedOnly:true,autoInstall:false,transferTimeoutMinutes:5};
+ const game={id:'direct-fixture',name:'Direct Fixture',links:[{uri:'https://pixeldrain.com/u/fixture',services:['direct']}]};const library=new Library(()=>config);
+ const queue=new Downloads(dir,()=>config,{byId:new Map([[game.id,game]])},library,{apiFactory:()=>assert.fail('No TorBox request is allowed'),transport:async url=>String(url).endsWith('/info')?Response.json({id:'fixture',name:'game.zip',size:archive.length}):new Response(archive,{headers:{'Content-Length':String(archive.length)}})});
+ const finished=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Direct queue timed out')),10000);queue.on('change',()=>{if(['failed','completed'].includes(queue.jobs[0]?.status)){clearTimeout(timer);resolve();}});});
+ await queue.start(game.id);await finished;await queue.persistQueue;assert.equal(queue.jobs[0].status,'completed',queue.jobs[0].message);assert.equal(queue.jobs[0].service,'direct');assert.equal(library.items.length,1);
 });
 test('complete queue downloads, extracts, flattens, and registers a portable game', async () => {
   const dir = await temp(); const config = { downloadPath: path.join(dir, 'Games'), torboxApiKey: 'fixture-key', cachedOnly: true, autoInstall: false, transferTimeoutMinutes: 5 };

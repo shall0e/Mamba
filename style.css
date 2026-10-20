@@ -139,7 +139,6 @@ body:not(.home-active) #ambient-art span { animation-play-state: paused; }
 .search-clear { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 8px; background: transparent; color: var(--color-textMuted); }
 .search-clear svg { width: 16px; height: 16px; }
 .search-clear:hover { background: var(--color-focus); color: var(--color-text); }
-.search-context { min-height: 19px; margin: 16px 0 0; font-size: 12px; color: var(--ambient-ink, var(--color-textMuted)); transition: color 1400ms cubic-bezier(.4, 0, .2, 1); }
 .setup-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; min-height: 32px; padding: 0 10px; border-radius: 8px; background: transparent; color: var(--color-textSecondary); font-size: 12px; }
 .setup-link span { display: flex; }
 .setup-link svg { width: 14px; height: 14px; }
@@ -169,7 +168,7 @@ body:not(.home-active) #ambient-art span { animation-play-state: paused; }
 .source-errors { max-height: 120px; overflow: auto; margin: 10px 0 0; padding: 12px 12px 12px 26px; border-radius: 9px; background: var(--color-inputInset); color: var(--color-textMuted); font-size: 10px; line-height: 1.8; overflow-wrap: anywhere; }
 .search-page.has-results { display: block; padding-top: 28px; }
 .search-page.has-results .search-content { margin: 0 auto 26px; transform: none; }
-.search-page.has-results .search-wordmark, .search-page.has-results .search-context, .search-page.has-results .setup-link { display: none; }
+.search-page.has-results .search-wordmark, .search-page.has-results .setup-link { display: none; }
 .search-results { width: min(1000px, 100%); min-width: 0; margin: 0 auto; container-type: inline-size; }
 .results-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .results-heading p { margin: 0; color: var(--color-textSecondary); font-size: 12px; }
@@ -283,6 +282,8 @@ button { transition: background 140ms ease, color 140ms ease, transform 140ms ea
 .switch-row { gap: 18px; padding: 16px 0; }
 .switch-row small { line-height: 1.6; }
 .version-label { margin-left: 6px; color: var(--color-textMuted); font-size: 12px; font-weight: 400; }
+.search-brand-line { display: flex; align-items: baseline; justify-content: center; gap: 9px; }
+.search-version { color: var(--color-textMuted); font-size: 11px; font-weight: 400; letter-spacing: .02em; }
 .appearance-card summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; list-style: none; font-size: 15px; font-weight: 600; }
 .appearance-card summary::-webkit-details-marker { display: none; }
 .appearance-card summary svg { width: 18px; height: 18px; }

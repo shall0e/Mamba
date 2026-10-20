@@ -33,8 +33,8 @@ test('language and release preferences guide ranking without hiding alternatives
   const options=[{release:'Example [ENG] Portable',cached:true,sources:['a']},{release:'Example [RUS] Repack',cached:true,sources:['b']}];
   assert.match(rankOptions(options,{preferredLanguage:'russian',preferredRelease:'repack'})[0].release,/RUS/);assert.equal(rankOptions(options).length,2);
 });
-test('issue messages redact credentials and links; diagnostics contain only safe categories',()=>{
+test('issue messages and exported diagnostics redact credentials and links',()=>{
   const issues=new Issues(),secret='super-secret-fixture-token';const item=issues.add(Error('401 '+secret+' https://example.com/private?token='+secret),'downloads',[secret]);
   assert.equal(item.code,'authentication');assert.ok(!item.message.includes(secret));assert.ok(!item.message.includes('example.com'));
-  const exported=JSON.stringify(issues.diagnostics());assert.ok(!exported.includes(secret));assert.ok(!exported.includes('message'));issues.resolve(item.id);assert.equal(issues.items[0].resolved,true);
+  const exported=JSON.stringify(issues.diagnostics());assert.ok(!exported.includes(secret));assert.ok(!exported.includes('example.com'));assert.equal(issues.diagnostics()[0].message,item.message);issues.resolve(item.id);assert.equal(issues.items[0].resolved,true);
 });

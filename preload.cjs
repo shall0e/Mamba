@@ -26,6 +26,13 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 contextBridge.exposeInMainWorld('mamba', {
+  uploadThemeFont:()=>ipcRenderer.invoke('themes:font'),
+  themes:()=>ipcRenderer.invoke('themes:list'),
+  saveTheme:theme=>ipcRenderer.invoke('themes:save',theme),
+  exportTheme:theme=>ipcRenderer.invoke('themes:export',theme),
+  importTheme:()=>ipcRenderer.invoke('themes:import'),
+  downloadOptions:()=>ipcRenderer.invoke('catalog:download-options'),
+  clearServiceKey:id=>ipcRenderer.invoke('service:clear-key',id),
   details: id => ipcRenderer.invoke('game:details',id),
   pause: id => ipcRenderer.invoke('downloads:pause',id),
   stopSync: () => ipcRenderer.invoke('catalog:cancel'),
@@ -55,7 +62,7 @@ contextBridge.exposeInMainWorld('mamba', {
   featuredGames: () => ipcRenderer.invoke('home:featured'),
   downloadBest: (id) => ipcRenderer.invoke('downloads:best', id),
   jobs: () => ipcRenderer.invoke('downloads:list'),
-  download: (id, option, game) => ipcRenderer.invoke('downloads:start', id, option, game),
+  download: (id, option, game, service) => ipcRenderer.invoke('downloads:start', id, option, game, service),
   cancel: (id) => ipcRenderer.invoke('downloads:cancel', id),
   retry: (id) => ipcRenderer.invoke('downloads:retry', id),
   removeDownload: (id) => ipcRenderer.invoke('downloads:remove', id),

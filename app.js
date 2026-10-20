@@ -84,7 +84,6 @@ async function advanceSteamBackdrop() {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         image.classList.add('visible');
         glow.classList.add('visible');
-        updateAmbientTextContrast(image);
       }));
       // Retain the previous slide until the incoming artwork has fully faded in.
       setTimeout(() => [...previous, ...previousGlow].forEach(slide => slide.remove()), 2800);
@@ -113,33 +112,9 @@ function updateHomeBackdrop() {
   if (home && !document.querySelector('#steam-backdrop').childElementCount) advanceSteamBackdrop();
   if (home) {
     const image = document.querySelector('#steam-backdrop img.visible');
-    if (image) updateAmbientTextContrast(image);
   }
 }
 
-function updateAmbientTextContrast(image) {
-  const label = document.querySelector('#search-context');
-  if (!image?.naturalWidth || !label?.getClientRects().length || !document.body.classList.contains('home-active')) return;
-  try {
-    const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 20;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const rect = label.getBoundingClientRect();
-    const x = (rect.left + rect.width / 2 + 28) / (innerWidth + 56) * canvas.width;
-    const y = (rect.top + rect.height / 2 + 28) / (innerHeight + 56) * canvas.height;
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    let brightness = 0, samples = 0;
-    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-      const px = Math.max(0, Math.min(canvas.width - 1, Math.round(x + dx)));
-      const py = Math.max(0, Math.min(canvas.height - 1, Math.round(y + dy)));
-      const offset = (py * canvas.width + px) * 4;
-      const tinted = [0, 1, 2].map(channel => pixels[offset + channel] * .64 + parseInt(getComputedStyle(document.documentElement).getPropertyValue('--color-primary').slice(channel * 2 + 1, channel * 2 + 3), 16) * .36);
-      const linear = tinted.map(value => { const c = value / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
-      brightness += linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722; samples++;
-    }
-    label.style.setProperty('--ambient-ink', brightness / samples > .179 ? '#000000' : '#ffffff');
-  } catch { /* Cross-origin artwork can skip sampling without affecting the search UI. */ }
-}
 
 function titleMatchTokens(value) {
   const roman = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9' };
@@ -202,6 +177,7 @@ function renderFeaturedGame(game) {
 function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cloneNode(true) || document.createDocumentFragment(); }
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button'); control.type = 'button'; control.className = className;
+  if(iconName==='play')control.classList.add('play-button');
   if (iconName) control.append(icon(iconName));
   control.append(document.createTextNode(label));
   control.addEventListener('click', async (event) => {
@@ -228,6 +204,7 @@ function remainingTime(job) {
 function renderCatalog(state) {
   if (!state) return;
   const previousCount = catalogState.count;
+  const previousPhase = catalogState.phase;
   catalogState = state;
   const text = state.message + (state.errors?.length ? ` · ${state.errors.length} sources unavailable` : '');
   document.querySelector('#catalog-status').textContent = text;
@@ -237,7 +214,7 @@ function renderCatalog(state) {
   document.querySelector('#sync-catalog').disabled = ['fetching', 'merging', 'checking'].includes(state.phase);
   document.querySelector('#settings-sync').disabled = document.querySelector('#sync-catalog').disabled;
   if (document.querySelector('#game-detail').hidden && document.querySelector('#main-search').value.trim() && (state.phase === 'ready' || previousCount !== state.count)) runSearch();
-  if (!document.querySelector('#main-search').value.trim()) document.querySelector('#search-context').textContent = text;
+  if(state.phase==='ready'&&previousPhase!=='ready')window.MambaSettings?.loadHosts();
 }
 async function runSearch(more = false) {
   const query = document.querySelector('#main-search').value.trim();
@@ -264,51 +241,14 @@ async function runSearch(more = false) {
   if (!query || !window.mamba) return;
   if (!more) { searchOffset = 0; featuredGameId = null; renderFeaturedGame(null); document.querySelector('#results-list').replaceChildren(); }
   document.querySelector('#results-status').textContent = 'Searching…';
+  window.MambaDiscovery.start(more);
   try {
     const result = await window.mamba.search(query, searchOffset);
     if (generation !== searchGeneration) return;
-    if (!more) {
-      const featured = bestFeaturedMatch(query, result.items);
-      featuredGameId = featured ? String(featured.id) : null;
-      renderFeaturedGame(featured);
-    }
-    for (const game of result.items) {
-      if (featuredGameId && String(game.id) === featuredGameId) continue;
-      const row = document.createElement('article'); row.className = 'result-card game-cover-card';
-      const cover = document.createElement('button'); cover.type = 'button'; cover.className = 'game-cover'; cover.setAttribute('aria-label', `View ${game.name}`);
-      cover.append(document.querySelector('#library-empty svg').cloneNode(true));
-      cover.addEventListener('click', () => openGame(game));
-      window.mamba.artwork(game.id).then((image) => {
-        if (!image || !cover.isConnected) return;
-        const img = document.createElement('img'); img.src = image; img.alt = `${game.name} cover`; img.loading = 'lazy'; img.decoding = 'async';
-        img.addEventListener('load', () => cover.classList.add('has-cover'));
-        img.addEventListener('error', () => img.remove()); cover.append(img);
-      }).catch(() => {});
-      const details = document.createElement('div'); details.className = 'result-info';
-      const heading = document.createElement('h2'); heading.textContent = game.name;
-      details.append(heading);
-      const metadata = document.createElement('p'); metadata.className = 'game-card-meta';
-      metadata.textContent = [game.releaseYear, game.downloadSize].filter(Boolean).join(' · ');
-      if (metadata.textContent) details.append(metadata);
-      const actions = document.createElement('div'); actions.className = 'result-actions';
-      actions.classList.add('game-result-action');
-      const download = button('Download', async (event) => {
-        if (event.shiftKey) return openGame(game);
-        download.lastChild.textContent = 'Finding best…';
-        try {
-          const jobId = await window.mamba.downloadBest(game.id);
-          download.dataset.jobId = jobId; download.dataset.locked = 'true'; download.lastChild.textContent = 'Queued';
-          cardJobs.set(game.id, jobId); showToast(`${game.name} added to downloads`);
-        } catch (error) { download.lastChild.textContent = 'Download'; throw error; }
-      }, 'download', 'primary-button');
-      if (cardJobs.has(game.id)) { download.dataset.jobId = cardJobs.get(game.id); download.dataset.locked = 'true'; download.disabled = true; download.lastChild.textContent = 'Queued'; }
-      actions.append(download);
-      row.append(cover, details, actions); document.querySelector('#results-list').append(row);
-    }
+    window.MambaDiscovery.update(result,more);
     searchOffset += result.items.length;
     document.querySelector('#results-more').hidden = searchOffset >= result.total;
-    document.querySelector('#results-status').textContent = result.total ? `${result.total.toLocaleString()} ${result.total === 1 ? 'game' : 'games'}${result.pending ? ' · Steam is still checking a few matches' : ''}` : result.pending ? 'Steam is taking longer than expected. Try a shorter search.' : ['fetching', 'merging', 'checking'].includes(catalogState.phase) ? 'The catalog is syncing. Results will appear when checks finish.' : 'No TorBox-ready games found. Try another name or sync your sources.';
-  } catch (error) { renderFeaturedGame(null); document.querySelector('#results-status').textContent = error.message; }
+  } catch (error) { if(generation!==searchGeneration)return;renderFeaturedGame(null); window.MambaDiscovery.fail(error.message); }
 }
 async function openGame(game) { return window.MambaExperience.openGame(game); }
 function renderJobs(jobs) {
@@ -338,17 +278,22 @@ function renderJobs(jobs) {
     if (!row) {
       row = document.createElement('article'); row.id = `transfer-${job.id}`; row.className = 'transfer-row';
       const name = document.createElement('h3'); name.textContent = job.name;
+      const status = document.createElement('span'); status.className = 'transfer-status';
       const message = document.createElement('p'); message.className = 'transfer-message';
+      const stats = document.createElement('div'); stats.className = 'transfer-stats';
       const bar = document.createElement('progress'); bar.max = 100; bar.setAttribute('aria-label', `Progress for ${job.name}`);
       const actions = document.createElement('div'); actions.className = 'transfer-actions';
       const stages=document.createElement('ol');stages.className='transfer-stages';stages.setAttribute('aria-label','Download stages');for(const label of ['Preparing','Downloading','Extracting','Installing','Ready']){const stage=document.createElement('li');stage.textContent=label;stages.append(stage);}
-      row.append(name, stages, message, bar, actions); list.append(row);
+      row.append(name, status, stages, message, stats, bar, actions); list.append(row);
     }
-    row.querySelector('.transfer-message').textContent = (job.error ? job.error.title + ' · ' + job.error.advice : job.message) + (job.status === 'downloading' ? ` · ${formatBytes(job.received)} / ${formatBytes(job.total)} · ${(Math.max(0, Number(job.speed) || 0) / 1000000).toFixed(1)} MB/s · ${remainingTime(job)}` : '');
+    row.querySelector('.transfer-status').textContent = ({'needs-setup':'Needs setup',completed:'Ready',failed:'Needs attention',cancelled:'Cancelled'})[job.status] || job.status;
+    row.querySelector('.transfer-message').textContent = job.error ? job.error.title + ' · ' + job.error.advice : ['downloading','completed'].includes(job.status) ? '' : job.message;
+    const stats=row.querySelector('.transfer-stats');stats.replaceChildren();
+    if(job.total>0){for(const text of [`${Math.min(100,Math.max(0,Math.floor((job.received||0)/job.total*100)))}%`,`${formatBytes(job.received)} / ${formatBytes(job.total)}`,...(job.status==='downloading'?[remainingTime(job)]:[])]){const value=document.createElement('span');value.textContent=text;stats.append(value);}}
     const current={queued:0,preparing:0,downloading:1,extracting:2,installing:3,completed:4,'needs-setup':3}[['paused','failed','cancelled'].includes(job.status)?job.stage:job.status];
     [...row.querySelectorAll('.transfer-stages li')].forEach((node,index)=>{node.classList.toggle('stage-done',current!==undefined&&index<current);node.classList.toggle('stage-current',index===current);node.setAttribute('aria-current',index===current?'step':'false');});
     row.querySelector('progress').value = job.progress || 0;
-    row.querySelector('progress').hidden=['paused','failed','cancelled','needs-setup'].includes(job.status);
+    row.querySelector('progress').hidden=['failed','cancelled','needs-setup'].includes(job.status);
     if(['preparing','extracting','installing'].includes(job.status))row.querySelector('progress').removeAttribute('value');
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
@@ -487,7 +432,7 @@ function sourceLines() {
 }
 
 function hasSettingsChanges() {
-  return Boolean(keyInput.value.trim()) || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(Object.entries(readDownloadPreferences()).sort(([a],[b])=>a.localeCompare(b))) !== JSON.stringify(Object.entries(downloadPreferences).sort(([a],[b])=>a.localeCompare(b)));
+  return Boolean(keyInput.value.trim()) || !!window.MambaSettings?.hasKeyChange() || JSON.stringify([...new Set(sourceLines())]) !== JSON.stringify(urls) || JSON.stringify(Object.entries(readDownloadPreferences()).sort(([a],[b])=>a.localeCompare(b))) !== JSON.stringify(Object.entries(downloadPreferences).sort(([a],[b])=>a.localeCompare(b)));
 }
 
 function scheduleSettingsSave(delay = 500) {
@@ -505,12 +450,10 @@ function updateSearchState() {
   document.querySelector('#search-clear').hidden = !populated;
   document.querySelector('#search-shortcut').hidden = populated;
   document.querySelector('#search-setup').hidden = !configLoaded || urls.length > 0;
-  document.querySelector('#search-context').textContent = configLoaded && urls.length
-    ? `${urls.length} ${urls.length === 1 ? 'source' : 'sources'} in your collection.`
-    : 'Your next game starts here.';
 }
 
 function updateSettingsState() {
+  window.MambaSettings?.busy(!configLoaded||settingsBusy);
   const visibility = document.querySelector('#key-visibility');
   visibility.classList.toggle('revealed', keyInput.type === 'text');
   visibility.setAttribute('aria-label', keyInput.type === 'text' ? 'Hide API key' : 'Show API key');
@@ -519,7 +462,9 @@ function updateSettingsState() {
   document.querySelector('#key-status').classList.toggle('configured', keyConfigured);
   keyInput.placeholder = keyConfigured ? 'Saved · enter a new key to replace' : 'Paste your API key';
   const count = new Set(sourceLines()).size;
-  document.querySelector('#source-count').textContent = `${count} ${count === 1 ? 'source' : 'sources'}`;
+  const disabledSources=window.MambaSettings?.read().disabledSourceUrls||[];
+  const activeSources=[...new Set(sourceLines())].filter(uri=>!disabledSources.includes(uri)).length;
+  document.querySelector('#source-count').textContent = `${activeSources} of ${count} enabled`;
   for (const control of [keyInput, sourceUrlsInput, visibility]) {
     control.disabled = !configLoaded || settingsBusy;
   }
@@ -531,6 +476,7 @@ updateSettingsState();
 const configReady = window.torboxSettings
   ? window.torboxSettings.loadConfig(urls).then((config) => {
     applyLoadedConfig(config);
+    return config;
   })
   : Promise.reject(new Error('Open Mamba in the desktop app to access config.json.'));
 configReady.catch((error) => {
@@ -635,10 +581,11 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
     updateSettingsState();
     await configReady;
     const preferences = readDownloadPreferences();
-    const result = await window.torboxSettings.saveConfig({ apiKey: keyInput.value, sourceUrls: nextUrls, ...preferences });
+    const result = await window.torboxSettings.saveConfig({ apiKey: keyInput.value, realDebridApiKey:window.MambaSettings?.key()||'',sourceUrls: nextUrls, ...preferences });
     downloadPreferences = preferences;
     applyPalette(preferences.palette);
     keyConfigured = result.configured;
+    window.MambaSettings?.saved(result);
 
     urls = result.sourceUrls;
 
@@ -660,62 +607,41 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
 
 function applyPalette(palette) {
   for (const [name,color] of Object.entries(palette || {})) if (/^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty('--color-'+name,color);
-  queueButtonContrast(document);
 }
 
-// Resolve translucent fills against their parent surfaces before choosing ink.
-const contrastCanvas = document.createElement('canvas'); contrastCanvas.width = contrastCanvas.height = 1;
-const contrastContext = contrastCanvas.getContext('2d', { willReadFrequently: true });
-const contrastColors = new Map();
-const pendingContrastButtons = new Set();
-let contrastFrame;
-function queueButtonContrast(root) {
-  if (root.matches?.('button')) pendingContrastButtons.add(root);
-  root.querySelectorAll?.('button').forEach(button => pendingContrastButtons.add(button));
-  if (contrastFrame) return;
-  contrastFrame = requestAnimationFrame(() => {
-    contrastFrame = null;
-    for (const button of pendingContrastButtons) {
-      if (!button.isConnected || !button.getClientRects().length) continue;
-      let alpha = 0; const rgb = [0, 0, 0];
-      for (let node = button; node && alpha < .999; node = node.parentElement) {
-        const fill = getComputedStyle(node).backgroundColor;
-        let pixel = contrastColors.get(fill);
-        if (!pixel) {
-          contrastContext.clearRect(0, 0, 1, 1); contrastContext.fillStyle = fill;
-          contrastContext.fillRect(0, 0, 1, 1);
-          pixel = [...contrastContext.getImageData(0, 0, 1, 1).data];
-          contrastColors.set(fill, pixel);
-          if (contrastColors.size > 256) contrastColors.clear();
-        }
-        const weight = pixel[3] / 255 * (1 - alpha);
-        for (let i = 0; i < 3; i++) rgb[i] += pixel[i] * weight;
-        alpha += weight;
-      }
-      const linear = rgb.map(value => { const channel = value / 255; return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4; });
-      const luminance = linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
-      const ink = luminance > .179 ? '#000000' : '#ffffff';
-      if (button.style.getPropertyValue('--button-ink') !== ink) button.style.setProperty('--button-ink', ink);
+// Adapt only text and icon ink. Composite visible art, surface opacity, and
+// translucent UI fills first so each item moves in proportion to its backdrop.
+const adaptivePixels=new WeakMap(),adaptivePending=new Set();
+const adaptiveTargets='button,input:not([type=color]):not([type=range]):not([type=checkbox]),textarea,select,.page,.settings-card,.filter-empty,.game-card,.version-card,.transfer-row,.quiet-state,.speed-card,.recent-card,p,label,small,output,.field-label,.search-wordmark,.search-shortcut,.sidebar,h1,h2,h3,h4,strong,span,a,li,summary,legend,dt,dd,th,td,svg';
+const adaptiveCanvas=document.createElement('canvas');adaptiveCanvas.width=adaptiveCanvas.height=1;
+const adaptiveContext=adaptiveCanvas.getContext('2d',{willReadFrequently:true});
+const adaptiveColorCache=new Map();let adaptiveFrame;
+function rgbaFor(value){let result=adaptiveColorCache.get(value);if(result)return result;adaptiveContext.clearRect(0,0,1,1);adaptiveContext.fillStyle='#000000';adaptiveContext.fillStyle=value;adaptiveContext.fillRect(0,0,1,1);result=[...adaptiveContext.getImageData(0,0,1,1).data];adaptiveColorCache.set(value,result);if(adaptiveColorCache.size>256)adaptiveColorCache.clear();return result;}
+function overColor(base,layer,opacity=1){const alpha=layer[3]/255*opacity,remain=1-alpha;return [0,1,2].map(index=>Math.round(layer[index]*alpha+base[index]*remain)).concat(255);}
+function displayedBackground(element){
+  const rootStyle=getComputedStyle(document.documentElement),base=rgbaFor(rootStyle.getPropertyValue('--color-primary').trim()||'#181818');let result=base;
+  const backdrop=document.querySelector('#steam-backdrop');let sampled=false;
+  if(backdrop){const bounds=element.getBoundingClientRect(),x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;
+    for(const image of backdrop.querySelectorAll('img')){const opacity=Number(getComputedStyle(image).opacity);if(!image.naturalWidth||opacity<=0)continue;
+      if(!adaptivePixels.has(image)){try{const canvas=document.createElement('canvas');canvas.width=80;canvas.height=50;const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0,80,50);adaptivePixels.set(image,context.getImageData(0,0,80,50).data);}catch{adaptivePixels.set(image,null);}}
+      const pixels=adaptivePixels.get(image);if(!pixels)continue;const rect=image.getBoundingClientRect(),scale=Math.max(rect.width/image.naturalWidth,rect.height/image.naturalHeight),width=image.naturalWidth*scale,height=image.naturalHeight*scale;
+      const px=Math.max(0,Math.min(79,Math.round((x-rect.left+(width-rect.width)/2)/width*80))),py=Math.max(0,Math.min(49,Math.round((y-rect.top+(height-rect.height)/2)/height*50))),offset=(py*80+px)*4;
+      result=overColor(result,[pixels[offset],pixels[offset+1],pixels[offset+2],255],opacity);sampled=true;
     }
-    pendingContrastButtons.clear();
-  });
-}
-new MutationObserver(records => {
-  for (const record of records) {
-    if (record.type === 'attributes') queueButtonContrast(record.target);
-    for (const node of record.addedNodes) if (node.nodeType === 1) queueButtonContrast(node);
+    if(sampled){const tint=Number(rootStyle.getPropertyValue('--background-opacity'))||0;result=overColor(result,base,tint);const groupOpacity=Number(getComputedStyle(backdrop).opacity);result=overColor(base,result,groupOpacity);}
   }
-}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'aria-pressed'] });
-for (const name of ['pointerover', 'pointerdown', 'pointerup', 'focusin']) document.addEventListener(name, event => {
-  const button = event.target.closest?.('button'); if (button) queueButtonContrast(button);
-});
-document.addEventListener('transitionend', event => {
-  if (event.propertyName === 'background-color') queueButtonContrast(event.target);
-});
-queueButtonContrast(document);
+  const layers=[];for(let node=element;node&&node!==document.body&&node!==document.documentElement;node=node.parentElement)layers.push(node);
+  for(let index=layers.length-1;index>=0;index--){const node=layers[index],fill=getComputedStyle(node).backgroundColor;if(fill!=='rgba(0, 0, 0, 0)'&&fill!=='transparent')result=overColor(result,rgbaFor(fill));}
+  return '#'+result.slice(0,3).map(value=>value.toString(16).padStart(2,'0')).join('');
+}
+function queueAdaptiveColors(root=document){if(root.matches?.(adaptiveTargets))adaptivePending.add(root);root.querySelectorAll?.(adaptiveTargets).forEach(element=>adaptivePending.add(element));if(adaptiveFrame)return;adaptiveFrame=requestAnimationFrame(()=>{adaptiveFrame=null;const api=window.MambaThemes;if(!api)return;const styles=getComputedStyle(document.documentElement),textColor=styles.getPropertyValue('--theme-text-color').trim()||styles.getPropertyValue('--color-text').trim(),iconColor=styles.getPropertyValue('--theme-icons-color').trim()||styles.getPropertyValue('--color-icons').trim();for(const element of adaptivePending){if(!element.isConnected||!element.getClientRects().length)continue;const background=displayedBackground(element),textInk=api.adaptiveColor(textColor,background),iconInk=api.adaptiveColor(iconColor,background);element.style.setProperty('--body-ink',textInk);element.style.setProperty('--button-ink',textInk);element.style.setProperty('--heading-ink',textInk);element.style.setProperty('--icon-ink',iconInk);element.style.setProperty('--divider-ink',iconInk);element.style.setProperty('--scrollbar-ink',iconInk);if(element.matches('.page,.source-errors,textarea'))for(const track of document.querySelectorAll('.ui-scrollbar'))if(track.getAttribute('aria-controls')===element.id)track.style.setProperty('--scrollbar-ink',iconInk);}adaptivePending.clear();});}
+window.MambaAppearanceContrast={refresh:()=>queueAdaptiveColors(document)};
+new MutationObserver(records=>{for(const record of records){if(record.type==='attributes')queueAdaptiveColors(record.target);for(const node of record.addedNodes)if(node.nodeType===1)queueAdaptiveColors(node);}}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','aria-pressed']});
+setInterval(()=>{if(!document.hidden)queueAdaptiveColors(document);},450);
+queueAdaptiveColors(document);
 function applyLoadedConfig(config) {
   urls=config.sourceUrls; keyConfigured=config.configured; keyInput.value='';
-  downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{},preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any',notifications:config.notifications!==false};
+  downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{},preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any',notifications:config.notifications!==false,enabledDownloadServices:config.enabledDownloadServices||['torbox','direct'],preferredDownloadService:config.preferredDownloadService||'auto',disabledDownloadHosts:config.disabledDownloadHosts||[],disabledSourceUrls:config.disabledSourceUrls||[]};
   const fields=document.querySelector('#palette-fields');fields.replaceChildren();
   for(const [name,color]of Object.entries(downloadPreferences.palette)){
     const label=document.createElement('label');label.className='palette-field';
@@ -725,10 +651,11 @@ function applyLoadedConfig(config) {
   }
   applyPalette(downloadPreferences.palette);populateDownloadPreferences();renderLibrary(config.installedGames||installedGames);
   window.MambaExperience?.configure(config);
-  configLoaded=true;settingsInitialized=true;localStorage.removeItem(STORAGE_KEY);sourceUrlsInput.value=urls.join('\n');updateSettingsState();updateSearchState();
+  configLoaded=true;settingsInitialized=true;localStorage.removeItem(STORAGE_KEY);sourceUrlsInput.value=urls.join('\n');window.MambaSettings?.configure(config);updateSettingsState();updateSearchState();
+  window.MambaAppearance?.configure(config);
 }
 function readDownloadPreferences() {
-  return { preferredLanguage:document.querySelector('#preferred-language').value,preferredRelease:document.querySelector('#preferred-release').value,notifications:document.querySelector('#notifications').checked,downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value, keepArchives:document.querySelector('#keep-archives').checked,transferTimeoutMinutes:Number(document.querySelector('#transfer-timeout').value),automaticUpdates:document.querySelector('#automatic-updates').checked,palette:Object.fromEntries([...document.querySelectorAll('[data-palette]')].map(input=>[input.dataset.palette,input.value])) };
+  return { ...(window.MambaSettings?.read()||{enabledDownloadServices:downloadPreferences.enabledDownloadServices||['torbox','direct'],preferredDownloadService:downloadPreferences.preferredDownloadService||'auto',disabledDownloadHosts:downloadPreferences.disabledDownloadHosts||[],disabledSourceUrls:downloadPreferences.disabledSourceUrls||[]}),preferredLanguage:document.querySelector('#preferred-language').value,preferredRelease:document.querySelector('#preferred-release').value,notifications:document.querySelector('#notifications').checked,downloadPath: document.querySelector('#download-path').value.trim(), autoInstall: document.querySelector('#auto-install').checked, cachedOnly: document.querySelector('#cached-only').checked, archivePassword: document.querySelector('#archive-password').value, keepArchives:document.querySelector('#keep-archives').checked,transferTimeoutMinutes:Number(document.querySelector('#transfer-timeout').value),automaticUpdates:document.querySelector('#automatic-updates').checked,palette:Object.fromEntries([...document.querySelectorAll('[data-palette]')].map(input=>[input.dataset.palette,input.value])),...(window.MambaAppearance?.read()||{}) };
 }
 function populateDownloadPreferences() {
   document.querySelector('#preferred-language').value=downloadPreferences.preferredLanguage||'english';
@@ -797,7 +724,9 @@ for(const action of ['import','export'])document.querySelector('#'+action+'-conf
   try{const result=await window.torboxSettings[action+'Config']();if(result){if(action==='import'){applyLoadedConfig(result);runSearch();}showToast(action==='import'?'Configuration loaded.':'Complete configuration exported.');}}catch(error){showToast(error.message);}finally{settingsBusy=false;updateSettingsState();}
 });
 function renderUpdate(state){
-  document.querySelector('#app-version').textContent='v'+state.version;
+  document.querySelector('#search-version').textContent=state.version?'v'+state.version:'';
+  document.querySelector('#search-version').hidden=!state.version;
+  document.querySelector('#app-version').textContent=state.version?'v'+state.version:'';
   document.querySelector('#update-status').textContent=state.message;
   document.querySelector('#update-badge').textContent=({ready:'Ready to install',current:'Up to date',checking:'Checking',downloading:'Downloading',error:'Unavailable',development:'Development',idle:'Stable'})[state.status]||'Stable';
   document.querySelector('#check-updates').disabled=['checking','downloading','ready'].includes(state.status);

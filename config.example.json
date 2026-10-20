@@ -1,5 +1,10 @@
 {
   "torboxApiKey": "",
+  "realDebridApiKey": "",
+  "enabledDownloadServices": ["torbox", "direct"],
+  "preferredDownloadService": "auto",
+  "disabledDownloadHosts": [],
+  "disabledSourceUrls": [],
   "sourceUrls": [],
   "installedGames": [],
   "legacyUrlsMigrated": true,
