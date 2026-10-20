@@ -46,12 +46,16 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 |---|:---:|:---:|
 | Game library | ✅ | ✅ |
 | Game discovery | ✅ | ✅ |
-| One-click downloads | ✅ | ✅ |
+| One-click downloads | ✅ | ❌ |
+| Dead link removal | ✅ | ❌ |
+| Automatic unnesting | ✅ | ❌ |
+| Adding to Steam Library | ✅ | ❌ |
+| Automatic best source | ✅ | ❌ |
 | Download progress tracking | ✅ | ✅ |
 | Download history | ✅ | ✅ |
-| Download diagnostics | ✅ | ❌ |
-| Built-in BitTorrent client | ❌ | ✅ |
-| Player profiles | ❌ | ✅ |
+| Accurate download time | ✅ | ❌ |
+| Accounts | ❌ | ✅ |
+| Friends | ❌ | ✅ |
 | Cloud saves | ❌ | ✅ |
 | Achievements | ❌ | ✅ |
-
+| Subscription service | ❌ | ✅ |
