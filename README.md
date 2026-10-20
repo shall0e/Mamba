@@ -12,6 +12,20 @@
 
 While Hydra aims to be an all-in-one gaming platform, Mamba takes a different approach: **actually downloading the games**
 
+## Screenshots
+
+| Launcher | Game library |
+|---|---|
+| <img src="assets/screenshots/launcher.svg" alt="Mamba launcher" width="480"> | <img src="assets/screenshots/library.svg" alt="Mamba game library" width="480"> |
+
+| Game details | Activity |
+|---|---|
+| <img src="assets/screenshots/beamng-detail.svg" alt="BeamNG.drive game details" width="480"> | <img src="assets/screenshots/activity.svg" alt="Mamba activity dashboard" width="480"> |
+
+| Activity dashboard (empty state) |
+|---|
+| <img src="assets/screenshots/activity-empty.svg" alt="Mamba activity dashboard with no active downloads" width="640"> |
+
 ## Features
 
 ### Game Discovery
