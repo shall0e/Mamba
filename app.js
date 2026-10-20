@@ -287,6 +287,9 @@ async function runSearch(more = false) {
       const details = document.createElement('div'); details.className = 'result-info';
       const heading = document.createElement('h2'); heading.textContent = game.name;
       details.append(heading);
+      const metadata = document.createElement('p'); metadata.className = 'game-card-meta';
+      metadata.textContent = [game.releaseYear, game.downloadSize].filter(Boolean).join(' · ');
+      if (metadata.textContent) details.append(metadata);
       const actions = document.createElement('div'); actions.className = 'result-actions';
       actions.classList.add('game-result-action');
       const download = button('Download', async (event) => {
@@ -304,7 +307,7 @@ async function runSearch(more = false) {
     }
     searchOffset += result.items.length;
     document.querySelector('#results-more').hidden = searchOffset >= result.total;
-    document.querySelector('#results-status').textContent = result.total ? `${result.total.toLocaleString()} ${result.total === 1 ? 'game' : 'games'}` : ['fetching', 'merging', 'checking'].includes(catalogState.phase) ? 'The catalog is syncing. Results will appear when checks finish.' : 'No TorBox-ready games found. Try another name or sync your sources.';
+    document.querySelector('#results-status').textContent = result.total ? `${result.total.toLocaleString()} ${result.total === 1 ? 'game' : 'games'}${result.pending ? ' · Steam is still checking a few matches' : ''}` : result.pending ? 'Steam is taking longer than expected. Try a shorter search.' : ['fetching', 'merging', 'checking'].includes(catalogState.phase) ? 'The catalog is syncing. Results will appear when checks finish.' : 'No TorBox-ready games found. Try another name or sync your sources.';
   } catch (error) { renderFeaturedGame(null); document.querySelector('#results-status').textContent = error.message; }
 }
 async function openGame(game) { return window.MambaExperience.openGame(game); }
@@ -568,7 +571,7 @@ function showToast(message, actionLabel, action) {
 document.querySelector('#settings-open').addEventListener('click', openSettings);
 document.querySelector('#search-setup').addEventListener('click', openSettings);
 document.querySelector('#main-search').addEventListener('input', updateSearchState);
-document.querySelector('#main-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => runSearch(), 220); });
+document.querySelector('#main-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => runSearch(), 400); });
 document.querySelector('#main-search').addEventListener('keydown', (event) => { if (event.key === 'Enter') { clearTimeout(searchTimer); runSearch(); } });
 document.querySelector('#results-more').addEventListener('click', () => runSearch(true));
 document.querySelector('#sync-catalog').addEventListener('click', () => window.mamba.sync().catch((error) => showToast(error.message)));

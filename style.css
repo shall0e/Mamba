@@ -246,6 +246,7 @@ body:not(.home-active) #ambient-art span { animation-play-state: paused; }
 .game-cover-card .game-cover { aspect-ratio: 460 / 205; min-height: 160px; }
 .game-cover-card .result-info { flex: 1; padding: 22px 21px 18px; }
 .game-cover-card .result-info h2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 52px; margin: 0; font-size: 17px; line-height: 1.5; }
+.game-cover-card .result-info .game-card-meta { margin: 8px 0 0; color: var(--color-textMuted); font-size: 12px; line-height: 1.45; }
 .game-cover-card .result-actions.game-result-action { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; justify-content: stretch; gap: 8px; width: 100%; padding: 0 20px 20px; }
 .game-cover-card .primary-button { width: 100%; min-width: 0; min-height: 48px; padding: 0 14px; font-size: 14px; }
 .featured-game { position: relative; isolation: isolate; min-height: 280px; margin: 24px 0 26px; overflow: hidden; border-radius: 24px; background: var(--color-surface); }
