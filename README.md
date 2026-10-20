@@ -1,4 +1,4 @@
-![Mamba logo](assets/mamba-logo.png)
+![Mamba logo](assets/mamba.png)
 
 # Mamba Launcher
 
