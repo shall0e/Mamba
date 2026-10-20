@@ -75,6 +75,7 @@ async function advanceSteamBackdrop() {
       }
       if (document.hidden || !document.body.classList.contains('home-active')) return;
       const previous = [...backdrop.children];
+      if(!previous.length)image.style.transitionDuration='900ms';
       const ambient = document.querySelector('#ambient-art');
       const previousGlow = [...ambient.children];
       const glow = document.createElement('span');

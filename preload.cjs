@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('windowControls', {
 });
 
 contextBridge.exposeInMainWorld('torboxSettings', {
+  completeSetup: () => ipcRenderer.invoke('onboarding:complete'),
+  testRestart: firstRun => ipcRenderer.invoke('app:test-restart', firstRun),
   loadConfig: (legacyUrls) => ipcRenderer.invoke('config:load', legacyUrls),
   saveConfig: (settings) => ipcRenderer.invoke('config:save', settings),
   importConfig: () => ipcRenderer.invoke('config:import'),

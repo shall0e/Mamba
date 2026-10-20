@@ -49,6 +49,74 @@ kbd { font: 10px 'Segoe UI', sans-serif; }
 .content-page { padding: 42px clamp(24px, 4vw, 64px) 56px; }
 .content-page > *, .settings-content { max-width: 1200px; margin-inline: auto; }
 #game-page, #activity-page { max-width: none; }
+#game-page { position: relative; isolation: isolate; }
+#game-page::before { content: ""; position: absolute; z-index: 0; inset: -18px; pointer-events: none; opacity: 0; transform: scale(1.035); filter: blur(18px) saturate(.82); background-image: linear-gradient(180deg,color-mix(in srgb,var(--color-background) 52%,transparent),color-mix(in srgb,var(--color-background) 78%,transparent)),var(--game-backdrop-image); background-size: cover; background-position: center; transition: opacity 900ms cubic-bezier(.22,1,.36,1), transform 1400ms cubic-bezier(.22,1,.36,1); }
+#game-page.has-game-backdrop::before { opacity: .72; transform: scale(1); }
+#game-content { position: relative; z-index: 1; }
+.startup-splash { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: transparent; pointer-events: none; }
+.startup-active .workspace,.startup-active .sidebar { opacity: 0; filter: blur(8px); pointer-events: none; }
+.startup-finishing .workspace,.startup-finishing .sidebar { opacity: 1; filter: blur(0); transition: opacity 850ms ease,filter 850ms ease; }
+.startup-active .workspace .search-wordmark { visibility: hidden; }
+.startup-splash .startup-brand { width: min(640px,calc(100vw - 48px)); margin: 0; transform-origin: top left; transition: none; }
+.startup-splash .startup-brand::before { display: none; }
+.startup-splash button { pointer-events: auto; }
+.startup-brand { position: relative; z-index: 2; text-align: center; animation: welcome-arrive 850ms cubic-bezier(.22,1,.36,1) both; transition: transform 600ms cubic-bezier(.22,1,.36,1),filter 600ms ease; }
+.startup-brand::before { content: ""; position: absolute; z-index: -1; inset: -90px; border-radius: 50%; background: radial-gradient(ellipse,color-mix(in srgb,var(--color-ambientCyan) 22%,transparent),transparent 65%); filter: blur(32px); animation: startup-breathe 2400ms ease-in-out infinite alternate; }
+.startup-splash .startup-glow { z-index: 1; opacity: .7; animation: startup-glow-enter 1000ms ease both; }
+.startup-splash .splash-ambient-art span { animation-duration: 7s; }
+.startup-splash.is-ready .startup-brand { transform: scale(1.045); filter: blur(6px); }
+.startup-brand .welcome-logo { animation: startup-logo 1000ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes startup-logo { from { opacity: 0; transform: scale(.8) rotate(-12deg); filter: blur(8px); } to { opacity: 1; transform: scale(1) rotate(0); filter: blur(0); } }
+@keyframes startup-glow-enter { from { opacity: 0; filter: blur(48px); } to { opacity: .7; filter: blur(24px); } }
+@keyframes startup-breathe { from { opacity: .5; transform: scale(.92); } to { opacity: 1; transform: scale(1.12); } }
+.welcome-logo { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; }
+.startup-brand h1 { margin-top: 20px; letter-spacing: -.04em; }
+.startup-brand p { margin-top: 12px; font-size: 13px; color: var(--color-textMuted); }
+.startup-brand button { margin-top: 20px; }
+.startup-splash.is-ready { opacity: 0; visibility: hidden; pointer-events: none; }
+.startup-art { position: fixed; inset: -28px; z-index: 0; opacity: 0; overflow: hidden; filter: blur(14px) saturate(125%); transition: opacity 700ms ease; }
+.startup-art.visible { opacity: 1; }
+.startup-art img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); }
+.startup-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg,color-mix(in srgb,var(--color-primary) 42%,transparent),color-mix(in srgb,var(--color-primary) 30%,transparent)); }
+.welcome-dialog { position: fixed; inset: 0; width: min(440px,calc(100vw - 32px)); max-height: calc(100vh - 48px); margin: auto; padding: 24px; border: 0; border-radius: 20px; background: color-mix(in srgb,var(--panel,var(--color-surface)) 82%,transparent); backdrop-filter: blur(36px) saturate(135%); color: var(--color-text); overflow: auto; animation: welcome-arrive 650ms cubic-bezier(.22,1,.36,1) both; }
+.welcome-dialog::backdrop { background: color-mix(in srgb,var(--color-primary) 48%,transparent); backdrop-filter: blur(24px) saturate(.75); transition: backdrop-filter 650ms ease,background 650ms ease; animation: welcome-backdrop-in 650ms ease both; }
+.welcome-dialog.is-tour { inset: auto 20px 20px auto; width: min(330px,calc(100vw - 40px)); }
+.welcome-dialog.is-tour::backdrop { background: color-mix(in srgb,var(--color-primary) 18%,transparent); backdrop-filter: blur(3px); }
+.welcome-dialog h1 { font-size: 22px; line-height: 1.2; letter-spacing: -.025em; }
+.welcome-eyebrow { font-size: 11px; letter-spacing: 0; margin-bottom: 12px; opacity: .65; }
+.welcome-body { margin-top: 16px; animation: welcome-arrive 350ms cubic-bezier(.22,1,.36,1) both; }
+.welcome-body > p { font-size: 13px; line-height: 1.65; margin-bottom: 0; }
+.welcome-field { display: flex; flex-direction: column; gap: 10px; margin: 18px 0; font-size: 13px; }
+.welcome-field:has(input[type=checkbox]) { flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: 12px; }
+.welcome-field input:not([type=checkbox]),.welcome-field select { width: 100%; min-height: 46px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--color-input); color: var(--color-text); font: inherit; }
+.welcome-field input[type=checkbox] { accent-color: var(--color-icons); width: 18px; height: 18px; }
+.welcome-actions { position: sticky; bottom: -24px; display: flex; justify-content: space-between; gap: 12px; margin: 20px -24px -24px; padding: 12px 24px 20px; background: color-mix(in srgb,var(--panel,var(--color-surface)) 88%,transparent); backdrop-filter: blur(18px); }
+.welcome-error { font-size: 12px; line-height: 1.6; margin-top: 14px; }
+.welcome-error:empty { display: none; }
+.welcome-progress { display: flex; gap: 6px; margin: -4px 0 18px; }
+.welcome-progress span { height: 4px; flex: 1; border-radius: 8px; background: color-mix(in srgb,var(--color-text) 10%,transparent); transition: background 400ms ease; }
+.welcome-progress span.current { background: color-mix(in srgb,var(--color-text) 65%,transparent); }
+.welcome-progress span.done { background: color-mix(in srgb,var(--color-text) 30%,transparent); }
+.welcome-emblem { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 22px; border-radius: 22px; background: linear-gradient(145deg,color-mix(in srgb,var(--color-ambientCyan) 28%,var(--color-selection)),color-mix(in srgb,var(--color-ambientViolet) 18%,var(--color-selection))); animation: welcome-arrive 650ms cubic-bezier(.22,1.2,.36,1) both; }
+.welcome-emblem svg { width: 28px; height: 28px; }
+.welcome-service { padding: 12px 14px; margin: 8px 0; border-radius: 12px; background: color-mix(in srgb,var(--color-input) 48%,transparent); transition: background 300ms ease,transform 350ms cubic-bezier(.22,1,.36,1); }
+.welcome-service.selected { background: color-mix(in srgb,var(--color-selection) 78%,transparent); }
+.welcome-service .welcome-field { margin: 0; }
+.welcome-service > .welcome-field { flex-direction: row; justify-content: initial; }
+.welcome-service > .welcome-field > span { flex: 1; font-weight: 600; }
+.welcome-service > .welcome-field > svg { width: 19px; height: 19px; }
+.welcome-service > p { margin: 8px 0 0; padding-left: 31px; line-height: 1.55; }
+.welcome-credential { margin-top: 16px; animation: welcome-detail-in 380ms ease both; }
+.welcome-preview { display: grid; gap: 8px; margin-top: 22px; }
+.welcome-preview > div { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 13px; background: color-mix(in srgb,var(--color-input) 60%,transparent); font-size: 12px; animation: welcome-detail-in 500ms cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--preview-order) * 90ms); }
+.welcome-preview svg { width: 17px; height: 17px; }
+.welcome-actions { align-items: center; flex-wrap: wrap; }
+.welcome-actions .primary-button { margin-left: auto; }
+.welcome-actions .text-button { padding-inline: 4px; opacity: .75; }
+@keyframes welcome-detail-in { from { opacity: 0; filter: blur(7px); transform: translateY(10px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
+@keyframes welcome-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+.nav-button.tour-highlight { background: var(--color-selection) !important; transform: scale(1.08); }
+@keyframes welcome-arrive { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .page-heading { max-width: 1200px; align-items: flex-end; gap: 24px; margin-bottom: 32px; }
 h1 { font-size: clamp(30px, 3vw, 40px); line-height: 1.15; letter-spacing: -.045em; font-weight: 650; }
 h2 { font-size: 16px; font-weight: 600; }
@@ -625,5 +693,5 @@ html input::placeholder,html textarea::placeholder { color: var(--button-ink,var
 html[data-theme] :is(button,input:not([type=color]):not([type=range]):not([type=checkbox]),textarea,select,p,label,small,output,.field-label,.search-wordmark,.search-shortcut,.sidebar,h1,h2,h3,h4,strong,span,a,li,summary,legend,dt,dd,th,td,svg,option) { transition: color 700ms cubic-bezier(.22,1,.36,1); }
 html[data-theme] * { box-shadow: none !important; }
 html select::picker(select) { box-shadow: none !important; }
-html[data-theme] :is(button,input:not([type=color]):not([type=range]):not([type=checkbox]),textarea,select,p,label,small,output,.field-label,.search-wordmark,.search-shortcut,h1,h2,h3,h4,strong,span,a,li,summary,legend,dt,dd,th,td,option) { text-shadow: 0 1px 2px rgb(0 0 0 / 48%); }
-html[data-theme] svg,html[data-theme] [data-lucide] { filter: drop-shadow(0 1px 3px rgb(0 0 0 / 48%)) blur(var(--icons-blur)); }
+html[data-theme] :is(button,input:not([type=color]):not([type=range]):not([type=checkbox]),textarea,select,p,label,small,output,.field-label,.search-wordmark,.search-shortcut,h1,h2,h3,h4,strong,span,a,li,summary,legend,dt,dd,th,td,option) { text-shadow: 0 1px 2px color-mix(in srgb,var(--body-ink,#000) 16%,transparent); }
+html[data-theme] svg,html[data-theme] [data-lucide] { filter: drop-shadow(0 1px 2px color-mix(in srgb,var(--icon-ink,#000) 18%,transparent)) blur(var(--icons-blur)); }

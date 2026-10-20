@@ -39,9 +39,9 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-l
 body:not(.home-active) #steam-backdrop { opacity: 0; }
 @property --ambient-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 .ambient-edge-glow { position: fixed; inset: 0; z-index: 1; pointer-events: none; filter: blur(24px); mix-blend-mode: screen; opacity: .42; transition: opacity 900ms cubic-bezier(.4, 0, .2, 1); }
-#ambient-art { position: absolute; inset: -8px; mask-image: linear-gradient(to bottom, #000, transparent 125px), linear-gradient(to top, #000, transparent 125px), linear-gradient(to right, #000, transparent 115px), linear-gradient(to left, #000, transparent 115px); }
-#ambient-art span { position: absolute; inset: 0; opacity: 0; transition: opacity 2600ms cubic-bezier(.4, 0, .2, 1); background: conic-gradient(from var(--ambient-angle), var(--art-glow-0, var(--color-ambientBlue)), var(--art-glow-1, var(--color-ambientCyan)) 65deg, transparent 130deg, var(--art-glow-2, var(--color-ambientViolet)) 200deg, var(--art-glow-0, var(--color-ambientPink)) 265deg, transparent 315deg, var(--art-glow-0, var(--color-ambientBlue))); animation: ambient-edge-flow 18s linear infinite; }
-#ambient-art span.visible { opacity: 1; }
+:is(#ambient-art,.splash-ambient-art) { position: absolute; inset: -8px; mask-image: linear-gradient(to bottom, #000, transparent 125px), linear-gradient(to top, #000, transparent 125px), linear-gradient(to right, #000, transparent 115px), linear-gradient(to left, #000, transparent 115px); }
+:is(#ambient-art,.splash-ambient-art) span { position: absolute; inset: 0; opacity: 0; transition: opacity 2600ms cubic-bezier(.4, 0, .2, 1); background: conic-gradient(from var(--ambient-angle), var(--art-glow-0, var(--color-ambientBlue)), var(--art-glow-1, var(--color-ambientCyan)) 65deg, transparent 130deg, var(--art-glow-2, var(--color-ambientViolet)) 200deg, var(--art-glow-0, var(--color-ambientPink)) 265deg, transparent 315deg, var(--art-glow-0, var(--color-ambientBlue))); animation: ambient-edge-flow 18s linear infinite; }
+:is(#ambient-art,.splash-ambient-art) span.visible { opacity: 1; }
 body:not(.home-active) .ambient-edge-glow { opacity: 0; }
 .window-controls { position: fixed; top: 5px; right: 6px; z-index: 30; display: flex; gap: 3px; -webkit-app-region: no-drag; }
 .window-button { display: grid; place-items: center; width: 36px; height: 28px; padding: 0; border-radius: 7px; background: transparent; color: var(--color-textMuted); }

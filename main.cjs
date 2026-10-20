@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess, Notification, Tray, Menu } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('./palette-defaults.json');
@@ -47,7 +47,7 @@ function dataDirectory() {
   if (require('node:fs').existsSync(path.join(legacyData, 'config.json'))) return resolvedDataDirectory = legacyData;
   return resolvedDataDirectory = app.getPath('userData');
 }
-const publicConfig = (config) => ({appearance:config.appearance||null,enabledDownloadServices:config.enabledDownloadServices||['torbox','direct'],preferredDownloadService:config.preferredDownloadService||'auto',disabledDownloadHosts:config.disabledDownloadHosts||[],disabledSourceUrls:config.disabledSourceUrls||[],realDebridConfigured:!!config.realDebridApiKey,librarySort:config.librarySort||'name',libraryFavoritesOnly:!!config.libraryFavoritesOnly,notifications:config.notifications!==false,preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any', configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
+const publicConfig = (config) => ({onboardingCompleted:config.onboardingCompleted!==false,appearance:config.appearance||null,enabledDownloadServices:config.enabledDownloadServices||['torbox','direct'],preferredDownloadService:config.preferredDownloadService||'auto',disabledDownloadHosts:config.disabledDownloadHosts||[],disabledSourceUrls:config.disabledSourceUrls||[],realDebridConfigured:!!config.realDebridApiKey,librarySort:config.librarySort||'name',libraryFavoritesOnly:!!config.libraryFavoritesOnly,notifications:config.notifications!==false,preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any', configured: Boolean(config.torboxApiKey), sourceUrls: config.sourceUrls, palette: config.palette, downloadPath: config.downloadPath, autoInstall: config.autoInstall, cachedOnly: config.cachedOnly, archivePassword: config.archivePassword || '', keepArchives: Boolean(config.keepArchives), transferTimeoutMinutes: config.transferTimeoutMinutes || 120, automaticUpdates: config.automaticUpdates !== false });
 
 function readPalette(palette) {
   return Object.fromEntries(Object.entries(defaultPalette).map(([name, fallback]) => [
@@ -66,6 +66,7 @@ async function readConfig() {
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Invalid config.json. Expected an object.');
     return {
       ...config,
+      onboardingCompleted: config.onboardingCompleted !== false,
       palette: readPalette(config.palette),
       downloadPath: typeof config.downloadPath === 'string' && path.isAbsolute(config.downloadPath) ? path.resolve(config.downloadPath) : path.join(app.getPath('downloads'), 'Mamba'),
       autoInstall: config.autoInstall !== false,
@@ -103,7 +104,7 @@ async function readConfig() {
     } catch (legacyError) {
       if (legacyError.code !== 'ENOENT') throw legacyError;
     }
-    return { notifications:true,preferredLanguage:'english',preferredRelease:'any',librarySort:'name',libraryFavoritesOnly:false,torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, keepArchives: false, automaticUpdates: true, transferTimeoutMinutes: 120 };
+    return { onboardingCompleted:false,notifications:true,preferredLanguage:'english',preferredRelease:'portable',librarySort:'name',libraryFavoritesOnly:false,torboxApiKey, sourceUrls: [], palette: { ...defaultPalette }, downloadPath: path.join(app.getPath('downloads'), 'Mamba'), autoInstall: true, cachedOnly: true, keepArchives: false, automaticUpdates: true, transferTimeoutMinutes: 120 };
   }
 }
 
@@ -291,7 +292,16 @@ ipcMain.handle('folder:choose', async (event) => {
   const chosen = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { defaultPath: config.downloadPath, properties: ['openDirectory', 'createDirectory'] });
   return chosen.canceled ? null : chosen.filePaths[0];
 });
-ipcMain.handle('window:minimize', (event) => BrowserWindow.fromWebContents(event.sender)?.minimize());
+let tray = null;
+function restoreWindow() { const window=BrowserWindow.getAllWindows()[0];if(window){window.show();if(window.isMinimized())window.restore();window.focus();} }
+ipcMain.handle('onboarding:complete', () => updateConfig(config => { config.onboardingCompleted=true; }));
+ipcMain.handle('app:test-restart', async (_event, firstRun) => {
+  if(typeof firstRun!=='boolean')throw Error('Invalid restart option.');
+  if(firstRun)await updateConfig(config=>{config.onboardingCompleted=false;});
+  else await configQueue;
+  app.relaunch();app.quit();
+});
+ipcMain.handle('window:minimize', (event) => { const window=BrowserWindow.fromWebContents(event.sender);if(tray)window?.hide();else window?.minimize(); });
 ipcMain.handle('window:toggle-maximize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   if (!window) return false;
@@ -321,6 +331,8 @@ function createWindow() {
     }
   });
   window.setMenuBarVisibility(false);
+  window.on('minimize', event => { if(tray&&!closing){event.preventDefault();window.hide();} });
+  window.on('close', event => { if(tray&&!closing){event.preventDefault();window.hide();} });
   const notifyWindowState = () => window.webContents.send('window:maximized', window.isMaximized());
   window.on('maximize', notifyWindowState);
   window.on('unmaximize', notifyWindowState);
@@ -382,6 +394,7 @@ app.whenReady().then(async () => {
   });
   configSecrets=[background.options.initialize.config.torboxApiKey,background.options.initialize.config.realDebridApiKey,background.options.initialize.config.archivePassword];
   try{const saved=JSON.parse(await fs.readFile(path.join(dataDirectory(),'issues.json'),'utf8'));if(Array.isArray(saved))issues.items=saved.slice(0,50);}catch{}
+  try { tray=new Tray(path.join(__dirname,'assets','mamba.ico'));tray.setToolTip('Mamba — running in the background');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open Mamba',click:restoreWindow},{type:'separator'},{label:'Quit Mamba',click:()=>app.quit()}]));tray.on('double-click',restoreWindow);tray.on('click',restoreWindow); } catch { tray=null; }
   createWindow();
   await registerHelperRuntime();
   background.start().catch(() => {});

@@ -17,8 +17,10 @@
   <script src="appearance.js" defer></script>
   <script src="experience.js" defer></script>
   <script src="scrollbar.js" defer></script>
+  <script src="welcome.js" defer></script>
 </head>
-<body class="home-active">
+<body class="home-active startup-active">
+  <div id="startup-splash" class="startup-splash" role="status" aria-label="Starting Mamba"><div class="search-wordmark startup-brand" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="144" height="144"><div class="search-brand-line"><span>mamba</span><small id="startup-version" class="search-version" hidden></small></div></div></div>
   <div class="window-drag-area" aria-hidden="true"></div>
   <div class="steam-backdrop" id="steam-backdrop" aria-hidden="true"></div>
   <div class="ambient-edge-glow" aria-hidden="true"><div id="ambient-art"></div></div>
@@ -83,7 +85,7 @@
   </div>
   <aside class="sidebar">
     <nav aria-label="Main navigation">
-      <button class="nav-button active" id="search-open" type="button" aria-label="Search" title="Search" data-page="search" aria-current="page"><svg aria-hidden="true"
+      <button class="nav-button active" id="search-open" type="button" aria-label="Home" title="Home" data-page="search" aria-current="page"><svg aria-hidden="true" class="lucide lucide-house"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
   height="24"
@@ -94,10 +96,10 @@
   stroke-linecap="round"
   stroke-linejoin="round"
 >
-  <path d="m21 21-4.34-4.34" />
-  <circle cx="11" cy="11" r="8" />
+  <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+  <path d="M9 21v-8h6v8" />
 </svg>
-<span>Search</span></button>
+<span>Home</span></button>
       <button class="nav-button" id="library-open" type="button" aria-label="Library" title="Library" data-page="library"><svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -146,7 +148,7 @@
 </svg>
 <span>Settings</span></button></div></aside>
   <main class="workspace">
-    <section class="page search-page" id="search-page" aria-label="Search">
+    <section class="page search-page" id="search-page" aria-label="Home">
       <div class="search-content">
         <div class="search-wordmark" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="56" height="56"><div class="search-brand-line"><span>mamba</span><small id="search-version" class="search-version" hidden></small></div></div>
         <div class="search-field">

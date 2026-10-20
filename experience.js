@@ -108,14 +108,16 @@
   }
   async function openGame(game,origin) {
     const token=++generation;currentDetail=null;
+    const detailPage=$('#game-page');detailPage.classList.remove('has-game-backdrop');detailPage.style.removeProperty('--game-backdrop-image');
     window.MambaExperience.origin=origin||(!$('#library-page').hidden?'library':'search');
     const returnPage=window.MambaExperience.origin==='library'?'library':'search';const returnScroll=$('#'+returnPage+'-page').scrollTop;
     const content=$('#game-content');content.replaceChildren();
-    content.append(action('Back to '+returnPage,()=>{generation++;showPage(returnPage);$('#'+returnPage+'-page').scrollTop=returnScroll;},'arrow-left'));
+    content.append(action('Back to '+(returnPage==='search'?'Home':'Library'),()=>{generation++;showPage(returnPage);$('#'+returnPage+'-page').scrollTop=returnScroll;},'arrow-left'));
     const title=node('h1',game.name||'Game details');title.id='game-title';title.tabIndex=-1;content.append(title);
     const loading=node('p','Loading game details…','field-hint');loading.setAttribute('role','status');content.append(loading);showPage('game');
     try {
       const data=await window.mamba.details(game.id);if(token!==generation)return;currentDetail=data;loading.remove();title.remove();
+      window.mamba.artwork(data.libraryId||data.catalogId||data.id).then(image=>{if(!image||token!==generation)return;detailPage.style.setProperty('--game-backdrop-image',`url("${image}")`);detailPage.classList.add('has-game-backdrop');}).catch(()=>{});
       const hero=node('div',undefined,'detail-hero');const image=node('div',undefined,'detail-art game-art');cover(image,data.libraryId||data.catalogId||data.id,data.name);
       const intro=node('div',undefined,'detail-intro');const heading=node('h1',data.name);heading.id='game-title';heading.tabIndex=-1;
       intro.append(node('p',data.steamId?'STEAM GAME':'YOUR GAME','page-eyebrow'),heading);

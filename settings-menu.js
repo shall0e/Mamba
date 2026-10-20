@@ -8,6 +8,10 @@
     const control=button(label,()=>{for(const [key,value]of Object.entries(panels))value.hidden=key!==id;for(const item of nav.children){const selected=item===control;item.classList.toggle('selected',selected);if(selected)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');}if(id==='sources')loadHosts();},symbol,'settings-category');if(id==='downloads'){control.classList.add('selected');control.setAttribute('aria-current','page');}nav.append(control);
   }
   const appearance=$('.appearance-card');appearance.open=true;panels.appearance.append(appearance);
+  const testing=node('section',undefined,'settings-card');testing.append(node('h2','Testing'),node('p','Replay startup or walk through setup again. Your games, saved keys, and settings are kept. Active downloads may need to be resumed after restarting.','field-hint'));
+  const testingActions=node('div',undefined,'settings-actions');
+  const restart=firstRun=>async(event)=>{const control=event.currentTarget;control.disabled=true;try{await window.torboxSettings.testRestart(firstRun);}catch(error){control.disabled=false;showToast(error.message||'Could not restart Mamba.');}};
+  testingActions.append(button('Restart Mamba',restart(false),'refresh-cw','secondary-button'),button('Restart as a new user',restart(true),'refresh-cw','secondary-button'));testing.append(testingActions);panels.app.append(testing);
   const heading=$('#settings-title').parentElement;heading.querySelector('.page-description')?.remove();heading.querySelector('.page-eyebrow')?.remove();
   $('#connection-title').textContent='TorBox';$('#connection-title').nextElementSibling.textContent='Torrents and supported file hosts.';
   $('#connection-title').closest('.settings-card').append($('#cached-only').closest('.switch-row'));

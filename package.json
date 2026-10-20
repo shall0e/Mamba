@@ -1,6 +1,6 @@
 {
   "name": "minimal-downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "main.cjs",
   "scripts": {
@@ -16,6 +16,7 @@
       "!dist/**",
       "!dist-preview/**",
       "!dist-preview-next/**",
+      "!dist-preview-ui/**",
       "!catalog.json*",
       "!artwork/**",
       "!game-metadata.json*",
