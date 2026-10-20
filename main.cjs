@@ -337,7 +337,8 @@ app.whenReady().then(async () => {
       const previous=previousStatuses.get(job.id);
       if(previous && previous!==job.status && ['completed','needs-setup','failed'].includes(job.status)) {
         if(job.status==='failed')reportIssue(new Error(job.message),'downloads');
-        broadcast('app:notice',{jobId:job.id,name:job.name,status:job.status});
+        const readyGame=job.status==='completed'?installedGames.find(game=>game.folder&&job.folder&&path.resolve(game.folder).toLowerCase()===path.resolve(job.folder).toLowerCase()):null;
+        broadcast('app:notice',{jobId:job.id,gameId:job.gameId,libraryId:readyGame?.id||null,folder:job.folder,name:job.name,status:job.status});
         if(background.options.initialize.config.notifications!==false && Notification.isSupported()) {
           try { const notice=new Notification({icon:brandIcon,title:job.status==='completed'?'Ready to play':job.status==='needs-setup'?'Installation needs review':'Download needs attention',body:job.name});
           notice.on('error',()=>{});notice.on('click',()=>{const window=BrowserWindow.getAllWindows()[0];if(!window)return;window.show();if(window.isMinimized())window.restore();window.focus();broadcast('app:navigate',{id:job.gameId,folder:job.folder,page:job.status==='failed'?'activity':'game'});});notice.show(); } catch { /* In-app notices remain available if Windows blocks notifications. */ }

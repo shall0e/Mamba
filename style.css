@@ -112,8 +112,9 @@ input::placeholder, textarea::placeholder { color: var(--color-textMuted); opaci
 .remove-key { margin-right: auto; color: var(--color-danger); }
 .save-status { min-height: 18px; margin: 12px 0 0; color: var(--color-success); font-size: 12px; text-align: right; }
 .save-status.error { color: var(--color-danger); }
-.toast { position: fixed; left: calc(50% + var(--sidebar-width) / 2); bottom: 24px; z-index: 40; width: max-content; max-width: calc(100vw - var(--sidebar-width) - 32px); padding: 11px 15px; transform: translate(-50%, 8px); opacity: 0; pointer-events: none; border-radius: 10px; color: var(--color-text); background: var(--color-focus); font-size: 12px; transition: opacity 180ms ease, transform 180ms ease; }
-.toast.visible { transform: translate(-50%, 0); opacity: 1; }
+.toast { position: fixed; left: calc(50% + var(--sidebar-width) / 2); bottom: 24px; z-index: 40; display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100vw - var(--sidebar-width) - 32px); padding: 11px 15px; transform: translate(-50%, 8px); opacity: 0; pointer-events: none; border-radius: 10px; color: var(--color-text); background: var(--color-focus); font-size: 12px; transition: opacity 180ms ease, transform 180ms ease; }
+.toast.visible { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.toast-action { flex: none; min-height: 32px; padding: 0 10px; color: var(--color-text); background: var(--color-selection); white-space: nowrap; }
 button:focus-visible { background: var(--color-focus); color: var(--color-textOnSelection); }
 .nav-button.active:focus-visible { background: var(--color-selection); transform: translateY(-2px); }
 button:active:not(:disabled) { transform: translateY(1px); }
@@ -255,6 +256,7 @@ body:not(.home-active) #ambient-art span { animation-play-state: paused; }
 .featured-content { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; min-height: 280px; max-width: 720px; padding: 30px 34px; }
 .featured-badge { margin: 0 0 10px; color: var(--color-textSecondary); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .featured-content h2 { max-width: 620px; margin: 0 0 20px; font-size: clamp(26px, 3vw, 40px); line-height: 1.14; text-wrap: balance; }
+.featured-content h2, .featured-badge { text-shadow: 0 2px 12px rgb(0 0 0 / .9), 0 1px 3px rgb(0 0 0 / .95); }
 .featured-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .featured-actions .primary-button, .featured-actions .secondary-button { min-width: 132px; min-height: 48px; padding: 0 18px; }
 @keyframes featured-image-in { from { opacity: .55; transform: scale(1.035); } to { opacity: 1; transform: scale(1); } }

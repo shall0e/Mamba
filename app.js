@@ -11,6 +11,7 @@ let searchOffset = 0;
 let catalogState = {};
 let detailGeneration = 0;
 const cardJobs = new Map();
+let featuredGameId = null;
 
 let steamSlides = [];
 let steamSlideIndex = -1;
@@ -98,6 +99,7 @@ async function loadSteamBackdrop() {
     const games = await window.mamba.featuredGames();
     if (!Array.isArray(games) || !games.length) return;
     steamSlides = games;
+    steamSlideIndex = -1;
     await advanceSteamBackdrop();
   } catch { /* The search page remains usable when Steam artwork is offline. */ }
 }
@@ -150,9 +152,10 @@ function confidentTitleMatch(query, name) {
   const ignore = new Set(['a', 'an', 'and', 'of', 'the', 'for', 'on', 'edition', 'pc']);
   const wanted = titleMatchTokens(query).filter(word => !ignore.has(word));
   const title = titleMatchTokens(name).filter(word => !ignore.has(word));
-  if (wanted.length < 2 || !title.length) return 0;
+  if (!wanted.length || !title.length) return 0;
   const normalize = words => [...new Set(words)].sort().join(' ');
   if (normalize(wanted) === normalize(title)) return 1;
+  if (wanted.length === 1) return 0;
   const matches = wanted.filter(word => title.includes(word)).length;
   if (matches !== wanted.length) return 0;
   const queryPhrase = wanted.join(' ');
@@ -259,13 +262,18 @@ async function runSearch(more = false) {
   }
   document.querySelector('#search-results').hidden = !query;
   if (!query || !window.mamba) return;
-  if (!more) { searchOffset = 0; document.querySelector('#results-list').replaceChildren(); }
+  if (!more) { searchOffset = 0; featuredGameId = null; renderFeaturedGame(null); document.querySelector('#results-list').replaceChildren(); }
   document.querySelector('#results-status').textContent = 'Searching…';
   try {
     const result = await window.mamba.search(query, searchOffset);
     if (generation !== searchGeneration) return;
-    renderFeaturedGame(bestFeaturedMatch(query, result.items));
+    if (!more) {
+      const featured = bestFeaturedMatch(query, result.items);
+      featuredGameId = featured ? String(featured.id) : null;
+      renderFeaturedGame(featured);
+    }
     for (const game of result.items) {
+      if (featuredGameId && String(game.id) === featuredGameId) continue;
       const row = document.createElement('article'); row.className = 'result-card game-cover-card';
       const cover = document.createElement('button'); cover.type = 'button'; cover.className = 'game-cover'; cover.setAttribute('aria-label', `View ${game.name}`);
       cover.append(document.querySelector('#library-empty svg').cloneNode(true));
@@ -549,11 +557,12 @@ function openSettings() {
   showPage('settings');
 }
 
-function showToast(message) {
-  toast.textContent = String(message).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+function showToast(message, actionLabel, action) {
+  toast.replaceChildren(document.createTextNode(String(message).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')));
+  if (actionLabel && action) toast.append(button(actionLabel, async () => { await action(); toast.classList.remove('visible'); }, actionLabel === 'Play' ? 'play' : 'arrow-right', 'text-button toast-action'));
   toast.classList.add('visible');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), 2200);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), actionLabel ? 10000 : 2200);
 }
 
 document.querySelector('#settings-open').addEventListener('click', openSettings);
@@ -746,6 +755,10 @@ if (window.mamba) {
   window.mamba.onCatalog(renderCatalog);
   window.mamba.onJobs(renderJobs);
   window.mamba.onLibrary(renderLibrary);
+  window.mamba.onNotice(notice => {
+    if (notice.status === 'completed' && notice.libraryId) showToast(`${notice.name} is ready. Play now?`, 'Play', () => window.mamba.gameAction(notice.libraryId, 'play'));
+    else if (notice.status === 'needs-setup') showToast(`${notice.name} needs setup. Review it in your Library.`, 'Open library', () => showPage('library'));
+  });
   window.mamba.catalogStatus().then(renderCatalog).catch((error) => showToast(error.message));
   window.mamba.jobs().then(renderJobs).catch((error) => showToast(error.message));
 }
