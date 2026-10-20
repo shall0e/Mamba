@@ -6,9 +6,7 @@
 
 ## What if Hydra's heads never grew back?
 
-### A simpler, download-focused alternative to Hydra Launcher.
-
-**Mamba Launcher** is a lightweight Windows game downloader inspired by [Hydra Launcher](https://github.com/hydralauncher/hydra).
+**Mamba Launcher** is a lightweight usage-focused Windows game downloader inspired by [Hydra Launcher](https://github.com/hydralauncher/hydra).
 
 While Hydra aims to be an all-in-one gaming platform, Mamba takes a different approach: **actually downloading the games**
 
@@ -51,9 +49,8 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 | Automatic unnesting | ✅ | ❌ |
 | Adding to Steam Library | ✅ | ❌ |
 | Automatic best source | ✅ | ❌ |
-| Download progress tracking | ✅ | ✅ |
 | Download history | ✅ | ✅ |
-| Accurate download time | ✅ | ❌ |
+| Accurate download progress | ✅ | ❌ |
 | Accounts | ❌ | ✅ |
 | Friends | ❌ | ✅ |
 | Cloud saves | ❌ | ✅ |
