@@ -116,7 +116,6 @@
         node(
           'p',
           [
-            game.identityUncertain ? 'Identity unconfirmed' : null,
             game.related ? 'Related game' : null,
             game.releaseYear,
             game.downloadSize,

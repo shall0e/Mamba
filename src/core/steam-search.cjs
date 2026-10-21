@@ -122,8 +122,6 @@ class SteamSearch {
     this.searches = new Map();
     this.sourceIndex = new Map();
     this.subtitleIndex = new Map();
-    this.rejectedTitles = new Set();
-    this.localQueries = new Map();
   }
   async load() {
     try {
@@ -139,7 +137,6 @@ class SteamSearch {
     this.indexedGames = this.catalog.games;
     this.sourceIndex.clear();
     this.subtitleIndex.clear();
-    this.localQueries.clear();
     for (const source of this.catalog.games) {
       const key = compactTitle(source.name);
       if (!this.sourceIndex.has(key)) this.sourceIndex.set(key, []);
@@ -213,55 +210,6 @@ class SteamSearch {
           group,
         });
       }
-    }
-    const claimed = new Set(items.flatMap((game) => game.options.map((option) => option.gameId)));
-    let raw = this.localQueries.get(query);
-    if (!raw) {
-      raw = {
-        matches: [
-          ...new Map(
-            queries
-              .flatMap((term) => this.catalog.search(term, 0).items)
-              .map((game) => [game.id, game]),
-          ).values(),
-        ],
-        direct: new Set(
-          primaryQueries
-            .flatMap((term) => this.catalog.search(term, 0).items)
-            .filter(primaryCandidate)
-            .map((game) => game.id),
-        ),
-      };
-      this.localQueries.set(query, raw);
-      if (this.localQueries.size > 40)
-        this.localQueries.delete(this.localQueries.keys().next().value);
-    }
-    const rawMatches = raw.matches;
-    const directSources = raw.direct;
-    for (const source of rawMatches) {
-      if (this.rejectedTitles.has(compactTitle(source.name))) continue;
-      const options = source.options.filter(
-        (option) =>
-          !claimed.has(option.gameId) &&
-          !optionTraits(option).partial &&
-          !optionTraits(option).incompatible,
-      );
-      if (!options.length) continue;
-      const group = {
-        ...source,
-        options,
-        cover: null,
-        verified: false,
-        identityUncertain: true,
-        name: source.releaseYear ? `${source.name} (${source.releaseYear})` : source.name,
-        related: !directSources.has(source.id),
-      };
-      items.push(group);
-      this.groups.set(group.id, {
-        games: this.catalog.games,
-        ambiguous: this.ambiguous.size,
-        group,
-      });
     }
     items.sort(
       (a, b) => Number(a.related) - Number(b.related) || Number(b.verified) - Number(a.verified),
@@ -434,10 +382,7 @@ class SteamSearch {
     ];
     const sourceResults = [...new Map(sourceLists.flat().map((item) => [item.id, item])).values()];
     const record = (app) => {
-      if (app?.type !== 'game') {
-        if (app?.name) this.rejectedTitles.add(compactTitle(app.name));
-        return;
-      }
+      if (app?.type !== 'game') return;
       this.apps.set('steam:' + app.steamId, app);
       if (revision === this.searchRevision) publish();
     };

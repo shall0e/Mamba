@@ -75,7 +75,7 @@ test('best banner needs one verified exact match; newest requires explicit inten
   );
 });
 
-test('first-game expansion and related sequels return promptly without invented artwork', async () => {
+test('first-game expansion returns unique confirmed games and related sequels', async () => {
   const catalog = new Catalog('unused', async () => ({}));
   catalog.replace(
     ['Modern Warfare', 'Modern Warfare 2'].map((name, i) => ({
@@ -86,13 +86,17 @@ test('first-game expansion and related sequels return promptly without invented 
     })),
   );
   const search = new SteamSearch('unused', catalog, {});
+  for (const [i, name] of ['Modern Warfare', 'Modern Warfare 2'].entries()) {
+    search.apps.set('steam:' + (i + 1), { steamId: i + 1, name, type: 'game' });
+  }
   const result = search.localResults('Modern Warfare 1');
   assert.equal(result.total, 2);
   assert.equal(result.items[0].name, 'Modern Warfare');
   assert.equal(result.items[0].related, false);
   assert.equal(result.items[1].related, true);
-  assert.ok(result.items.every((game) => game.cover === null && game.identityUncertain));
-  assert.equal(result.bestMatch, null);
+  assert.ok(result.items.every((game) => game.verified && !game.identityUncertain));
+  assert.equal(new Set(result.items.map((game) => game.id)).size, result.total);
+  assert.equal(result.bestMatch.id, 'steam:1');
 });
 
 test('year-specific releases attach only to the matching app and never borrow a launcher cover', () => {
@@ -128,16 +132,15 @@ test('year-specific releases attach only to the matching app and never borrow a 
     cover: 'https://example.test/launcher.png',
   });
   const result = search.localResults('call of duty');
-  assert.equal(result.total, 2);
+  assert.equal(result.total, 1);
   const old = result.items.find((game) => game.id === 'steam:1');
   assert.deepEqual(
     old.options.map((option) => option.gameId),
     ['old'],
   );
   assert.equal(old.releaseYear, '2003');
-  const unknown = result.items.find((game) => game.identityUncertain);
-  assert.equal(unknown.releaseYear, '2022');
-  assert.equal(unknown.cover, null);
+  assert.ok(result.items.every((game) => game.verified && !game.identityUncertain));
+  assert.ok(!result.items.some((game) => game.id === 'steam:2'));
   assert.equal(result.bestMatch, null);
   assert.equal(search.localResults('call of duty 2003').bestMatch.id, 'steam:1');
 });
