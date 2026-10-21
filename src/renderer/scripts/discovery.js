@@ -7,7 +7,6 @@
     loading = false;
   const queueing = new Set();
   const cardCache = new Map();
-  const labels = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' };
   const node = (tag, text, className) => {
     const item = document.createElement(tag);
     if (text !== undefined) item.textContent = text;
@@ -134,21 +133,10 @@
         ),
       );
       info.append(title);
-      const methods = [
-        ...new Set((game.options || []).flatMap((option) => option.services || ['torbox'])),
-      ];
       info.append(
         node(
           'p',
-          [
-            game.related ? 'Related game' : null,
-            game.releaseYearLabel || game.releaseYear,
-            game.downloadSize,
-            methods
-              .map((id) => labels[id])
-              .filter(Boolean)
-              .join(' · ') || 'Connect a download service',
-          ]
+          [game.releaseYearLabel || game.releaseYear, game.downloadSize]
             .filter(Boolean)
             .join(' · '),
           'game-card-meta',
