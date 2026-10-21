@@ -1,4 +1,4 @@
-![Mamba logo](assets/mamba.png)
+<img src="assets/mamba.png" alt="Mamba logo" width="256">
 
 # Mamba Launcher
 
