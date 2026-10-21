@@ -159,3 +159,25 @@ test('modifications and numbered sequels do not silently claim base-game identit
     true,
   );
 });
+
+test('contiguous title matches outrank loose word matches and store dates are labeled', () => {
+  const catalog = new Catalog('unused', async () => ({}));
+  const names = ['Modern Naval Warfare', 'Call of Duty: Modern Warfare', 'Modern Warfare 2'];
+  catalog.replace(
+    names.map((name, i) => ({
+      id: String(i),
+      name,
+      sources: ['fixture'],
+      links: [{ kind: 'torrents', uri: 'magnet:?xt=urn:btih:' + String(i + 1).repeat(40) }],
+    })),
+  );
+  const search = new SteamSearch('unused', catalog, {});
+  names.forEach((name, i) =>
+    search.apps.set('steam:' + i, { steamId: i + 1, type: 'game', name, releaseDate: '2023' }),
+  );
+  const result = search.localResults('modern warfare 1');
+  assert.equal(result.items[0].name, names[1]);
+  assert.equal(result.items.at(-1).name, names[0]);
+  assert.equal(result.items.at(-1).related, true);
+  assert.equal(result.items[0].releaseYearLabel, 'Steam release 2023');
+});

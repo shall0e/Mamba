@@ -142,7 +142,7 @@
           'p',
           [
             game.related ? 'Related game' : null,
-            game.releaseYear,
+            game.releaseYearLabel || game.releaseYear,
             game.downloadSize,
             methods
               .map((id) => labels[id])

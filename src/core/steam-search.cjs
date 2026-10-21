@@ -189,6 +189,11 @@ class SteamSearch {
       primaryQueries
         .flatMap((term) => rankedSearch(index, term, 0).items)
         .filter(primaryCandidate)
+        .filter((app) =>
+          primaryQueries.some((term) =>
+            (' ' + titleKey(app.name) + ' ').includes(' ' + titleKey(term) + ' '),
+          ),
+        )
         .map((app) => app.id),
     );
     const matching = [
@@ -218,9 +223,18 @@ class SteamSearch {
         });
       }
     }
-    items.sort(
-      (a, b) => Number(a.related) - Number(b.related) || Number(b.verified) - Number(a.verified),
-    );
+    const relevance = (game) =>
+      Math.max(
+        ...primaryQueries.map((term) => {
+          const wanted = titleKey(term);
+          const title = titleKey(game.name);
+          return (
+            (title === wanted ? 4 : (' ' + title + ' ').includes(' ' + wanted + ' ') ? 2 : 0) +
+            titleSimilarity(term, game.name)
+          );
+        }),
+      );
+    items.sort((a, b) => Number(a.related) - Number(b.related) || relevance(b) - relevance(a));
     const bestMatch = chooseBestMatch(query, items, matching);
     const start = Math.max(0, Number(offset) || 0);
     return { total: items.length, items: items.slice(start, start + 40), bestMatch };
@@ -309,6 +323,10 @@ class SteamSearch {
       name: app.name,
       cover: app.cover,
       releaseYear: year,
+      releaseYearLabel:
+        year && !app.originalReleaseYear && !releaseHints(app.name).year && sourceYears.length !== 1
+          ? 'Steam release ' + year
+          : year,
       downloadSize: sizes[0] || null,
       verified: true,
     };
