@@ -52,7 +52,9 @@ test('Steam identities own cards; variants merge and unsupported Steam results a
   assert.equal((await search.search('zomboid')).pending, true);
   await search.searches.get('zomboid').work;
   const result = await search.search('zomboid');
-  assert.equal(result.total, 1);
+  assert.equal(result.total, 2);
+  assert.equal(result.items[1].identityUncertain, true);
+  assert.equal(result.items[1].cover, null);
   assert.equal(result.items[0].id, 'steam:108600');
   assert.equal(result.items[0].options.length, 2);
   assert.equal(result.items[0].name, 'Project Zomboid');
@@ -92,7 +94,7 @@ test('title matching preserves sequel order, remasters and explicit release year
   assert.ok(!sourceMatches({ name: 'Portal 2' }, { name: 'Portal' }));
   assert.equal(titleKey('Constructor'), 'constructor');
 });
-test('ambiguous sources and update-only releases cannot become game cards', async (t) => {
+test('ambiguous sources remain neutral while update-only releases stay excluded', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-steam-ambiguous-'));
   t.after(async () => {
     await Promise.all([...search.searches.values()].map((state) => state.work));
@@ -124,7 +126,11 @@ test('ambiguous sources and update-only releases cannot become game cards', asyn
   );
   await search.search('game');
   await search.searches.get('game').work;
-  assert.equal((await search.search('game')).total, 0);
+  const result = await search.search('game');
+  assert.equal(result.total, 1);
+  assert.equal(result.items[0].identityUncertain, true);
+  assert.equal(result.items[0].cover, null);
+  assert.equal(result.bestMatch, null);
 });
 test('cached verified games return while Steam is still pending, without duplicate lookups', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-fast-search-'));

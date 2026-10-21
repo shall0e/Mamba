@@ -1,4 +1,5 @@
 const { torrentHash } = require('./torbox.cjs');
+const { releaseHints, assessIdentity, identityKey } = require('./identity-match.cjs');
 
 function tokens(value) {
   return (
@@ -75,17 +76,23 @@ function createSearchIndex(games, metadata = new Map()) {
   const groups = new Map();
   for (const game of games) {
     const cleaned = gameTitle(game.name);
-    const info = metadata.get(tokens(cleaned.replace(/[’']/g, '')).join(' '));
+    const candidate = metadata.get(
+      identityKey(game.name, tokens(cleaned.replace(/[’']/g, '')).join(' ')),
+    );
+    const info = candidate && assessIdentity(game.name, candidate).accepted ? candidate : null;
+    const hints = releaseHints(game.name);
     const name = info?.name || cleaned;
     const words = tokens(name);
     const key = info?.steamId
       ? `steam:${info.steamId}`
-      : tokens(cleaned.replace(/[’']/g, '')).join(' ');
+      : identityKey(game.name, tokens(cleaned.replace(/[’']/g, '')).join(' '));
     let group = groups.get(key);
     if (!group) {
       group = {
         id: game.id,
         name,
+        releaseYear: hints.year,
+        identityTitle: game.name,
         cover: info?.cover || game.cover || null,
         words,
         sources: new Set(),
@@ -146,13 +153,16 @@ function rankedSearch(index, query, offset = 0) {
   const phrase = terms.join(' ');
   const results = [];
   for (const game of index) {
-    if (numericTerms.some((term) => !game.words.includes(term))) continue;
+    if (numericTerms.some((term) => !game.words.includes(term) && game.releaseYear !== term))
+      continue;
 
-    const matchedTerms = terms.filter((term, position) =>
-      game.words.some(
-        (word) =>
-          word === term || (!/^\d+$/.test(term) && term.length >= 3 && word.startsWith(term)),
-      ),
+    const matchedTerms = terms.filter(
+      (term, position) =>
+        game.releaseYear === term ||
+        game.words.some(
+          (word) =>
+            word === term || (!/^\d+$/.test(term) && term.length >= 3 && word.startsWith(term)),
+        ),
     );
 
     const minimumMatches =

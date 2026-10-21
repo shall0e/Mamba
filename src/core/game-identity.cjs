@@ -1,6 +1,12 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { tokens, gameTitle } = require('./search.cjs');
+const {
+  IDENTITY_VERSION,
+  releaseHints,
+  assessIdentity,
+  identityKey,
+} = require('./identity-match.cjs');
 function cleanTitle(raw) {
   return gameTitle(
     String(raw)
@@ -76,7 +82,7 @@ class GameIdentity {
     if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) return null;
     const key = 'app:' + id,
       saved = this.cache.get(key);
-    if (saved && saved.data.detailsVersion === 4 && Date.now() - saved.at < 30 * 86400000)
+    if (saved && saved.data.detailsVersion === 5 && Date.now() - saved.at < 30 * 86400000)
       return saved.data;
     const response = await this.fetch(
       'https://store.steampowered.com/api/appdetails?appids=' + id + '&l=english&cc=CA',
@@ -98,7 +104,10 @@ class GameIdentity {
         /nudity|sexual content|adult.only|sexually explicit/i.test(String(value)),
       );
     const data = {
-      detailsVersion: 4,
+      detailsVersion: 5,
+      isHub: /\b(?:game launcher|launch hub|central hub|launch platform)\b/i.test(
+        String(app.short_description || ''),
+      ),
       description: String(app.short_description || '')
         .replace(/<[^>]*>/g, '')
         .replace(/&amp;/g, '&')
@@ -106,6 +115,10 @@ class GameIdentity {
         .slice(0, 2500),
       developers: app.developers || [],
       genres: (app.genres || []).map((item) => item.description),
+      originalReleaseYear:
+        String(app.about_the_game || app.short_description || '').match(
+          /(?:originally|first) released(?:\s|<[^>]*>)*(?:in\s+)?((?:19|20)\d{2})/i,
+        )?.[1] || null,
       releaseDate: app.release_date?.date || null,
       steamId: Number(id),
       name: app.name,
@@ -124,7 +137,7 @@ class GameIdentity {
   identify(raw, { aliases = [] } = {}) {
     const key =
       'title:' +
-      identityWords(raw).join(' ') +
+      identityKey(raw, identityWords(raw).join(' ')) +
       '|' +
       aliases.map((a) => identityWords(a).join(' ')).join('|');
     if (this.pending.has(key)) return this.pending.get(key);
@@ -136,12 +149,20 @@ class GameIdentity {
   async identifyNow(raw, key, aliases) {
     const fallback = { name: cleanTitle(raw) || raw, verified: false, type: 'unknown' };
     const saved = this.cache.get(key);
-    if (saved && Date.now() - saved.at < (saved.data.verified ? 30 : 0.05) * 86400000)
+    if (
+      saved &&
+      saved.data.identityVersion === IDENTITY_VERSION &&
+      Date.now() - saved.at < (saved.data.verified ? 30 : 0.05) * 86400000
+    )
       return saved.data;
     try {
       let candidates = [];
       const names = [raw, ...aliases.filter((name) => cleanTitle(name).length >= 5)];
-      const queries = [cleanTitle(raw)];
+      const hints = releaseHints(raw);
+      const queries = [
+        hints.year ? cleanTitle(raw) + ' ' + hints.year : cleanTitle(raw),
+        cleanTitle(raw),
+      ];
       if (/^[A-Z]{2,5}\s/.test(raw)) queries.push(cleanTitle(raw).split(' ').slice(1).join(' '));
       queries.push(...aliases.map(cleanTitle).filter((name) => name.length >= 5));
       for (const query of [...new Set(queries)].slice(0, 4)) {
@@ -164,21 +185,36 @@ class GameIdentity {
           const word = identityWords(raw)[0];
           candidates = items.filter((item) => identityWords(item.name)[0] === word);
         }
+        if (candidates.length && hints.year) {
+          const checks = await Promise.all(
+            candidates.map(async (candidate) => ({
+              candidate,
+              app: await this.details(candidate.id).catch(() => null),
+            })),
+          );
+          candidates = checks
+            .filter(({ app }) => assessIdentity(raw, app).accepted)
+            .map(({ candidate }) => candidate);
+        }
         if (candidates.length) break;
       }
-      const sourceYear = String(raw).match(/\b((?:19|20)\d{2})\b/)?.[1];
-      if (candidates.length > 1 && sourceYear) {
-        const details = await Promise.all(
-          candidates.map(async (item) => ({
+      // Validate every candidate, including a single search result.
+      const evaluated = await Promise.all(
+        candidates.map(async (item) => {
+          const app = await this.details(item.id).catch(() => null);
+          return {
             item,
-            app: await this.details(item.id).catch(() => null),
-          })),
-        );
-        const matching = details.filter(({ item, app }) =>
-          String(item.name + ' ' + (app?.releaseDate || '')).includes(sourceYear),
-        );
-        if (matching.length) candidates = matching.map((entry) => entry.item);
-      }
+            app,
+            evidence: assessIdentity(
+              raw,
+              app,
+              matchesTitle(raw, item.name) ||
+                aliases.some((alias) => matchesTitle(alias, item.name)),
+            ),
+          };
+        }),
+      );
+      candidates = evaluated.filter(({ evidence }) => evidence.accepted).map(({ item }) => item);
       if (candidates.length !== 1) {
         this.cache.set(key, { at: Date.now(), data: fallback });
         return fallback;
@@ -190,7 +226,15 @@ class GameIdentity {
         baseGame = await this.details(app.parentId);
         if (baseGame?.type !== 'game') baseGame = null;
       }
-      const data = { ...app, verified: true, baseGame };
+      const evidence = assessIdentity(raw, app);
+      const data = {
+        ...app,
+        verified: true,
+        identityVersion: IDENTITY_VERSION,
+        confidence: evidence.confidence,
+        matchReason: evidence.reason,
+        baseGame,
+      };
       this.cache.set(key, { at: Date.now(), data });
       await this.save();
       return data;
@@ -230,7 +274,7 @@ async function groupInstallations(items, identify) {
               .slice(0, -1)
               .filter((name) => !/^(?:bin|binaries|x64|win64|engine|data)$/i.test(name))
           : [];
-        const info = await identify(item.name, { aliases }).catch(() => ({
+        const info = await identify(item.sourceName || item.name, { aliases }).catch(() => ({
           name: cleanTitle(item.name),
           verified: false,
         }));
@@ -246,7 +290,9 @@ async function groupInstallations(items, identify) {
   const groups = new Map();
   for (const item of enriched) {
     const base = item.identity.baseGame || item.identity;
-    const key = base.steamId ? 'steam:' + base.steamId : identityWords(item.name).join(' ');
+    const key = base.steamId
+      ? 'steam:' + base.steamId
+      : identityKey(item.sourceName || item.name, identityWords(item.name).join(' '));
     if (!groups.has(key)) groups.set(key, { base, items: [] });
     groups.get(key).items.push(item);
   }

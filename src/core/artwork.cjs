@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { tokens, displayTitle } = require('./search.cjs');
+const { assessIdentity, releaseHints } = require('./identity-match.cjs');
 
 function exactGameName(left, right) {
   const normalize = (name) => tokens(displayTitle(name)).join(' ');
@@ -28,11 +29,16 @@ class Artwork {
       this.catalog.getGame?.(id) ||
       this.catalog.searchIndex?.find((entry) => entry.id === id) ||
       this.catalog.library?.get(id);
-    if (!game) return null;
+    if (
+      !game ||
+      game.identityUncertain ||
+      (!game.verified && releaseHints(game.identityTitle || game.name).year)
+    )
+      return null;
     const cache = path.join(
       this.directory,
       createHash('sha256')
-        .update(game.name + (game.cover || ''))
+        .update('identity-v2|' + (game.identityTitle || game.name) + (game.cover || ''))
         .digest('hex') + '.json',
     );
     try {
@@ -50,9 +56,13 @@ class Artwork {
         const response = await this.fetch(search, { signal: AbortSignal.timeout(8000) });
         if (!response.ok) return null;
         const data = await response.json();
-        const match = data.items?.find(
-          (item) => Number.isSafeInteger(item.id) && exactGameName(game.name, item.name),
+        const matches = (data.items || []).filter(
+          (item) =>
+            Number.isSafeInteger(item.id) &&
+            exactGameName(game.name, item.name) &&
+            assessIdentity(game.identityTitle || game.name, { name: item.name }).accepted,
         );
+        const match = matches.length === 1 ? matches[0] : null;
         if (match)
           url = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${match.id}/header.jpg`;
       }

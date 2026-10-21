@@ -25,9 +25,14 @@ const cardJobs = new Map();
 
 function renderFeaturedGame(game) {
   const banner = document.querySelector('#featured-game');
+  if (game && !banner.hidden && banner.dataset.gameId === String(game.id)) return;
   banner.replaceChildren();
   banner.hidden = !game;
-  if (!game) return;
+  if (!game) {
+    delete banner.dataset.gameId;
+    return;
+  }
+  const owned = window.MambaPresence?.installed(installedGames, game);
   banner.dataset.gameId = String(game.id);
   const cover = document.createElement('img');
   cover.className = 'featured-art';
@@ -54,13 +59,17 @@ function renderFeaturedGame(game) {
   actions.className = 'featured-actions';
   actions.append(
     button(
-      'Download',
+      owned?.executable && owned.status === 'installed' ? 'Play' : 'Download',
       async () => {
+        if (owned?.executable && owned.status === 'installed') {
+          await window.mamba.gameAction(owned.id, 'play');
+          return;
+        }
         const jobId = await window.mamba.downloadBest(game.id);
         cardJobs.set(game.id, jobId);
         showToast(`${game.name} added to downloads`);
       },
-      'download',
+      owned?.executable && owned.status === 'installed' ? 'play' : 'download',
       'primary-button',
     ),
   );

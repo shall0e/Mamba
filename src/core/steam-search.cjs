@@ -8,6 +8,7 @@ const {
   rankedSearch,
 } = require('./search.cjs');
 const { atomicJson } = require('./catalog.cjs');
+const { releaseHints, assessIdentity } = require('./identity-match.cjs');
 
 function titleKey(raw) {
   const cleaned = gameTitle(String(raw).replace(/[._]+/g, ' ')).replace(/[’']/g, '');
@@ -43,17 +44,67 @@ function titleSimilarity(left, right) {
 function sourceMatches(source, app) {
   const wanted = titleKey(app.name),
     actual = titleKey(source.name);
-  const sourceYear = source.name.match(/\(\s*((?:19|20)\d{2})\s*\)/)?.[1];
-  const steamYear =
-    app.name.match(/\(\s*((?:19|20)\d{2})\s*\)/)?.[1] ||
-    String(app.releaseDate || '').match(/\b((?:19|20)\d{2})\b/)?.[1];
-  if (sourceYear && steamYear && sourceYear !== steamYear) return false;
+  if (!assessIdentity(source.name, app).accepted) return false;
   if (compactTitle(source.name) === compactTitle(app.name)) return true;
 
+  // A remaster may omit a franchise number when its full distinct subtitle remains.
+  // Do not drop sequel numbers from plain titles such as "Game 2".
+  const words = actual.split(' ');
+  const numbers = words
+    .map((word, index) => (/^\d+$/.test(word) ? index : -1))
+    .filter((index) => index >= 0);
+  const index = numbers[0];
   return (
-    wanted === 'call of duty modern warfare remastered' &&
-    actual === 'call of duty 4 modern warfare remastered'
+    releaseHints(source.name).edition === 'remaster' &&
+    numbers.length === 1 &&
+    index >= 2 &&
+    words.length - index - 1 >= 3 &&
+    words.filter((_word, position) => position !== index).join(' ') === wanted
   );
+}
+
+function topicQueries(query) {
+  const clean = String(query)
+    .replace(/\b(?:latest|newest)\b/gi, '')
+    .trim();
+  const words = titleKey(clean).split(' ').filter(Boolean);
+  const withoutOne = clean.replace(/\b1\b/g, '').replace(/\s+/g, ' ').trim();
+  const core = words.filter((word) => !/^\d+$/.test(word));
+  const meaningful = core.filter((word) => !['the', 'a', 'an', 'of', 'and', 'for'].includes(word));
+  const family = meaningful.length > 2 ? meaningful.slice(0, 2).join(' ') : '';
+  return [...new Set([clean, withoutOne, core.join(' '), family].filter(Boolean))].slice(0, 4);
+}
+function chooseBestMatch(query, items, knownApps = []) {
+  const latest = /\b(?:latest|newest)\b/i.test(query);
+  const clean = topicQueries(query)[0].replace(/\b1\b/g, '').replace(/\s+/g, ' ').trim();
+  const hints = releaseHints(clean);
+  const wanted = compactTitle(
+    hints.year ? clean.replace(new RegExp('\\b' + hints.year + '\\b'), '') : clean,
+  );
+  if (!wanted || wanted.length < 4) return null;
+  const exact = items.filter(
+    (game) =>
+      compactTitle(game.name) === wanted ||
+      compactTitle(game.name.replace(/\s*\(\d{4}\)$/, '')) === wanted,
+  );
+  if (latest) {
+    const candidates = items
+      .filter((game) => game.verified && !game.related && game.releaseYear)
+      .sort((a, b) => Number(b.releaseYear) - Number(a.releaseYear));
+    return candidates.length &&
+      (candidates.length === 1 || candidates[0].releaseYear !== candidates[1].releaseYear)
+      ? candidates[0]
+      : null;
+  }
+  if (!hints.year && knownApps.filter((app) => compactTitle(app.name) === wanted).length > 1)
+    return null;
+  const eligible = exact.filter(
+    (game) => game.verified && (!hints.year || String(game.releaseYear) === hints.year),
+  );
+  const uncertain = exact.some(
+    (game) => !game.verified && (!hints.year || String(game.releaseYear) === hints.year),
+  );
+  return eligible.length === 1 && !uncertain ? eligible[0] : null;
 }
 class SteamSearch {
   constructor(directory, catalog, identity, transport = fetch) {
@@ -70,6 +121,9 @@ class SteamSearch {
     this.searchRevision = 0;
     this.searches = new Map();
     this.sourceIndex = new Map();
+    this.subtitleIndex = new Map();
+    this.rejectedTitles = new Set();
+    this.localQueries = new Map();
   }
   async load() {
     try {
@@ -84,10 +138,21 @@ class SteamSearch {
     if (this.indexedGames === this.catalog.games) return;
     this.indexedGames = this.catalog.games;
     this.sourceIndex.clear();
+    this.subtitleIndex.clear();
+    this.localQueries.clear();
     for (const source of this.catalog.games) {
       const key = compactTitle(source.name);
       if (!this.sourceIndex.has(key)) this.sourceIndex.set(key, []);
       this.sourceIndex.get(key).push(source);
+      const parts = titleKey(source.name).split(' ');
+      if (releaseHints(source.name).edition === 'remaster') {
+        const alias = parts
+          .filter((word) => !/^\d+$/.test(word))
+          .join(' ')
+          .replace(/[^a-z0-9]/g, '');
+        if (!this.subtitleIndex.has(alias)) this.subtitleIndex.set(alias, []);
+        this.subtitleIndex.get(alias).push(source);
+      }
     }
     this.groups.clear();
     this.ambiguous.clear();
@@ -96,12 +161,12 @@ class SteamSearch {
     this.indexSources();
     const key = compactTitle(app.name);
     const releases = this.sourceIndex.get(key) || [];
-    const alias =
-      key === 'callofdutymodernwarfareremastered'
-        ? this.sourceIndex.get('callofduty4modernwarfareremastered') || []
-        : [];
-    return [...releases, ...alias].filter((source) => sourceMatches(source, app));
+    const alias = this.subtitleIndex.get(key) || [];
+    return [
+      ...new Map([...releases, ...alias].map((source) => [source.id, source])).values(),
+    ].filter((source) => sourceMatches(source, app));
   }
+
   localResults(query, offset = 0) {
     this.indexSources();
     const index = [...this.apps.values()].map((app) => ({
@@ -111,7 +176,22 @@ class SteamSearch {
       isCollection: false,
     }));
 
-    const matching = rankedSearch(index, query, 0).items;
+    const queries = topicQueries(query);
+    const primaryQueries = /\b1\b/.test(query) ? queries.slice(0, 2) : queries.slice(0, 1);
+    const firstGameAlias = /\b1\b/.test(query);
+    const primaryCandidate = (game) =>
+      !firstGameAlias || !tokens(game.name).some((word) => /^\d{1,3}$/.test(word) && word !== '1');
+    const direct = new Set(
+      primaryQueries
+        .flatMap((term) => rankedSearch(index, term, 0).items)
+        .filter(primaryCandidate)
+        .map((app) => app.id),
+    );
+    const matching = [
+      ...new Map(
+        queries.flatMap((term) => rankedSearch(index, term, 0).items).map((app) => [app.id, app]),
+      ).values(),
+    ];
     const entries = matching.map((app) => ({ app, releases: this.releasesFor(app) }));
     const claims = new Map();
     for (const { releases } of entries)
@@ -125,6 +205,7 @@ class SteamSearch {
       if (!safe.length) continue;
       const group = this.group(app, safe);
       if (group) {
+        group.related = !direct.has(group.id);
         items.push(group);
         this.groups.set(group.id, {
           games: this.catalog.games,
@@ -133,8 +214,61 @@ class SteamSearch {
         });
       }
     }
+    const claimed = new Set(items.flatMap((game) => game.options.map((option) => option.gameId)));
+    let raw = this.localQueries.get(query);
+    if (!raw) {
+      raw = {
+        matches: [
+          ...new Map(
+            queries
+              .flatMap((term) => this.catalog.search(term, 0).items)
+              .map((game) => [game.id, game]),
+          ).values(),
+        ],
+        direct: new Set(
+          primaryQueries
+            .flatMap((term) => this.catalog.search(term, 0).items)
+            .filter(primaryCandidate)
+            .map((game) => game.id),
+        ),
+      };
+      this.localQueries.set(query, raw);
+      if (this.localQueries.size > 40)
+        this.localQueries.delete(this.localQueries.keys().next().value);
+    }
+    const rawMatches = raw.matches;
+    const directSources = raw.direct;
+    for (const source of rawMatches) {
+      if (this.rejectedTitles.has(compactTitle(source.name))) continue;
+      const options = source.options.filter(
+        (option) =>
+          !claimed.has(option.gameId) &&
+          !optionTraits(option).partial &&
+          !optionTraits(option).incompatible,
+      );
+      if (!options.length) continue;
+      const group = {
+        ...source,
+        options,
+        cover: null,
+        verified: false,
+        identityUncertain: true,
+        name: source.releaseYear ? `${source.name} (${source.releaseYear})` : source.name,
+        related: !directSources.has(source.id),
+      };
+      items.push(group);
+      this.groups.set(group.id, {
+        games: this.catalog.games,
+        ambiguous: this.ambiguous.size,
+        group,
+      });
+    }
+    items.sort(
+      (a, b) => Number(a.related) - Number(b.related) || Number(b.verified) - Number(a.verified),
+    );
+    const bestMatch = chooseBestMatch(query, items, matching);
     const start = Math.max(0, Number(offset) || 0);
-    return { total: items.length, items: items.slice(start, start + 40) };
+    return { total: items.length, items: items.slice(start, start + 40), bestMatch };
   }
   async save() {
     this.writes = this.writes
@@ -201,10 +335,17 @@ class SteamSearch {
       })
     )
       return null;
+    const sourceYears = [
+      ...new Set(releases.map((release) => releaseHints(release.name).year).filter(Boolean)),
+    ];
     const year =
-      String(app.releaseDate || app.name.match(/\b(?:19|20)\d{2}\b/)?.[0] || '').match(
-        /\b(?:19|20)\d{2}\b/,
-      )?.[0] || null;
+      String(
+        app.originalReleaseYear ||
+          releaseHints(app.name).year ||
+          (sourceYears.length === 1 ? sourceYears[0] : null) ||
+          app.releaseDate ||
+          '',
+      ).match(/\b(?:19|20)\d{2}\b/)?.[0] || null;
     const sizes = [...new Set(group.options.map((option) => option.fileSize).filter(Boolean))];
     return {
       ...group,
@@ -252,8 +393,14 @@ class SteamSearch {
       this.searches.set(key, state);
       while (this.searches.size > 40) this.searches.delete(this.searches.keys().next().value);
       const publish = () => {
-        if (this.activeQuery === key && this.searches.get(key) === state)
-          this.onResults?.(query, { ...this.localResults(query), pending: state.pending });
+        if (this.activeQuery === key && this.searches.get(key) === state) {
+          const result = this.localResults(query);
+          this.onResults?.(query, {
+            ...result,
+            bestMatch: state.pending ? null : result.bestMatch,
+            pending: state.pending,
+          });
+        }
       };
       state.work = Promise.resolve()
         .then(() => this.enrich(query, publish))
@@ -264,7 +411,12 @@ class SteamSearch {
           publish();
         });
     }
-    return { ...this.localResults(query, offset), pending: state.pending };
+    const result = this.localResults(query, offset);
+    return {
+      ...result,
+      bestMatch: state.pending ? null : result.bestMatch,
+      pending: state.pending,
+    };
   }
   async enrich(query, publish = () => {}) {
     const revision = ++this.searchRevision;
@@ -272,22 +424,20 @@ class SteamSearch {
       .trim()
       .slice(0, 300);
     if (!query) return { total: 0, items: [] };
-    const words = query.split(/\s+/).filter(Boolean);
-    const relaxedQuery =
-      words.length > 1 ? words.filter((word) => !/^\d{1,4}$/.test(word)).join(' ') : '';
-    const [candidates, sourceLists] = await Promise.all([
-      this.steamResults(query),
-      Promise.all(
-        [query, relaxedQuery]
-          .filter(Boolean)
-          .map((term) => Promise.resolve(this.catalog.search(term, 0).items || [])),
-      ),
+    const queries = topicQueries(query);
+    const [candidateLists, sourceLists] = await Promise.all([
+      Promise.all(queries.slice(0, 2).map((term) => this.steamResults(term).catch(() => []))),
+      Promise.all(queries.map((term) => Promise.resolve(this.catalog.search(term, 0).items || []))),
     ]);
-    const sourceResults = [
-      ...new Map(sourceLists.flat().map((item) => [compactTitle(item.name), item])).values(),
+    const candidates = [
+      ...new Map(candidateLists.flat().map((candidate) => [candidate.id, candidate])).values(),
     ];
+    const sourceResults = [...new Map(sourceLists.flat().map((item) => [item.id, item])).values()];
     const record = (app) => {
-      if (app?.type !== 'game') return;
+      if (app?.type !== 'game') {
+        if (app?.name) this.rejectedTitles.add(compactTitle(app.name));
+        return;
+      }
       this.apps.set('steam:' + app.steamId, app);
       if (revision === this.searchRevision) publish();
     };
@@ -304,15 +454,8 @@ class SteamSearch {
         }),
       );
     })();
-    const directNames = new Set(candidates.map((candidate) => compactTitle(candidate.name)));
     const sourceCandidates = this.identity.identify
-      ? [
-          ...new Map(
-            sourceResults
-              .filter((item) => !directNames.has(compactTitle(item.name)))
-              .map((item) => [compactTitle(item.name), item]),
-          ).values(),
-        ].slice(0, 24)
+      ? [...new Map(sourceResults.map((item) => [item.id, item])).values()].slice(0, 24)
       : [];
     const sourceTask = (async () => {
       let index = 0;
@@ -320,7 +463,9 @@ class SteamSearch {
         Array.from({ length: Math.min(3, sourceCandidates.length) }, async () => {
           while (index < sourceCandidates.length && revision === this.searchRevision) {
             const item = sourceCandidates[index++];
-            const identity = await this.identity.identify(item.name).catch(() => null);
+            const identity = await this.identity
+              .identify(item.identityTitle || item.name)
+              .catch(() => null);
             if (!identity?.verified || identity.type !== 'game' || !identity.steamId) continue;
             const app = await this.identity.details(identity.steamId).catch(() => identity);
             record(app);
@@ -333,4 +478,12 @@ class SteamSearch {
     this.identity.save().catch(() => {});
   }
 }
-module.exports = { SteamSearch, titleKey, compactTitle, titleSimilarity, sourceMatches };
+module.exports = {
+  SteamSearch,
+  titleKey,
+  compactTitle,
+  titleSimilarity,
+  sourceMatches,
+  topicQueries,
+  chooseBestMatch,
+};

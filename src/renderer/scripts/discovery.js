@@ -1,6 +1,7 @@
 (() => {
   const $ = (selector) => document.querySelector(selector);
   let games = [],
+    bestMatch = null,
     total = 0,
     pending = false,
     loading = false;
@@ -61,6 +62,7 @@
     if (sort.value === 'name') matches.sort((a, b) => a.name.localeCompare(b.name));
     if (sort.value === 'year')
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
+    renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
     const list = $('#results-list');
     const cards = document.createDocumentFragment();
     list.replaceChildren();
@@ -114,6 +116,8 @@
         node(
           'p',
           [
+            game.identityUncertain ? 'Identity unconfirmed' : null,
+            game.related ? 'Related game' : null,
             game.releaseYear,
             game.downloadSize,
             methods
@@ -239,6 +243,7 @@
         : result.items;
       total = result.total;
       pending = !!result.pending;
+      bestMatch = result.bestMatch || null;
       render();
     },
   };

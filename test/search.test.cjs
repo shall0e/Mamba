@@ -68,14 +68,15 @@ test('groups equivalent releases, deduplicates hashes, and preserves the source 
     game('sequel', 'Call of Duty Modern Warfare II (2022) [RePack]', 'd'),
   ]);
   const result = rankedSearch(index, 'modern warfare 4');
-  assert.equal(result.total, 2);
-  const classic = result.items[0];
+  assert.equal(result.total, 3);
+  // Undated releases remain separate until identity evidence establishes their year.
+  const classic = result.items.find((item) => item.releaseYear === '2007');
   assert.equal(classic.name, 'Call of Duty 4: Modern Warfare');
-  assert.equal(classic.options.length, 2);
-  assert.equal(classic.options[1].gameId, 'steam');
-  assert.equal(classic.options[1].linkIndex, 0);
-  assert.deepEqual(classic.options[1].sources, ['Two', 'Three']);
-  assert.match(result.items[1].name, /Remastered/);
+  assert.equal(classic.options.length, 1);
+  assert.equal(classic.options[0].gameId, 'steam');
+  assert.equal(classic.options[0].linkIndex, 0);
+  assert.deepEqual(classic.options[0].sources, ['Two', 'Three']);
+  assert.ok(result.items.some((item) => /Remastered/.test(item.name)));
 });
 test('exact single-game matches precede collections and partial queries remain useful', () => {
   const index = createSearchIndex([
