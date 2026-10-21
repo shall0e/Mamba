@@ -154,7 +154,7 @@
           for(const [label,value]of [['Game folder',installation.folder],['Startup file',installation.executable||'No launcher selected'],['Installed version',installation.version||'Not reported by this release'],['Added',installation.installedAt?date(installation.installedAt):'Existing installation']])details.append(node('dt',label),node('dd',value));
           const manage=node('details',undefined,'manage-installation');manage.append(node('summary','Manage installation'),details);const controls=node('div',undefined,'game-actions');
           if(installation.status==='installed'&&installation.executable)controls.append(action('Play',()=>window.mamba.gameAction(installation.id,'play'),'play','primary-button'));
-          if(installation.installer)controls.append(action('Run setup',()=>window.mamba.gameAction(installation.id,'setup'),'play'));
+          if(installation.installer)controls.append(action('Run setup',()=>window.mamba.gameAction(installation.id,'setup'),'play'),action('Run setup as administrator',async()=>{if(await window.mamba.gameAction(installation.id,'setup-admin'))showToast('Setup started as administrator');},'play'));
           controls.append(action('Change launcher',async()=>{const result=await window.mamba.chooseLauncher(installation.id);if(result){await refreshLibrary();await openGame({id:data.libraryId||data.id,name:data.name},'library');showToast('Startup file saved');}},'folder-open'));
           controls.append(action('Open folder',()=>window.mamba.gameAction(installation.id,'folder'),'folder-open'));
           controls.append(action('Setup helper',()=>window.mamba.gameAction(installation.id,'launcher'),'settings-2'));
@@ -179,6 +179,7 @@
     $('.issues-section').hidden=!open.length;
     if(!open.length)list.append(node('p','No unresolved issues.','field-hint'));
     for(const issue of open){const card=node('article',undefined,'issue-card');const heading=node('h3');heading.append(icon('circle-alert'),document.createTextNode(issue.title||'This task needs attention'));card.append(heading,node('p',issue.advice||'Try again.','issue-advice'));const detail=node('details',undefined,'issue-details');detail.append(node('summary','Details'),node('p',issue.message),node('p',date(issue.at)+(issue.count>1?' · Seen '+issue.count+' times':''),'field-hint'));card.append(detail);const controls=node('div',undefined,'game-actions');
+      if(issue.code==='permissions'&&/\.(exe|msi)\b/i.test(issue.message))controls.append(action('Retry setup as administrator',async()=>{if(await window.mamba.retrySetupAsAdmin(issue.id))showToast('Setup started as administrator');},'refresh-cw'));
       if(issue.action==='settings')controls.append(action('Open settings',openSettings,'settings-2'));
       if(issue.action==='library')controls.append(action('Review library',()=>showPage('library'),'folder-open'));
       if(['catalog:sync','catalog:search'].includes(issue.context))controls.append(action('Retry source sync',()=>window.mamba.sync(),'refresh-cw'));

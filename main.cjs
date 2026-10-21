@@ -276,11 +276,36 @@ ipcMain.handle('app:export-diagnostics',async event=>{
   const report={schemaVersion:1,createdAt:new Date().toISOString(),version:status.version,platform:process.platform,architecture:process.arch,electron:process.versions.electron,worker:{connected:status.worker.connected,pending:status.worker.pending},catalog:{phase:status.catalog.phase,count:status.catalog.count,unavailableSources:status.catalog.unavailableSources},libraryCount:status.libraryCount,tasks:downloadJobs.map(({status,stage,progress,total,received,message,downloadFailure})=>({status,stage,progress,total,received,message:safeMessage(message,configSecrets),downloadFailure})),issues:issues.diagnostics()};
   await fs.writeFile(chosen.filePath,JSON.stringify(report,null,2),'utf8');return true;
 });
+async function runSetupAsAdministrator(game) {
+  if(process.platform!=='win32')throw Error('Administrator setup is only available on Windows.');
+  const config=await readConfig();authorizeGame(config,game.imported?[game.folder]:[],game);
+  if(!game.installer)throw Error('No setup file was detected. Refresh the library.');
+  const folder=await fs.realpath(game.folder),target=await fs.realpath(game.installer);
+  within(folder,target);
+  if(!/\.(exe|msi)$/i.test(target)||!(await fs.lstat(target)).isFile())throw Error('The setup file is no longer available.');
+  const quote=value=>"'"+value.replace(/'/g,"''")+"'";
+  const command="try { Start-Process -FilePath "+quote(target)+" -WorkingDirectory "+quote(path.dirname(target))+" -Verb RunAs -ErrorAction Stop; exit 0 } catch { if ($_.Exception.NativeErrorCode -eq 1223 -or $_.Exception.InnerException.NativeErrorCode -eq 1223) { exit 2 }; exit 1 }";
+  return new Promise((resolve,reject)=>{
+    const child=spawn(path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],{windowsHide:true,stdio:'ignore',shell:false});
+    child.once('error',reject);child.once('exit',code=>code===0?resolve(true):code===2?resolve(false):reject(Error('Windows could not start setup as administrator. Check file permissions or security software.')));
+  });
+}
+ipcMain.handle('issues:setup-admin',async(_event,id)=>{
+  const issue=issues.items.find(item=>item.id===id&&!item.resolved&&item.code==='permissions');
+  if(!issue)throw Error('This setup error is no longer active.');
+  await task('library:scan');
+  const game=installedGames.find(item=>item.installer&&issue.message.toLowerCase().includes(item.installer.toLowerCase()));
+  if(!game)throw Error('Setup could not be matched to an installation. Open the game details to run setup as administrator.');
+  const launched=await runSetupAsAdministrator(game);
+  if(launched){issues.resolve(issue.id);broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});}
+  return launched;
+});
 ipcMain.handle('library:action', async (_event, id, action) => {
   const game = await task('library:get', id);
   if (!game) throw new Error('Game not found. Refresh your library.');
   const config = await readConfig();
   authorizeGame(config,game.imported?[game.folder]:[],game);
+  if (action === 'setup-admin') return runSetupAsAdministrator(game);
   if (action === 'launcher') { await openGameHelper(game.folder); return; }
   if (action === 'folder') { const error = await shell.openPath(game.folder); if (error) throw new Error(error); return; }
   const target = action === 'setup' ? game.installer : action === 'play' && game.status === 'installed' ? game.executable : null;
