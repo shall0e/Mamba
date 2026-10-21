@@ -725,8 +725,9 @@ body { user-select: none; -webkit-user-select: none; }
 input,textarea,[contenteditable='true'],#game-content,#game-content * { user-select: text; -webkit-user-select: text; }
 #game-content :is(button,button *,select) { user-select: none; -webkit-user-select: none; }
 html[data-theme] :is(.download-button,.play-button),html[data-theme] :is(.download-button,.play-button):hover { background: color-mix(in srgb,var(--theme-icons-color,var(--color-icons)) calc(var(--icons-opacity,1) * 100%),transparent); backdrop-filter: blur(var(--icons-blur,0px)); }
-html[data-theme] :is(.download-button,.play-button) :is(svg,.button-label) { color: var(--color-primary) !important; }
+html[data-theme] button:is(.download-button,.play-button),html[data-theme] button:is(.download-button,.play-button) :is(svg,.button-label) { color: var(--color-primary) !important; -webkit-text-fill-color: var(--color-primary); }
 .search-field { position: relative; }
 .rotating-placeholder::placeholder { color: transparent !important; }
 .rotating-search-hint { position: absolute; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-family: var(--font-search,var(--font-inputs,var(--font-default))); font-size: 16px; color: color-mix(in srgb,var(--body-ink,var(--color-text)) calc(var(--supportingText-opacity,1) * 65%),transparent); filter: blur(var(--supportingText-blur,0px)); }
 @media(max-width:600px) { .rotating-search-hint { font-size: 14px; } }
+
