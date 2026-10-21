@@ -187,6 +187,39 @@ class Catalog extends EventEmitter {
   getGame(id) {
     return this.steamSearch?.get(id) || this.searchIndex?.find((entry) => entry.id === id);
   }
+  async recoveryCandidates(job, config) {
+    const hash = torrentHash(job.uri);
+    if (!hash) return [];
+    const game =
+      this.getGame(job.gameId) ||
+      this.searchIndex?.find((entry) =>
+        entry.options.some((option) => option.gameId === job.gameId),
+      );
+    const resolved = game ? await this.resolveGame(game.id) : null;
+    const options = resolved?.options || [{ gameId: job.gameId, linkIndex: 0, available: true }];
+    const result = [];
+    for (const option of options) {
+      const release = this.byId.get(option.gameId);
+      const link = release?.links[option.linkIndex];
+      if (
+        !option.available ||
+        !link ||
+        torrentHash(link.uri) !== hash ||
+        !hostAllowed(link.uri, config)
+      )
+        continue;
+      for (const service of option.services || link.services || ['torbox']) {
+        if (service === job.service || !enabledServices(config).includes(service)) continue;
+        if (
+          (service === 'torbox' && !config.torboxApiKey) ||
+          (service === 'realdebrid' && !config.realDebridApiKey)
+        )
+          continue;
+        result.push({ uri: link.uri, service });
+      }
+    }
+    return result;
+  }
   async resolveGame(id) {
     const game = this.getGame(id);
     if (!game) throw new Error('This game is no longer in the catalog. Search again.');
@@ -243,6 +276,38 @@ class Catalog extends EventEmitter {
         : 'No complete Windows-compatible download is currently available.',
     };
   }
+  async readSource(url, signal, refresh = false) {
+    const file = path.join(path.dirname(this.file), 'source-cache', digest(url) + '.json');
+    let cached;
+    try {
+      const saved = JSON.parse(await fs.readFile(file, 'utf8'));
+      if (saved.url === url && Array.isArray(saved.source?.downloads)) cached = saved;
+    } catch {}
+    if (cached && !refresh) return cached.source;
+    const headers = {};
+    if (cached?.etag) headers['If-None-Match'] = cached.etag;
+    if (cached?.modified) headers['If-Modified-Since'] = cached.modified;
+    const response = await this.fetch(url, {
+      headers,
+      signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
+    });
+    if (response.status === 304 && cached) return cached.source;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const raw = await sourceText(response);
+    const data = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    const downloads = Array.isArray(data) ? data : data.downloads;
+    if (!Array.isArray(downloads)) throw new Error('Expected a Hydra downloads array.');
+    const source = { name: String(data.name || new URL(url).hostname), downloads };
+    signal.throwIfAborted();
+    await atomicJson(file, {
+      version: 1,
+      url,
+      source,
+      etag: response.headers?.get('etag') || null,
+      modified: response.headers?.get('last-modified') || null,
+    });
+    return source;
+  }
   sync(force = false) {
     clearTimeout(this.retryTimer);
     this.controller?.abort();
@@ -252,6 +317,7 @@ class Catalog extends EventEmitter {
   }
   async performSync(force = false) {
     const config = await this.getConfig();
+    const preserveCatalog = this.games.length > 0;
     const sourceUrls = config.sourceUrls.filter(
       (uri) => !(config.disabledSourceUrls || []).includes(uri),
     );
@@ -301,18 +367,8 @@ class Catalog extends EventEmitter {
         while (next < sourceUrls.length && !signal.aborted) {
           const url = sourceUrls[next++];
           try {
-            const response = await this.fetch(url, {
-              signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const raw = await sourceText(response);
-            const data = JSON.parse(raw.replace(/^\uFEFF/, ''));
-            const downloads = Array.isArray(data) ? data : data.downloads;
-            if (!Array.isArray(downloads)) throw new Error('Expected a Hydra downloads array.');
-            mergeDownloads(
-              [{ name: String(data.name || new URL(url).hostname), downloads }],
-              accumulator,
-            );
+            const source = await this.readSource(url, signal, force);
+            mergeDownloads([source], accumulator);
             sourceCount++;
           } catch (error) {
             if (!signal.aborted) errors.push({ source: url, message: error.message.slice(0, 200) });
@@ -320,7 +376,7 @@ class Catalog extends EventEmitter {
           if (!signal.aborted)
             this.status({
               completed: ++done,
-              message: `Fetched ${done} of ${sourceUrls.length} sources`,
+              message: `Loaded ${done} of ${sourceUrls.length} sources`,
               errors,
             });
         }
@@ -482,7 +538,7 @@ class Catalog extends EventEmitter {
           });
           if (i % 50000 === 0) {
             await atomicJson(this.availabilityFile, this.availability);
-            this.replace(publish());
+            if (!preserveCatalog) this.replace(publish());
             this.status({ count: this.games.length });
           }
         }
@@ -515,7 +571,7 @@ class Catalog extends EventEmitter {
     } catch (error) {
       if (!signal.aborted) {
         if (merged && valid && allLinks) {
-          this.replace(publish());
+          if (!preserveCatalog) this.replace(publish());
           await atomicJson(this.file, {
             version: 1,
             signature,

@@ -48,7 +48,11 @@ class FileCleanup {
           : null,
       };
       if (job.folder && (contains(job.folder, target) || contains(target, job.folder))) return true;
-      if (!FINAL_JOBS.has(job.status) && job.root && job.id) {
+      if (
+        (!FINAL_JOBS.has(job.status) || (job.recovery?.enabled && job.status !== 'cancelled')) &&
+        job.root &&
+        job.id
+      ) {
         const stage = path.join(job.root, '.mamba-downloads', String(job.id));
         if (contains(stage, target) || contains(target, stage)) return true;
       }
@@ -134,7 +138,11 @@ class FileCleanup {
           const job = this.state
             .jobs()
             .find((job) => job.id === stage.name && job.root && same(job.root, root));
-          if (job && !FINAL_JOBS.has(job.status)) continue;
+          if (
+            job &&
+            (!FINAL_JOBS.has(job.status) || (job.recovery?.enabled && job.status !== 'cancelled'))
+          )
+            continue;
           await add(
             path.join(target, stage.name),
             job ? 'Download leftovers' : 'Old temporary download',

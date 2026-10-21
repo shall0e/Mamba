@@ -1,3 +1,4 @@
+let downloadJobsForRecovery = [];
 const backdrop = document.querySelector('#settings-backdrop');
 const keyInput = document.querySelector('#api-key');
 const sourceUrlsInput = document.querySelector('#source-urls');
@@ -5,6 +6,7 @@ const saveStatus = document.querySelector('#save-status');
 const toast = document.querySelector('#toast');
 let downloadPreferences = {
   downloadPath: '',
+  automaticRecovery: false,
   autoInstall: true,
   cachedOnly: true,
   archivePassword: '',
@@ -133,6 +135,13 @@ function renderCatalog(state) {
     item.textContent = `${error.source}: ${error.message}`;
     errorList.append(item);
   }
+  if (['ready', 'error', 'needs-key'].includes(state.phase)) {
+    const urls = new Set(urlsForSourceErrors());
+    const failedSources = (state.errors || [])
+      .map((error) => error.source)
+      .filter((source) => urls.has(source));
+    if (failedSources.length) window.MambaSettings?.autoDisableSources(failedSources);
+  }
   document.querySelector('#sync-catalog').disabled = ['fetching', 'merging', 'checking'].includes(
     state.phase,
   );
@@ -145,6 +154,12 @@ function renderCatalog(state) {
   )
     runSearch();
   if (state.phase === 'ready' && previousPhase !== 'ready') window.MambaSettings?.loadHosts();
+}
+function urlsForSourceErrors() {
+  return sourceUrlsInput.value
+    .split(/\r?\n/)
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
 async function runSearch(more = false) {
   const query = document.querySelector('#main-search').value.trim();
@@ -208,6 +223,7 @@ function renderJobs(jobs) {
     control.disabled = false;
     control.lastChild.textContent = 'Download';
   }
+  downloadJobsForRecovery = jobs;
   for (const job of jobs) {
     const controls = [...document.querySelectorAll('button[data-job-id]')].filter(
       (control) => control.dataset.jobId === job.id,
@@ -257,7 +273,14 @@ function renderJobs(jobs) {
       const stages = document.createElement('ol');
       stages.className = 'transfer-stages';
       stages.setAttribute('aria-label', 'Download stages');
-      for (const label of ['Preparing', 'Downloading', 'Extracting', 'Installing', 'Ready']) {
+      for (const label of [
+        'Preparing',
+        'Downloading',
+        'Verifying',
+        'Extracting',
+        'Installing',
+        'Ready',
+      ]) {
         const stage = document.createElement('li');
         stage.textContent = label;
         stages.append(stage);
@@ -267,16 +290,21 @@ function renderJobs(jobs) {
     }
     row.querySelector('.transfer-status').textContent =
       {
+        'waiting-retry': 'Recovering',
+        verifying: 'Verifying',
         'needs-setup': 'Needs setup',
         completed: 'Ready',
         failed: 'Needs attention',
         cancelled: 'Cancelled',
       }[job.status] || job.status;
     row.querySelector('.transfer-message').textContent = job.error
-      ? job.error.title + ' · ' + job.error.advice
+      ? job.message + ' · ' + job.error.advice
       : ['downloading', 'completed'].includes(job.status)
         ? ''
-        : job.message;
+        : job.message +
+          (job.status === 'waiting-retry' && job.recovery?.nextRetryAt
+            ? ` Retrying in ${Math.max(0, Math.ceil((job.recovery.nextRetryAt - Date.now()) / 1000))} seconds.`
+            : '');
     const stats = row.querySelector('.transfer-stats');
     stats.replaceChildren();
     if (job.total > 0) {
@@ -294,10 +322,12 @@ function renderJobs(jobs) {
       queued: 0,
       preparing: 0,
       downloading: 1,
-      extracting: 2,
-      installing: 3,
-      completed: 4,
-      'needs-setup': 3,
+      verifying: 2,
+      extracting: 3,
+      installing: 4,
+      completed: 5,
+      'needs-setup': 4,
+      'waiting-retry': 1,
     }[['paused', 'failed', 'cancelled'].includes(job.status) ? job.stage : job.status];
     [...row.querySelectorAll('.transfer-stages li')].forEach((node, index) => {
       node.classList.toggle('stage-done', current !== undefined && index < current);
@@ -308,15 +338,15 @@ function renderJobs(jobs) {
     row.querySelector('progress').hidden = ['failed', 'cancelled', 'needs-setup'].includes(
       job.status,
     );
-    if (['preparing', 'extracting', 'installing'].includes(job.status))
+    if (['preparing', 'verifying', 'extracting', 'installing'].includes(job.status))
       row.querySelector('progress').removeAttribute('value');
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
       actions.replaceChildren();
       row.dataset.status = job.status;
-      if (['queued', 'preparing', 'downloading'].includes(job.status))
+      if (['queued', 'preparing', 'downloading', 'waiting-retry'].includes(job.status))
         actions.append(button('Pause', () => window.mamba.pause(job.id), 'pause'));
-      if (['failed', 'cancelled', 'paused'].includes(job.status))
+      if (['failed', 'cancelled', 'paused', 'waiting-retry'].includes(job.status))
         actions.append(
           button(
             job.status === 'paused' ? 'Resume' : 'Retry',
@@ -325,6 +355,8 @@ function renderJobs(jobs) {
           ),
         );
       else if (!['completed', 'needs-setup'].includes(job.status))
+        actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
+      if (job.status === 'waiting-retry')
         actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
       if (job.status === 'failed')
         actions.append(button('Get help', () => showPage('activity'), 'circle-alert'));
@@ -341,6 +373,18 @@ function renderJobs(jobs) {
     }
   }
 }
+setInterval(() => {
+  for (const job of downloadJobsForRecovery) {
+    if (job.status !== 'waiting-retry') continue;
+    const row = document.getElementById(`transfer-${job.id}`);
+    if (row)
+      row.querySelector('.transfer-message').textContent =
+        job.message +
+        (job.recovery?.nextRetryAt
+          ? ` Retrying in ${Math.max(0, Math.ceil((job.recovery.nextRetryAt - Date.now()) / 1000))} seconds.`
+          : '');
+  }
+}, 1000);
 document.querySelector('#clear-finished').addEventListener('click', async () => {
   try {
     await window.mamba.clearFinished();
@@ -424,6 +468,7 @@ let keyConfigured = false;
 let toastTimer;
 let configLoaded = false;
 let settingsBusy = false;
+let settingsSavePending = false;
 let settingsSaveTimer;
 let installedGames = [];
 let settingsInitialized = false;
@@ -488,9 +533,9 @@ function updateSettingsState() {
     control.disabled = !configLoaded || settingsBusy;
   }
   for (const control of document.querySelectorAll(
-    '#download-path, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config',
+    '#download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config',
   ))
-    control.disabled = !configLoaded || settingsBusy;
+    control.disabled = !configLoaded || (control.type !== 'checkbox' && settingsBusy);
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
   document.querySelector('#remove-key').hidden = configLoaded && !keyConfigured;
 }
@@ -614,7 +659,11 @@ document.querySelector('#key-visibility').addEventListener('click', () => {
 
 document.querySelector('#settings-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (settingsBusy || !configLoaded || !hasSettingsChanges()) return;
+  if (settingsBusy) {
+    settingsSavePending = true;
+    return;
+  }
+  if (!configLoaded || !hasSettingsChanges()) return;
   saveStatus.textContent = '';
   saveStatus.classList.remove('error');
   const nextUrls = [...new Set(sourceLines())];
@@ -666,6 +715,10 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
   } finally {
     settingsBusy = false;
     updateSettingsState();
+    if (settingsSavePending) {
+      settingsSavePending = false;
+      scheduleSettingsSave(150);
+    }
   }
 });
 
@@ -681,6 +734,7 @@ function applyLoadedConfig(config) {
   keyInput.value = '';
   downloadPreferences = {
     downloadPath: config.downloadPath,
+    automaticRecovery: config.automaticRecovery === true,
     autoInstall: config.autoInstall,
     cachedOnly: config.cachedOnly,
     archivePassword: config.archivePassword || '',
@@ -741,6 +795,7 @@ function readDownloadPreferences() {
     preferredRelease: document.querySelector('#preferred-release').value,
     notifications: document.querySelector('#notifications').checked,
     downloadPath: document.querySelector('#download-path').value.trim(),
+    automaticRecovery: document.querySelector('#automatic-recovery').checked,
     autoInstall: document.querySelector('#auto-install').checked,
     cachedOnly: document.querySelector('#cached-only').checked,
     archivePassword: document.querySelector('#archive-password').value,
@@ -763,6 +818,7 @@ function populateDownloadPreferences() {
     downloadPreferences.preferredRelease || 'any';
   document.querySelector('#notifications').checked = downloadPreferences.notifications !== false;
   document.querySelector('#download-path').value = downloadPreferences.downloadPath || '';
+  document.querySelector('#automatic-recovery').checked = downloadPreferences.automaticRecovery;
   document.querySelector('#auto-install').checked = downloadPreferences.autoInstall;
   document.querySelector('#cached-only').checked = downloadPreferences.cachedOnly;
   document.querySelector('#archive-password').value = downloadPreferences.archivePassword;
@@ -774,7 +830,7 @@ function populateDownloadPreferences() {
   applyPalette(downloadPreferences.palette);
 }
 for (const control of document.querySelectorAll(
-  '#download-path, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications',
+  '#download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications',
 )) {
   const save = () => {
     saveStatus.textContent = '';

@@ -27,6 +27,7 @@ function createConfigStore({
     sourceUrls: config.sourceUrls,
     palette: config.palette,
     downloadPath: config.downloadPath,
+    automaticRecovery: config.automaticRecovery === true,
     autoInstall: config.autoInstall,
     cachedOnly: config.cachedOnly,
     archivePassword: config.archivePassword || '',
@@ -64,6 +65,7 @@ function createConfigStore({
           typeof config.downloadPath === 'string' && path.isAbsolute(config.downloadPath)
             ? path.resolve(config.downloadPath)
             : path.join(app.getPath('downloads'), 'Mamba'),
+        automaticRecovery: config.automaticRecovery === true,
         autoInstall: config.autoInstall !== false,
         keepArchives: config.keepArchives === true,
         automaticUpdates: config.automaticUpdates !== false,
@@ -148,6 +150,7 @@ function createConfigStore({
         sourceUrls: [],
         palette: { ...defaultPalette },
         downloadPath: path.join(app.getPath('downloads'), 'Mamba'),
+        automaticRecovery: false,
         autoInstall: true,
         cachedOnly: true,
         keepArchives: false,

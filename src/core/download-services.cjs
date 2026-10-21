@@ -1,5 +1,6 @@
 const { TorBox, torrentHash } = require('./torbox.cjs');
 const path = require('node:path');
+const { retryAfter } = require('./recovery.cjs');
 const SERVICES = ['torbox', 'realdebrid', 'direct'];
 const enabledServices = (config) =>
   (config.enabledDownloadServices || ['torbox', 'direct']).filter((id) => SERVICES.includes(id));
@@ -61,7 +62,10 @@ function chooseService(link, config, requested) {
 async function json(response, label) {
   const data = await response.json().catch(() => null);
   if (!response.ok || !data || data.success === false)
-    throw Error(`${label} request failed (${response.status}).`);
+    throw Object.assign(Error(`${label} request failed (${response.status}).`), {
+      status: response.status,
+      retryAfter: retryAfter(response.headers.get('retry-after')),
+    });
   return data;
 }
 class DirectDownloads {
@@ -94,6 +98,7 @@ class DirectDownloads {
           id: file.id,
           name: file.name,
           size: Number(file.size),
+          ...(file.hash_sha256 ? { sha256: file.hash_sha256 } : {}),
           url: `https://pixeldrain.com/api/file/${encodeURIComponent(file.id)}?download`,
         };
       });

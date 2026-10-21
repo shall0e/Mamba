@@ -647,7 +647,8 @@
               </div>
               <p class="field-hint">
                 Downloads, extracted games, and installations stay inside this folder. On startup,
-                unfinished download files are cleared after 24 hours without changes.
+                unfinished download files are cleared after 24 hours without changes, except files
+                protected for automatic recovery.
               </p>
               <label class="switch-row"
                 ><span
@@ -656,13 +657,22 @@
                     >Run recognized Inno Setup and NSIS installers. Other packages stay ready for
                     manual setup.</small
                   ></span
-                ><input id="auto-install" type="checkbox" role="switch"
+                ><input id="auto-install" type="checkbox"
+              /></label>
+              <label class="switch-row"
+                ><span
+                  ><strong>Automatically recover failed downloads</strong
+                  ><small
+                    >Resume interrupted transfers and preserve files while recovery is
+                    pending.</small
+                  ></span
+                ><input id="automatic-recovery" type="checkbox"
               /></label>
               <label class="switch-row"
                 ><span
                   ><strong>Only cached TorBox downloads</strong
                   ><small>Exclude links that TorBox does not currently have cached.</small></span
-                ><input id="cached-only" type="checkbox" role="switch"
+                ><input id="cached-only" type="checkbox"
               /></label>
               <label class="field-label" for="archive-password">Archive password (optional)</label
               ><input
@@ -676,7 +686,7 @@
                 ><span
                   ><strong>Keep downloaded archives</strong
                   ><small>Retain the original files after successful installation.</small></span
-                ><input id="keep-archives" type="checkbox" role="switch"
+                ><input id="keep-archives" type="checkbox"
               /></label>
               <label class="field-label" for="transfer-timeout"
                 >TorBox preparation timeout (minutes)</label
@@ -783,7 +793,7 @@
                   ><small
                     >Check on startup, download new versions, and install when Mamba closes.</small
                   ></span
-                ><input id="automatic-updates" type="checkbox" role="switch"
+                ><input id="automatic-updates" type="checkbox"
               /></label>
               <p id="update-status" class="field-hint" role="status"></p>
               <div class="settings-actions">
@@ -847,7 +857,7 @@
                 ><span
                   ><strong>Desktop notifications</strong
                   ><small>Let me know when a game is ready or needs attention.</small></span
-                ><input id="notifications" type="checkbox" role="switch" /></label
+                ><input id="notifications" type="checkbox" /></label
               ><button class="text-button" id="open-troubleshooting" type="button">
                 Open Activity and troubleshooting
               </button>
@@ -1231,6 +1241,40 @@
         />
       </svg>
     </template>
+    <template id="icon-pencil"
+      ><svg
+        aria-hidden="true"
+        class="lucide lucide-pencil"
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        <path d="m15 5 4 4" /></svg
+    ></template>
+    <template id="icon-plus"
+      ><svg
+        aria-hidden="true"
+        class="lucide lucide-plus"
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 5v14" />
+        <path d="M5 12h14" /></svg
+    ></template>
     <template id="icon-check"
       ><svg
         aria-hidden="true"

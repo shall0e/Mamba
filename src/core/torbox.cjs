@@ -62,6 +62,7 @@ class TorBox {
         if (signal?.aborted || attempt === 3)
           throw new Error(
             signal?.aborted ? 'Cancelled' : 'TorBox connection failed. Retry the operation.',
+            { cause: error },
           );
         await delay(1000 * 2 ** attempt, signal);
         continue;
@@ -87,7 +88,10 @@ class TorBox {
           typeof data?.detail === 'string'
             ? data.detail
             : `TorBox request failed (${response.status}).`;
-        throw new Error(message.replaceAll(this.key, '[key]'));
+        throw Object.assign(new Error(message.replaceAll(this.key, '[key]')), {
+          status: response.status,
+          retryAfter: require('./recovery.cjs').retryAfter(response.headers.get('retry-after')),
+        });
       }
       return data.data;
     }

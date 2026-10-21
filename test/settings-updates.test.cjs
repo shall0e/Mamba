@@ -10,6 +10,7 @@ test('complete config round trip preserves credentials, advanced settings and un
     downloadPath: 'C:\\Games',
     sourceUrls: ['https://example.test/feed.json'],
     autoInstall: true,
+    automaticRecovery: true,
     cachedOnly: false,
     keepArchives: true,
     transferTimeoutMinutes: 42,
@@ -23,6 +24,7 @@ test('complete config round trip preserves credentials, advanced settings and un
   assert.throws(() => decodeConfig('{"schemaVersion":2,"settings":{}}'), /unsupported/);
   assert.throws(() => validateSettings({ sourceUrls: ['file:///bad'] }));
   assert.throws(() => validateSettings({ transferTimeoutMinutes: 0 }));
+  assert.throws(() => validateSettings({ automaticRecovery: 'yes' }));
   assert.throws(() => validateSettings({ palette: { primary: 'red' } }));
 });
 test('updater honors preferences, exposes progress and blocks restart during transfers', async () => {

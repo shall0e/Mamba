@@ -72,6 +72,7 @@ if (!app.requestSingleInstanceLock()) {
       throw error;
     }
   }
+  let catalogSyncTimer;
   async function refreshBackgroundConfig() {
     if (!background) return;
     const config = await readConfig();
@@ -83,8 +84,8 @@ if (!app.requestSingleInstanceLock()) {
         previous.cachedOnly,
         previous.realDebridApiKey,
         previous.enabledDownloadServices,
-        previous.disabledDownloadHosts,
-        previous.disabledSourceUrls,
+        previous.disabledDownloadHosts || [],
+        previous.disabledSourceUrls || [],
       ]) !==
       JSON.stringify([
         config.sourceUrls,
@@ -92,13 +93,18 @@ if (!app.requestSingleInstanceLock()) {
         config.cachedOnly,
         config.realDebridApiKey,
         config.enabledDownloadServices,
-        config.disabledDownloadHosts,
-        config.disabledSourceUrls,
+        config.disabledDownloadHosts || [],
+        config.disabledSourceUrls || [],
       ]);
     configSecrets = [config.torboxApiKey, config.realDebridApiKey, config.archivePassword];
     background.options.initialize.config = config;
     await task('configure', config);
-    if (changed) task('catalog:sync').catch(() => {});
+    // Coalesce selection changes; catalog rebuilds reuse each cached source.
+    // Only explicit refreshes revalidate already cached source URLs.
+    if (changed) {
+      clearTimeout(catalogSyncTimer);
+      catalogSyncTimer = setTimeout(() => task('catalog:sync').catch(() => {}), 750);
+    }
   }
   function dataDirectory() {
     if (resolvedDataDirectory) return resolvedDataDirectory;
@@ -198,6 +204,8 @@ if (!app.requestSingleInstanceLock()) {
           throw new Error('Choose an absolute game folder path.');
         config.downloadPath = path.resolve(settings.downloadPath.trim());
       }
+      if (typeof settings.automaticRecovery === 'boolean')
+        config.automaticRecovery = settings.automaticRecovery;
       if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
       if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
       if (typeof settings.archivePassword === 'string')
@@ -411,7 +419,14 @@ if (!app.requestSingleInstanceLock()) {
       downloadJobs.some(
         (job) =>
           job.folder === game.folder &&
-          ['preparing', 'downloading', 'extracting', 'installing'].includes(job.status),
+          [
+            'preparing',
+            'downloading',
+            'extracting',
+            'installing',
+            'verifying',
+            'waiting-retry',
+          ].includes(job.status),
       )
     )
       throw Error('Finish or cancel the active download before removing this installation.');
@@ -472,15 +487,20 @@ if (!app.requestSingleInstanceLock()) {
     reportIssue(new Error(String(message).slice(0, 700)), 'interface'),
   );
   ipcMain.handle('background:restart', async (event) => {
-    if (downloadJobs.some((job) => ['extracting', 'installing'].includes(job.status)))
+    if (downloadJobs.some((job) => ['extracting', 'installing', 'verifying'].includes(job.status)))
       throw Error(
         'Wait for extraction or installation to finish before restarting background tasks.',
       );
-    if (downloadJobs.some((job) => ['queued', 'preparing', 'downloading'].includes(job.status))) {
+    if (
+      downloadJobs.some((job) =>
+        ['queued', 'preparing', 'downloading', 'verifying', 'waiting-retry'].includes(job.status),
+      )
+    ) {
       const answer = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
         type: 'question',
         message: 'Restart background tasks?',
-        detail: 'Active downloads will pause. Resume them after the service reconnects.',
+        detail:
+          'Downloads with automatic recovery enabled will resume after the service reconnects. Other active downloads will pause.',
         buttons: ['Keep running', 'Restart tasks'],
         defaultId: 0,
         cancelId: 0,
@@ -512,7 +532,7 @@ if (!app.requestSingleInstanceLock()) {
       },
       libraryCount: status.libraryCount,
       tasks: downloadJobs.map(
-        ({ status, stage, progress, total, received, message, downloadFailure }) => ({
+        ({ status, stage, progress, total, received, message, downloadFailure, recovery }) => ({
           status,
           stage,
           progress,
@@ -520,6 +540,17 @@ if (!app.requestSingleInstanceLock()) {
           received,
           message: safeMessage(message, configSecrets),
           downloadFailure,
+          recovery: recovery
+            ? {
+                phase: recovery.phase,
+                retryCount: recovery.retryCount,
+                nextRetryAt: recovery.nextRetryAt,
+                history: (recovery.history || []).map((item) => ({
+                  ...item,
+                  message: safeMessage(item.message, configSecrets),
+                })),
+              }
+            : null,
         }),
       ),
       issues: issues.diagnostics(),
@@ -724,7 +755,15 @@ if (!app.requestSingleInstanceLock()) {
         getConfig: readConfig,
         canInstall: () =>
           !downloadJobs.some((job) =>
-            ['queued', 'preparing', 'downloading', 'extracting', 'installing'].includes(job.status),
+            [
+              'queued',
+              'preparing',
+              'downloading',
+              'extracting',
+              'installing',
+              'verifying',
+              'waiting-retry',
+            ].includes(job.status),
           ),
       });
       updates.on('change', (state) => broadcast('app:updated', state));
@@ -843,12 +882,22 @@ if (!app.requestSingleInstanceLock()) {
       background.on('interrupted', ({ code }) => {
         if (closing) return;
         downloadJobs = downloadJobs.map((job) =>
-          ['queued', 'preparing', 'downloading', 'extracting', 'installing'].includes(job.status)
+          [
+            'queued',
+            'preparing',
+            'downloading',
+            'extracting',
+            'installing',
+            'verifying',
+            'waiting-retry',
+          ].includes(job.status)
             ? {
                 ...job,
-                status: 'paused',
+                status: job.recovery?.enabled ? 'waiting-retry' : 'paused',
                 speed: 0,
-                message: 'Background service interrupted. Retry after it reconnects.',
+                message: job.recovery?.enabled
+                  ? 'Background service interrupted. Recovery will continue after it reconnects.'
+                  : 'Background service interrupted. Retry after it reconnects.',
               }
             : job,
         );

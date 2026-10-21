@@ -10,6 +10,7 @@
     hosts = [],
     disabledHosts = [],
     disabledSources = [];
+  let sourceOrder = null;
   const form = $('#settings-form');
   const layout = node('div', undefined, 'settings-layout');
   const nav = node('nav', undefined, 'settings-nav');
@@ -99,7 +100,6 @@
     copy.append(node('strong', title), node('small', description));
     const input = node('input');
     input.type = 'checkbox';
-    input.setAttribute('role', 'switch');
     input.setAttribute('aria-label', 'Use ' + title);
     input.onchange = () => scheduleSettingsSave(200);
     row.append(copy, input);
@@ -177,7 +177,7 @@
   const sourceList = node('div', undefined, 'source-picker');
   sourcesCard.querySelector('.settings-card-heading').after(sourceList);
   const edit = node('details', undefined, 'source-editor');
-  edit.append(node('summary', 'Edit source URLs'));
+  edit.append(node('summary', 'Bulk edit source URLs'));
   for (const id of ['source-urls', 'source-error', 'source-urls-hint'])
     edit.append(document.getElementById(id));
   sourcesCard.append(edit);
@@ -201,31 +201,148 @@
       change(input.checked);
       scheduleSettingsSave(250);
     };
-    row.append(text, input);
+    const control = node('span', undefined, 'catalog-checkbox');
+    control.append(input);
+    row.append(text, control);
     return row;
+  }
+  function sourceAction(label, handler, symbol) {
+    const control = button(label, handler, symbol, 'source-icon-button');
+    control.setAttribute('aria-label', label);
+    control.title = label;
+    return control;
   }
   function renderSources() {
     sourceList.replaceChildren();
-    for (const uri of sourceLines()) {
-      let title = uri;
-      try {
-        const url = new URL(uri);
-        title =
-          decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || url.hostname) +
-          ' · ' +
-          url.hostname;
-      } catch {}
-      sourceList.append(
-        checkRow(title, '', !disabledSources.includes(uri), (checked) => {
-          disabledSources = checked
+    const urls = [...new Set(sourceLines())];
+    // Snapshot enabled/disabled ordering once per renderer session.
+    sourceOrder ??= [
+      ...urls.filter((uri) => !disabledSources.includes(uri)),
+      ...urls.filter((uri) => disabledSources.includes(uri)),
+    ];
+    sourceOrder = [
+      ...sourceOrder.filter((uri) => urls.includes(uri)),
+      ...urls.filter((uri) => !sourceOrder.includes(uri)),
+    ];
+    const replaceUrls = (next) => {
+      const previous = new Set(urls);
+      const nextUrls = [...new Set(next)];
+      sourceUrlsInput.value = nextUrls.join('\n');
+      disabledSources = disabledSources.filter((uri) => nextUrls.includes(uri));
+      for (const uri of nextUrls)
+        if (!previous.has(uri)) disabledSources = disabledSources.filter((item) => item !== uri);
+      renderSources();
+      scheduleSettingsSave(200);
+    };
+    const renderGroup = (entries) => {
+      if (!entries.length) return;
+      const group = node('section', undefined, 'source-group');
+      for (const uri of entries) {
+        const isDisabled = disabledSources.includes(uri);
+        let title = uri;
+        try {
+          const url = new URL(uri);
+          title =
+            decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || url.hostname) +
+            ' · ' +
+            url.hostname;
+        } catch {}
+        const row = node('div', undefined, 'source-row');
+        row.classList.toggle('is-disabled', isDisabled);
+        const details = node('div', undefined, 'source-row-copy');
+        details.append(node('strong', title));
+        details.title = uri;
+        const controls = node('div', undefined, 'source-row-actions');
+        const checkbox = node('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !isDisabled;
+        checkbox.setAttribute('aria-label', `Use ${title}`);
+        checkbox.onchange = () => {
+          disabledSources = checkbox.checked
             ? disabledSources.filter((item) => item !== uri)
             : [...new Set([...disabledSources, uri])];
-        }),
-      );
-    }
-    if (!sourceLines().length)
-      sourceList.append(node('p', 'Add a source URL below.', 'field-hint'));
+          row.classList.toggle('is-disabled', !checkbox.checked);
+          scheduleSettingsSave(150);
+        };
+        const toggle = node('span', undefined, 'catalog-checkbox');
+        toggle.append(checkbox);
+        const editButton = sourceAction(
+          'Edit',
+          () => {
+            const input = node('input', undefined, 'source-edit-input');
+            input.type = 'url';
+            input.value = uri;
+            input.setAttribute('aria-label', 'Edit source URL');
+            const save = sourceAction(
+              'Save',
+              () => {
+                const nextValue = input.value.trim();
+                try {
+                  if (!['http:', 'https:'].includes(new URL(nextValue).protocol)) throw Error();
+                } catch {
+                  input.setCustomValidity('Enter a valid HTTP or HTTPS URL.');
+                  input.reportValidity();
+                  return;
+                }
+                sourceOrder = sourceOrder.map((value) => (value === uri ? nextValue : value));
+                replaceUrls(urls.map((value) => (value === uri ? nextValue : value)));
+              },
+              'check',
+            );
+            const cancel = sourceAction('Cancel', renderSources, 'x');
+            row.classList.add('is-editing');
+            row.replaceChildren(input, save, cancel);
+            input.focus();
+            input.select();
+          },
+          'pencil',
+        );
+        editButton.setAttribute('aria-label', `Edit ${title}`);
+        const remove = sourceAction(
+          'Delete',
+          () => {
+            replaceUrls(urls.filter((value) => value !== uri));
+          },
+          'trash-2',
+        );
+        remove.setAttribute('aria-label', `Delete ${title}`);
+        controls.append(toggle, editButton, remove);
+        row.append(details, controls);
+        group.append(row);
+      }
+      sourceList.append(group);
+    };
+    renderGroup(sourceOrder);
+    if (!urls.length) sourceList.append(node('p', 'Add a source URL below.', 'field-hint'));
   }
+  const addRow = node('div', undefined, 'source-add-row');
+  const addInput = node('input', undefined, 'settings-input');
+  addInput.type = 'url';
+  addInput.placeholder = 'https://example.com/games.json';
+  addInput.setAttribute('aria-label', 'New source URL');
+  const addButton = button(
+    'Add source',
+    () => {
+      const value = addInput.value.trim();
+      try {
+        if (!['http:', 'https:'].includes(new URL(value).protocol)) throw Error();
+      } catch {
+        addInput.setCustomValidity('Enter a valid HTTP or HTTPS URL.');
+        addInput.reportValidity();
+        return;
+      }
+      sourceUrlsInput.value = [...new Set([...sourceLines(), value])].join('\n');
+      disabledSources = disabledSources.filter((uri) => uri !== value);
+      addInput.value = '';
+      addInput.setCustomValidity('');
+      renderSources();
+      scheduleSettingsSave(150);
+    },
+    'plus',
+    'secondary-button',
+  );
+  addRow.append(addInput, addButton);
+  sourceList.after(addRow);
   $('#source-urls').addEventListener('input', renderSources);
   function renderHosts() {
     hostList.replaceChildren();
@@ -291,7 +408,7 @@
     loadHosts,
     busy(value) {
       for (const input of form.querySelectorAll('input,select,textarea,button'))
-        input.disabled = value;
+        input.disabled = input.type === 'checkbox' ? !configLoaded : value;
       clear.hidden = !config.realDebridConfigured;
     },
     read: () => ({
@@ -302,6 +419,22 @@
       disabledDownloadHosts: disabledHosts,
       disabledSourceUrls: disabledSources,
     }),
+    autoDisableSources(uris) {
+      const known = new Set(sourceLines());
+      const failing = [...new Set(uris)].filter(
+        (uri) => known.has(uri) && !disabledSources.includes(uri),
+      );
+      if (!failing.length) return false;
+      disabledSources = [...disabledSources, ...failing];
+      const order = sourceOrder || [...known];
+      sourceOrder = [
+        ...order.filter((uri) => !failing.includes(uri)),
+        ...order.filter((uri) => failing.includes(uri)),
+      ];
+      renderSources();
+      scheduleSettingsSave(150);
+      return true;
+    },
     hasKeyChange: () => !!rdKey.value.trim(),
     key: () => rdKey.value,
   };

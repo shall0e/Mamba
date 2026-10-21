@@ -1,14 +1,16 @@
 const fs = require('node:fs/promises');
 const { createWriteStream } = require('node:fs');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { EventEmitter } = require('node:events');
 const { TorBox, delay } = require('./torbox.cjs');
 const { displayTitle, optionTraits } = require('./search.cjs');
 const { ensureSpace, sizeBytes } = require('./experience.cjs');
-const { explain } = require('./issues.cjs');
+const { explain, safeMessage } = require('./issues.cjs');
+const recovery = require('./recovery.cjs');
+const { verifyDownloads } = require('./verification.cjs');
 const {
   chooseService,
   createService,
@@ -17,6 +19,7 @@ const {
 } = require('./download-services.cjs');
 const {
   within,
+  safePath,
   safeName,
   unpack,
   autoInstall,
@@ -78,6 +81,9 @@ async function downloadFile(
         `Download failed: ${cause.message}. Saved ${received} of ${expected || 'unknown'} bytes; partial files kept.`,
         { cause },
       );
+      error.transfer = true;
+      error.status = cause.status;
+      error.retryAfter = cause.retryAfter;
       error.code = cause.code || 'DOWNLOAD_FAILED';
       error.download = {
         received,
@@ -90,7 +96,8 @@ async function downloadFile(
         /terminated|fetch failed|ECONN|ETIMEDOUT|UND_ERR_/i.test(
           `${cause.message} ${cause.code} ${cause.cause?.code}`,
         );
-      if (!transient || attempt >= 2) throw error;
+      if (!transient || attempt >= 2 || [429, 401, 403, 404, 410].includes(cause.status))
+        throw error;
       await delay(250 * (attempt + 1), signal);
     }
   }
@@ -99,6 +106,8 @@ async function downloadFile(
 async function downloadAttempt(url, destination, expected, signal, onProgress, transport, meter) {
   const partial = destination + '.part';
   await fs.mkdir(path.dirname(destination), { recursive: true });
+  await safePath(path.dirname(destination), destination);
+  await safePath(path.dirname(destination), partial);
   let start = await fs
     .stat(partial)
     .then((stat) => stat.size)
@@ -113,17 +122,58 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
     onProgress(start, expected);
     return;
   }
-  const response = await transport(url, {
-    signal,
-    headers: { 'Accept-Encoding': 'identity', ...(start ? { Range: `bytes=${start}-` } : {}) },
-  });
+  const metadataFile = path.join(
+    path.dirname(destination),
+    '.mamba-transfer',
+    createHash('sha256').update(path.basename(destination)).digest('hex') + '.json',
+  );
+  await safePath(path.dirname(destination), metadataFile);
+  await safePath(path.dirname(destination), metadataFile + '.tmp');
+  const metadata = JSON.parse(await fs.readFile(metadataFile, 'utf8').catch(() => '{}'));
+  const validator = metadata.etag || metadata.lastModified;
+  const transferController = new AbortController();
+  const transferSignal = signal
+    ? AbortSignal.any([signal, transferController.signal])
+    : transferController.signal;
+  let idleTimer;
+  const heartbeat = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () =>
+        transferController.abort(
+          Object.assign(Error('Download connection timed out'), { code: 'ETIMEDOUT' }),
+        ),
+      120000,
+    );
+    idleTimer.unref?.();
+  };
+  heartbeat();
+  let response;
+  try {
+    response = await transport(url, {
+      signal: transferSignal,
+      headers: {
+        'Accept-Encoding': 'identity',
+        ...(start
+          ? { Range: `bytes=${start}-`, ...(validator ? { 'If-Range': validator } : {}) }
+          : {}),
+      },
+    });
+  } catch (error) {
+    clearTimeout(idleTimer);
+    throw error;
+  }
   const rejectResponse = async (message) => {
+    clearTimeout(idleTimer);
     await response.body?.cancel().catch(() => {});
     throw new Error(message);
   };
   if (!response.ok || !response.body) {
+    clearTimeout(idleTimer);
     await response.body?.cancel().catch(() => {});
     throw Object.assign(new Error(`File download failed (${response.status})`), {
+      status: response.status,
+      retryAfter: recovery.retryAfter(response.headers.get('retry-after')),
       retryable: [408, 429, 500, 502, 503, 504].includes(response.status),
     });
   }
@@ -158,12 +208,35 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
     return rejectResponse('Partial download exceeds expected size');
   if (response.status !== 206 && expected > 0 && length !== null && length !== expected)
     return rejectResponse('Download response size disagrees with expected size');
+  const etag = response.headers.get('etag');
+  const lastModified = response.headers.get('last-modified');
+  if (
+    start &&
+    ((metadata.etag && etag && metadata.etag !== etag) ||
+      (!metadata.etag &&
+        metadata.lastModified &&
+        lastModified &&
+        metadata.lastModified !== lastModified))
+  )
+    return rejectResponse('Download server returned changed content');
+  try {
+    await atomicJson(metadataFile, {
+      etag: etag && !etag.startsWith('W/') ? etag : null,
+      lastModified,
+      total,
+    });
+  } catch (error) {
+    clearTimeout(idleTimer);
+    await response.body.cancel().catch(() => {});
+    throw error;
+  }
   let bytes = start;
   onProgress(bytes, total, 0);
   const progress = new Transform({
     transform(chunk, _encoding, callback) {
       if (total > 0 && bytes + chunk.length > total)
         return callback(new Error('Download response exceeds expected size'));
+      heartbeat();
       bytes += chunk.length;
       onProgress(bytes, total, meter.add(chunk.length));
       callback(null, chunk);
@@ -175,9 +248,13 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
       Readable.fromWeb(response.body),
       progress,
       createWriteStream(partial, { flags: start ? 'a' : 'w' }),
-      { signal },
+      { signal: transferSignal },
     );
+  } catch (error) {
+    if (transferController.signal.aborted) throw transferController.signal.reason;
+    throw error;
   } finally {
+    clearTimeout(idleTimer);
     clearInterval(ticker);
   }
   if (total > 0 && bytes !== total)
@@ -204,9 +281,16 @@ class Downloads extends EventEmitter {
       setupGame,
       checkDisk = ensureSpace,
       reviewSetup = async () => {},
+      isOnline = recovery.online,
+      now = Date.now,
+      retryDelay = recovery.backoff,
     } = {},
   ) {
     super();
+    this.isOnline = isOnline;
+    this.now = now;
+    this.retryDelay = retryDelay;
+    this.stopped = false;
     this.file = path.join(directory, 'downloads.json');
     this.getConfig = getConfig;
     this.catalog = catalog;
@@ -228,7 +312,18 @@ class Downloads extends EventEmitter {
     this.reviewSetup = reviewSetup;
   }
   snapshot() {
-    return this.jobs.map(({ uri, ...job }) => job);
+    return this.jobs.map(({ uri, activeFile, recovery: state, ...job }) => ({
+      ...job,
+      recovery: state
+        ? {
+            enabled: state.enabled,
+            phase: state.phase,
+            retryCount: state.retryCount,
+            nextRetryAt: state.nextRetryAt,
+            history: state.history,
+          }
+        : undefined,
+    }));
   }
   async load() {
     try {
@@ -237,11 +332,34 @@ class Downloads extends EventEmitter {
       this.jobs = Array.isArray(saved)
         ? saved
             .filter((job) => /^[a-f0-9-]{36}$/i.test(job.id))
-            .map((job) =>
-              ['completed', 'cancelled', 'failed', 'needs-setup', 'paused'].includes(job.status)
-                ? job
-                : { ...job, status: 'paused', message: 'Interrupted. Retry to resume.' },
-            )
+            .map((job) => {
+              if (
+                ['completed', 'cancelled', 'failed', 'needs-setup', 'paused'].includes(job.status)
+              )
+                return job;
+              if (job.recovery?.installerStarted)
+                return {
+                  ...job,
+                  status: 'needs-setup',
+                  message: 'Installer interrupted. Review installation before continuing.',
+                };
+              if (job.recovery?.enabled && job.pauseReason !== 'manual')
+                return {
+                  ...job,
+                  status: 'waiting-retry',
+                  message: 'Recovering interrupted download',
+                  recovery: {
+                    ...job.recovery,
+                    nextRetryAt: job.recovery.nextRetryAt || this.now(),
+                  },
+                };
+              return {
+                ...job,
+                status: 'paused',
+                pauseReason: 'interrupted',
+                message: 'Interrupted. Retry to resume.',
+              };
+            })
         : [];
     } catch (error) {
       if (error.code !== 'ENOENT') {
@@ -264,7 +382,8 @@ class Downloads extends EventEmitter {
     const cutoff = now - 24 * 60 * 60 * 1000;
     for (const job of this.jobs) {
       if (
-        !['paused', 'failed', 'cancelled'].includes(job.status) ||
+        !['paused', 'failed', 'cancelled', 'waiting-retry'].includes(job.status) ||
+        (job.recovery?.enabled && job.status !== 'cancelled') ||
         this.controllers.has(job.id) ||
         !/^[a-f0-9-]{36}$/i.test(job.id) ||
         !path.isAbsolute(job.root || '')
@@ -315,7 +434,9 @@ class Downloads extends EventEmitter {
     if (!this.jobs.includes(job)) return;
     if (patch.status && patch.status !== 'downloading') patch.speed = 0;
     if (
-      ['preparing', 'downloading', 'extracting', 'installing', 'completed'].includes(patch.status)
+      ['preparing', 'downloading', 'verifying', 'extracting', 'installing', 'completed'].includes(
+        patch.status,
+      )
     )
       patch.stage = patch.status;
     Object.assign(job, patch, { updatedAt: new Date().toISOString() });
@@ -370,6 +491,7 @@ class Downloads extends EventEmitter {
       createdAt: new Date().toISOString(),
       root: path.resolve(config.downloadPath),
     };
+    job.recovery = recovery.checkpoint(config.automaticRecovery === true);
     job.service = service;
     this.jobs.unshift(job);
     await this.persist();
@@ -379,34 +501,43 @@ class Downloads extends EventEmitter {
   }
   async pause(id) {
     const job = this.jobs.find((item) => item.id === id);
-    if (!job || !['queued', 'preparing', 'downloading'].includes(job.status))
+    if (!job || !['queued', 'preparing', 'downloading', 'waiting-retry'].includes(job.status))
       throw Error('This stage cannot be paused safely. Wait for extraction or setup to finish.');
+    if (job.recovery) job.recovery.nextRetryAt = null;
     this.pauseRequests.add(id);
     this.controllers.get(id)?.abort();
     await this.update(job, {
       status: 'paused',
+      pauseReason: 'manual',
       message: 'Paused. Partial files are kept; resume when ready.',
     });
   }
   async cancel(id) {
     const job = this.jobs.find((entry) => entry.id === id);
     if (!job || ['completed', 'needs-setup', 'cancelled'].includes(job.status)) return;
+    if (job.recovery) job.recovery.nextRetryAt = null;
     this.pauseRequests.delete(id);
     this.controllers.get(id)?.abort();
     await this.update(job, {
       status: 'cancelled',
+      pauseReason: 'manual',
       message: 'Cancelled. Partial files kept for retry.',
     });
   }
   async retry(id) {
     const job = this.jobs.find((entry) => entry.id === id);
-    if (!job || !['paused', 'failed', 'cancelled'].includes(job.status))
+    if (!job || !['paused', 'failed', 'cancelled', 'waiting-retry'].includes(job.status))
       throw new Error('This download cannot be retried yet.');
     for (let i = 0; this.controllers.has(id) && i < 50; i++) await delay(100);
     if (this.controllers.has(id))
       throw new Error('Cancellation is still finishing. Try again in a moment.');
     this.pauseRequests.delete(id);
+    job.recovery ||= recovery.checkpoint();
+    job.recovery.enabled = (await this.getConfig()).automaticRecovery === true;
+    job.recovery.retryCount = 0;
+    job.recovery.nextRetryAt = null;
     await this.update(job, {
+      pauseReason: null,
       status: 'queued',
       error: null,
       downloadFailure: null,
@@ -427,20 +558,149 @@ class Downloads extends EventEmitter {
     await this.persist();
     this.emit('change', this.snapshot());
   }
+  async checkpoint(job, phase, patch = {}) {
+    job.recovery ||= recovery.checkpoint();
+    Object.assign(job.recovery, { phase }, patch);
+    await this.persist();
+  }
+  schedule() {
+    clearTimeout(this.retryTimer);
+    if (this.stopped) return;
+    const waiting = this.jobs.filter((job) => job.status === 'waiting-retry');
+    if (!waiting.length) return;
+    const due = Math.min(...waiting.map((job) => job.recovery.nextRetryAt || this.now()));
+    this.retryTimer = setTimeout(
+      () => this.pump().catch((error) => this.emit('failure', error)),
+      Math.min(2147483647, Math.max(10, due - this.now())),
+    );
+    this.retryTimer.unref?.();
+  }
+  async recover(job, error) {
+    const config = await this.getConfig();
+    const state = job.recovery;
+    if (
+      !state?.enabled ||
+      config.automaticRecovery !== true ||
+      state.payloadCommitted ||
+      state.installerStarted
+    )
+      return false;
+    const policy = recovery.classify(error);
+    const secrets = [config.torboxApiKey, config.realDebridApiKey, config.archivePassword];
+    if (['attention', 'settings'].includes(policy.action)) return false;
+    if (state.retryCount >= recovery.MAX_RETRIES) {
+      // Only proven identical torrent content may move to another enabled service.
+      const alternatives =
+        (await Promise.resolve(this.catalog.recoveryCandidates?.(job, config)).catch(() => [])) ||
+        [];
+      const next = alternatives.find(
+        (candidate) =>
+          !(state.triedSources || []).includes(candidate.service + ':' + candidate.uri),
+      );
+      if (!next || (state.fallbackCount || 0) >= 2) return false;
+      state.triedSources = [
+        ...new Set([
+          ...(state.triedSources || []),
+          job.service + ':' + job.uri,
+          next.service + ':' + next.uri,
+        ]),
+      ];
+      state.fallbackCount = (state.fallbackCount || 0) + 1;
+      state.sameContentFallback = true;
+      job.uri = next.uri;
+      job.service = next.service;
+      job.remote = null;
+      state.retryCount = 0;
+      recovery.record(job, 'identical-source', 'Switching service for identical content');
+    }
+    if (['paused', 'cancelled'].includes(job.status) || !this.jobs.includes(job)) return false;
+    if (policy.action === 'restart-file') {
+      if (!job.activeFile || state.restartedFile === job.activeFile) return false;
+      const raw = path.join(job.root, '.mamba-downloads', job.id, 'raw');
+      const target = await safePath(job.root, within(raw, job.activeFile));
+      await fs.rm(target + '.part', { force: true });
+      await fs.rm(
+        path.join(
+          path.dirname(target),
+          '.mamba-transfer',
+          createHash('sha256').update(path.basename(target)).digest('hex') + '.json',
+        ),
+        { force: true },
+      );
+      state.restartedFile = job.activeFile;
+    }
+    const connected = await this.isOnline();
+    if (['paused', 'cancelled'].includes(job.status) || !this.jobs.includes(job) || this.stopped)
+      return false;
+    if (connected) state.retryCount++;
+    state.nextRetryAt =
+      this.now() + (connected ? this.retryDelay(state.retryCount, policy.delay || 0) : 15000);
+    recovery.record(job, connected ? policy.action : 'offline', error, secrets);
+    await this.update(job, {
+      status: 'waiting-retry',
+      error: null,
+      message: connected
+        ? `Connection interrupted. Automatic retry ${state.retryCount} of ${recovery.MAX_RETRIES}. Downloaded files preserved.`
+        : 'Waiting for connectivity. Downloaded files preserved.',
+    });
+    return true;
+  }
   async pump() {
-    if (this.running) return;
+    if (this.running || this.stopped) return;
     this.running = true;
     try {
       let job;
-      while ((job = this.jobs.find((entry) => entry.status === 'queued'))) {
+      for (const waiting of this.jobs.filter(
+        (job) => job.status === 'waiting-retry' && job.recovery.nextRetryAt <= this.now(),
+      )) {
+        if ((await this.getConfig()).automaticRecovery !== true) {
+          await this.update(waiting, {
+            status: 'paused',
+            pauseReason: 'recovery-disabled',
+            message: 'Automatic recovery disabled. Resume when ready.',
+          });
+        } else if (await this.isOnline()) {
+          if (waiting.status === 'waiting-retry')
+            await this.update(waiting, { status: 'queued', message: 'Resuming download' });
+        } else waiting.recovery.nextRetryAt = this.now() + 15000;
+      }
+      await this.persist();
+      while (!this.stopped && (job = this.jobs.find((entry) => entry.status === 'queued'))) {
         const controller = new AbortController();
         this.controllers.set(job.id, controller);
         try {
           await this.execute(job, controller.signal);
         } catch (error) {
+          if (this.stopped) {
+            await this.update(job, {
+              message: 'Interrupted. Recovery will continue after restart.',
+            });
+            continue;
+          }
+          if (!this.jobs.includes(job)) continue;
+          if (!controller.signal.aborted) {
+            try {
+              if (await this.recover(job, error)) continue;
+            } catch (recoveryError) {
+              error = recoveryError;
+            }
+          }
+          const config = await this.getConfig();
+          const message = safeMessage(error.message, [
+            config.torboxApiKey,
+            config.realDebridApiKey,
+            config.archivePassword,
+          ]);
+          if (job.recovery) recovery.record(job, 'needs-attention', message);
           const paused = this.pauseRequests.has(job.id);
           await this.update(job, {
-            status: controller.signal.aborted ? (paused ? 'paused' : 'cancelled') : 'failed',
+            status: job.recovery?.installerStarted
+              ? 'needs-setup'
+              : controller.signal.aborted
+                ? paused
+                  ? 'paused'
+                  : 'cancelled'
+                : 'failed',
             ...(error.download
               ? {
                   received: (job.downloadOffset || 0) + error.download.received,
@@ -452,7 +712,10 @@ class Downloads extends EventEmitter {
               ? paused
                 ? 'Paused. Resume to continue.'
                 : 'Cancelled. Partial files kept for retry.'
-              : error.message.slice(0, 400),
+              : message +
+                (job.recovery?.retryCount >= recovery.MAX_RETRIES
+                  ? ' Automatic retries exhausted. Choose Retry or another download option.'
+                  : ''),
           });
         } finally {
           this.controllers.delete(job.id);
@@ -461,15 +724,15 @@ class Downloads extends EventEmitter {
       }
     } finally {
       this.running = false;
+      this.schedule();
     }
   }
   async execute(job, signal) {
     const config = await this.getConfig();
+    if (job.recovery?.installerStarted)
+      throw Error('Installer interrupted. Review installation before continuing.');
+    job.recovery ||= recovery.checkpoint();
     const service = job.service || 'torbox';
-    const api =
-      service === 'torbox'
-        ? this.apiFactory(config.torboxApiKey)
-        : createService(service, config, this.fetch, job.uri);
     const serviceName = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct download' }[
       service
     ];
@@ -478,19 +741,36 @@ class Downloads extends EventEmitter {
     const stage = within(job.root, path.join(job.root, '.mamba-downloads', job.id));
     const raw = path.join(stage, 'raw');
     const payload = path.join(stage, 'payload');
+    await fs.mkdir(job.root, { recursive: true });
+    job.root = await fs.realpath(job.root);
+    await safePath(job.root, raw);
     await fs.mkdir(raw, { recursive: true });
     let destination = job.folder
       ? within(job.root, job.folder)
       : within(job.root, path.join(job.root, `${safeName(job.name)}-${job.gameId.slice(0, 6)}`));
+    if (job.recovery?.renameTarget) {
+      const renamed = await safePath(job.root, job.recovery.renameTarget);
+      const manifest = JSON.parse(
+        await fs.readFile(path.join(renamed, '.mamba-game.json'), 'utf8').catch(() => '{}'),
+      );
+      if (manifest.downloadId === job.id) destination = renamed;
+    }
+    await safePath(job.root, destination);
     job.folder = destination;
     const present = await fs.stat(destination).catch(() => null);
     if (present) {
       const manifest = JSON.parse(
         await fs.readFile(path.join(destination, '.mamba-game.json'), 'utf8').catch(() => '{}'),
       );
-      if (manifest.releaseId !== job.gameId)
+      if (
+        manifest.releaseId !== job.gameId ||
+        (job.recovery?.payloadCommitted && manifest.downloadId !== job.id)
+      )
         throw new Error('The destination already exists. Existing files were preserved.');
-      if (manifest.status === 'installed') {
+      if (
+        manifest.status === 'installed' &&
+        (!job.recovery?.payloadCommitted || job.recovery.phase === 'completed')
+      ) {
         await this.update(job, {
           status: 'completed',
           progress: 100,
@@ -501,111 +781,260 @@ class Downloads extends EventEmitter {
         return;
       }
     }
-    if (!job.remote) {
-      await this.update(job, { status: 'preparing', message: 'Preparing with ' + serviceName });
-      job.remote = await api.create(job.uri, config.cachedOnly, signal);
-      await this.persist();
-    }
-    let info;
-    const deadline = Date.now() + config.transferTimeoutMinutes * 60000;
-    while (Date.now() < deadline) {
-      signal.throwIfAborted();
-      info = await api.info(job.remote.kind, job.remote.id, signal);
-      if (info?.download_finished && Array.isArray(info.files) && info.files.length) break;
-      if (info?.download_present && info?.progress >= 1 && info?.files?.length) break;
-      if (/failed|error|deleted/i.test(info?.download_state || ''))
-        throw new Error(serviceName + ' could not prepare this release.');
-      await this.update(job, {
-        status: 'preparing',
-        message: `${serviceName}: ${info?.download_state || 'preparing files'}`,
-        progress: Math.round(Number(info?.progress || 0) * 100),
-      });
-      await delay(5000, signal);
-    }
-    if (
-      !info?.files?.length ||
-      !(info.download_finished || (info.download_present && info.progress >= 1))
-    )
-      throw new Error(serviceName + ' preparation timed out. Retry to check again.');
-    const files = info.files.filter((file) => file.id !== undefined && Number(file.size) >= 0);
-    const total = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
-    let previous = 0;
-    let existingBytes = 0;
-    for (const file of await require('./library.cjs').walk(raw))
-      existingBytes += (await fs.stat(file)).size;
-    job.storage = await this.checkDisk(job.root, total, { existing: existingBytes });
-    const meter = new RollingSpeed();
-    const seen = new Set();
-    for (const file of files) {
-      signal.throwIfAborted();
-      const relative = String(file.name || file.short_name || `file-${file.id}`).replaceAll(
-        '\\',
-        '/',
-      );
-      if (
-        relative.startsWith('/') ||
-        relative.includes(':') ||
-        relative.split('/').includes('..') ||
-        !relative.trim()
-      )
-        throw new Error('TorBox returned an unsafe file path.');
-      const target = within(raw, path.join(raw, relative));
-      if (seen.has(target.toLowerCase())) throw new Error('TorBox returned colliding filenames.');
-      seen.add(target.toLowerCase());
-      const link = await api.downloadLink(job.remote.kind, job.remote.id, file.id, signal);
-      job.downloadOffset = previous;
-      await this.update(job, {
-        status: 'downloading',
-        message: `Downloading ${path.basename(relative)}`,
-        total,
-      });
-      await downloadFile(
-        link,
-        target,
-        Number(file.size || 0),
-        signal,
-        (received, _total, speed) => {
-          this.update(
-            job,
-            {
-              received: previous + received,
-              total,
-              speed,
-              progress: total ? Math.min(99, Math.floor(((previous + received) / total) * 100)) : 0,
-            },
-            true,
-          ).catch(() => {});
-        },
-        this.fetch,
-        meter,
-      );
-      previous += Number(file.size || 0);
-    }
-    await this.update(job, {
-      status: 'extracting',
-      message: 'Extracting and removing wrapper folders',
-      progress: 100,
-    });
     if (!present) {
-      const existingPayload = await fs.stat(payload).catch(() => null);
-      if (existingPayload) await fs.rename(payload, path.join(stage, 'previous-' + Date.now()));
-      const found = await unpack(
-        raw,
-        payload,
-        { signal, password: config.archivePassword || '' },
-        (message) => {
-          this.update(job, { message }, true).catch(() => {});
-        },
-      );
-      signal.throwIfAborted();
-      await fs.rename(payload, destination);
-      job.hasInstaller = Boolean(found.installer);
+      if (job.recovery.phase === 'committing') job.recovery.payloadCommitted = false;
+      const entries = [];
+      const savedFiles = job.recovery?.files;
+      let localReady = Array.isArray(savedFiles) && savedFiles.length > 0;
+      if (localReady)
+        for (const file of savedFiles) {
+          const target = await safePath(job.root, within(raw, path.join(raw, file.name)));
+          const stat = await fs.stat(target).catch(() => null);
+          if (!stat?.isFile() || (file.size > 0 && stat.size !== file.size)) {
+            localReady = false;
+            break;
+          }
+          entries.push({ ...file, target });
+        }
+      if (!localReady) {
+        entries.length = 0;
+        const api =
+          service === 'torbox'
+            ? this.apiFactory(config.torboxApiKey)
+            : createService(service, config, this.fetch, job.uri);
+
+        await this.checkpoint(job, 'downloading');
+        if (!job.remote) {
+          await this.update(job, { status: 'preparing', message: 'Preparing with ' + serviceName });
+          job.remote = await api.create(job.uri, config.cachedOnly, signal);
+          await this.persist();
+        }
+        let info;
+        const deadline = Date.now() + (config.transferTimeoutMinutes || 120) * 60000;
+        while (Date.now() < deadline) {
+          signal.throwIfAborted();
+          try {
+            info = await api.info(job.remote.kind, job.remote.id, signal);
+          } catch (cause) {
+            if ([404, 410].includes(cause.status) && !job.recovery.remoteRecreated) {
+              job.remote = null;
+              job.recovery.remoteRecreated = true;
+              await this.persist();
+              throw Object.assign(
+                Error('Service transfer expired. Reconnecting to the same source.'),
+                { retryable: true, cause },
+              );
+            }
+            throw cause;
+          }
+          if (info?.download_finished && Array.isArray(info.files) && info.files.length) break;
+          if (info?.download_present && info?.progress >= 1 && info?.files?.length) break;
+          if (/failed|error|deleted/i.test(info?.download_state || ''))
+            throw new Error(serviceName + ' could not prepare this release.');
+          await this.update(job, {
+            status: 'preparing',
+            message: `${serviceName}: ${info?.download_state || 'preparing files'}`,
+            progress: Math.round(Number(info?.progress || 0) * 100),
+          });
+          await delay(5000, signal);
+        }
+        if (
+          !info?.files?.length ||
+          !(info.download_finished || (info.download_present && info.progress >= 1))
+        )
+          throw new Error(serviceName + ' preparation timed out. Retry to check again.');
+        const files = info.files.filter(
+          (file) =>
+            file.id !== undefined &&
+            Number.isSafeInteger(Number(file.size)) &&
+            Number(file.size) >= 0,
+        );
+        if (!files.length || files.length !== info.files.length)
+          throw Error('Download service returned invalid file information.');
+        const identity = files
+          .map((file) => ({
+            name: String(file.name || file.short_name || `file-${file.id}`).replaceAll('\\', '/'),
+            size: Number(file.size),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (
+          job.recovery.fileIdentity &&
+          JSON.stringify(job.recovery.fileIdentity) !== JSON.stringify(identity)
+        )
+          throw Error('Download source returned changed content. Choose another option.');
+        job.recovery.fileIdentity = identity;
+        await this.persist();
+        const total = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
+        let previous = 0;
+        let existingBytes = 0;
+        for (const file of await require('./library.cjs').walk(raw))
+          existingBytes += (await fs.stat(file)).size;
+        job.storage = await this.checkDisk(job.root, total, { existing: existingBytes });
+        const meter = new RollingSpeed();
+        const seen = new Set();
+        for (const file of files) {
+          signal.throwIfAborted();
+          const relative = String(file.name || file.short_name || `file-${file.id}`).replaceAll(
+            '\\',
+            '/',
+          );
+          if (
+            relative.startsWith('/') ||
+            relative.includes(':') ||
+            relative
+              .split('/')
+              .some(
+                (part) =>
+                  part === '..' ||
+                  /^\.mamba(?:-|$)/i.test(part) ||
+                  /[<>:"|?*\x00-\x1f]|[. ]$/.test(part) ||
+                  /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(part),
+              ) ||
+            !relative.trim()
+          )
+            throw new Error('TorBox returned an unsafe file path.');
+          const target = within(raw, path.join(raw, relative));
+          if (seen.has(target.toLowerCase()))
+            throw new Error('TorBox returned colliding filenames.');
+          seen.add(target.toLowerCase());
+          await safePath(job.root, target);
+          job.activeFile = target;
+          entries.push({ ...file, size: Number(file.size), target });
+          const link = await api.downloadLink(job.remote.kind, job.remote.id, file.id, signal);
+          job.downloadOffset = previous;
+          await this.update(job, {
+            status: 'downloading',
+            message: `Downloading ${path.basename(relative)}`,
+            total,
+          });
+          await downloadFile(
+            link,
+            target,
+            Number(file.size || 0),
+            signal,
+            (received, _total, speed) => {
+              this.update(
+                job,
+                {
+                  received: previous + received,
+                  total,
+                  speed,
+                  progress: total
+                    ? Math.min(99, Math.floor(((previous + received) / total) * 100))
+                    : 0,
+                },
+                true,
+              ).catch(() => {});
+            },
+            this.fetch,
+            meter,
+          );
+          previous += Number(file.size || 0);
+        }
+        job.recovery.files = entries.map(({ target, size, sha256, sha1, md5 }) => ({
+          name: path.relative(raw, target),
+          size,
+          ...(sha256 ? { sha256 } : {}),
+          ...(sha1 ? { sha1 } : {}),
+          ...(md5 ? { md5 } : {}),
+        }));
+      }
+      await this.checkpoint(job, 'verifying', { lastCompletedPhase: 'downloading' });
+      await this.update(job, {
+        status: 'verifying',
+        message: 'Checking downloaded files',
+        progress: 100,
+      });
+      let verifiedArchives;
+      try {
+        verifiedArchives = await verifyDownloads(
+          entries,
+          { signal, password: config.archivePassword || '' },
+          (message) => this.update(job, { message }, true).catch(() => {}),
+        );
+      } catch (error) {
+        const damaged = entries.find((entry) => entry.target === error.file);
+        // Multipart archive damage cannot safely be attributed to a single volume.
+        const repairable =
+          error.code === 'FILE_INVALID' ||
+          (error.code === 'ARCHIVE_INVALID' && entries.length === 1);
+        if (damaged && repairable && !job.recovery.redownloadedFile) {
+          job.recovery.redownloadedFile = damaged.target;
+          await this.persist();
+          await fs.rm(await safePath(job.root, damaged.target), { force: true });
+          await fs.rm(damaged.target + '.part', { force: true });
+          await fs.rm(
+            path.join(
+              path.dirname(damaged.target),
+              '.mamba-transfer',
+              createHash('sha256').update(path.basename(damaged.target)).digest('hex') + '.json',
+            ),
+            { force: true },
+          );
+          job.recovery.files = null;
+          await this.persist();
+          throw Object.assign(
+            Error('File verification failed. Redownloading the affected file once.'),
+            { retryable: true },
+          );
+        }
+        throw error;
+      }
+      await this.checkpoint(job, 'extracting', { lastCompletedPhase: 'verifying' });
+      await this.update(job, {
+        status: 'extracting',
+        message: 'Extracting and removing wrapper folders',
+        progress: 100,
+      });
+      if (!present) {
+        const existingPayload = await fs.stat(payload).catch(() => null);
+        if (existingPayload) await fs.rm(await safePath(job.root, payload), { recursive: true });
+        for (let depth = 0; depth < 4; depth++)
+          for (const name of [`unpack-${depth}`, `archive-layer-${depth}`])
+            await fs.rm(await safePath(job.root, path.join(stage, name)), {
+              recursive: true,
+              force: true,
+            });
+        const found = await unpack(
+          raw,
+          payload,
+          { signal, password: config.archivePassword || '', verifiedArchives },
+          (message) => {
+            this.update(job, { message }, true).catch(() => {});
+          },
+        );
+        signal.throwIfAborted();
+        await atomicJson(path.join(payload, '.mamba-game.json'), {
+          name: job.name,
+          releaseId: job.gameId,
+          downloadId: job.id,
+          status: 'needs-setup',
+        });
+        await this.checkpoint(job, 'committing', {
+          lastCompletedPhase: 'extracting',
+          payloadCommitted: true,
+        });
+        await safePath(job.root, destination);
+        if (await fs.lstat(destination).catch(() => null))
+          throw Error('The destination already exists. Existing files were preserved.');
+        await fs.rename(payload, destination);
+        await this.checkpoint(job, 'committed');
+        job.hasInstaller = Boolean(found.installer);
+      }
     }
+    signal.throwIfAborted();
+    await this.checkpoint(job, 'finalizing');
     await require('./game-helper.cjs').installGameHelper(destination);
     let found = await detect(destination);
-    let status = found.installer ? 'needs-setup' : found.executable ? 'installed' : 'needs-setup';
+    let status =
+      found.installer && !job.recovery.installerFinished
+        ? 'needs-setup'
+        : found.executable && found.confidence === 'high'
+          ? 'installed'
+          : 'needs-setup';
     await atomicJson(path.join(destination, '.mamba-game.json'), {
       name: job.name,
+      downloadId: job.id,
       version: job.version,
       release: job.release,
       releaseId: job.gameId,
@@ -613,18 +1042,38 @@ class Downloads extends EventEmitter {
       installedAt: new Date().toISOString(),
       executable: found.executable,
     });
-    if (found.installer && config.autoInstall) {
+    if (found.installer && config.autoInstall && !job.recovery.installerFinished) {
       await this.update(job, { status: 'installing', message: 'Running supported installer' });
       const installTarget = destination;
+      await atomicJson(path.join(destination, '.mamba-game.json'), {
+        name: job.name,
+        downloadId: job.id,
+        releaseId: job.gameId,
+        status: 'needs-setup',
+        setupInterrupted: true,
+      });
+      await this.checkpoint(job, 'installing', { installerStarted: true });
       const installed = await autoInstall(found.installer, installTarget, signal);
+      await atomicJson(path.join(destination, '.mamba-game.json'), {
+        name: job.name,
+        downloadId: job.id,
+        releaseId: job.gameId,
+        status: 'needs-setup',
+        setupInterrupted: false,
+      });
+      await this.checkpoint(job, 'finalizing', {
+        installerStarted: false,
+        installerFinished: installed,
+      });
       if (installed) {
         found = await detect(installTarget);
-        status = found.executable ? 'installed' : 'needs-setup';
+        status = found.executable && found.confidence === 'high' ? 'installed' : 'needs-setup';
       }
     }
     let steamRegistration;
     if (status === 'installed') {
       job.name = await this.resolveName(job.name);
+      signal.throwIfAborted();
       const repairManifest = JSON.parse(
         await fs.readFile(path.join(destination, '.mamba-game.json'), 'utf8'),
       );
@@ -637,6 +1086,12 @@ class Downloads extends EventEmitter {
         finalized = await finalizeInstallation(destination, job.name, {
           releaseId: job.gameId,
           status,
+          beforeRename: async (_from, to) =>
+            this.checkpoint(job, 'finalizing', { renameTarget: to }),
+          afterRename: async (to) => {
+            job.folder = to;
+            await this.persist();
+          },
         });
       } catch (error) {
         await this.reviewSetup(destination);
@@ -683,19 +1138,27 @@ class Downloads extends EventEmitter {
       await atomicJson(path.join(destination, '.mamba-game.json'), {
         name: job.name,
         releaseId: job.gameId,
+        downloadId: job.id,
         status,
         installedAt: new Date().toISOString(),
         executable: found.executable,
       });
       await this.reviewSetup(destination);
     }
+    signal.throwIfAborted();
     if (!config.keepArchives) {
       const stagingRoot = within(job.root, path.join(job.root, '.mamba-downloads'));
       within(stagingRoot, stage);
       if (/^[a-f0-9-]{36}$/i.test(path.basename(stage)))
-        await fs.rm(stage, { recursive: true, force: true }).catch(() => {});
+        await fs
+          .rm(await safePath(job.root, stage), { recursive: true, force: true })
+          .catch(() => {});
     }
     await this.library.scan();
+    await this.checkpoint(job, 'completed', {
+      lastCompletedPhase: 'finalizing',
+      nextRetryAt: null,
+    });
     await this.update(job, {
       status: status === 'installed' ? 'completed' : 'needs-setup',
       message:
@@ -710,6 +1173,8 @@ class Downloads extends EventEmitter {
     });
   }
   stop() {
+    this.stopped = true;
+    clearTimeout(this.retryTimer);
     for (const controller of this.controllers.values()) controller.abort();
   }
 }

@@ -26,11 +26,12 @@ function mergeXboxLibrary(saved, game) {
     throw Error('Xbox custom-library format changed. Existing entries were preserved.');
   const launch = launchTarget(game.executable),
     executable = launch.exe.replace(/^"|"$/g, '');
-  const installLocation = path.dirname(executable) + path.sep,
-    executableName = path.basename(executable);
+  const paths = path.win32.isAbsolute(executable) ? path.win32 : path;
+  const installLocation = paths.dirname(executable) + paths.sep,
+    executableName = paths.basename(executable);
   const existing = Object.values(saved).find(
     (entry) =>
-      (path.join(entry.installLocation, entry.executableName).toLowerCase() ===
+      (paths.join(entry.installLocation, entry.executableName).toLowerCase() ===
         executable.toLowerCase() &&
         (entry.executableCommandArgs || '') === launch.args) ||
       entry.title?.toLowerCase() === game.name.toLowerCase(),

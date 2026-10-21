@@ -794,7 +794,7 @@
         activity.catalog.phase,
       );
       $('#restart-tasks').disabled = activity.jobs.some((job) =>
-        ['extracting', 'installing'].includes(job.status),
+        ['verifying', 'extracting', 'installing'].includes(job.status),
       );
       renderIssues(activity.issues);
       renderDownloadOverview();
