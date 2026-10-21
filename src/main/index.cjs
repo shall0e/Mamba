@@ -72,6 +72,7 @@ if (!app.requestSingleInstanceLock()) {
       throw error;
     }
   }
+  let catalogSyncTimer;
   async function refreshBackgroundConfig() {
     if (!background) return;
     const config = await readConfig();
@@ -83,8 +84,8 @@ if (!app.requestSingleInstanceLock()) {
         previous.cachedOnly,
         previous.realDebridApiKey,
         previous.enabledDownloadServices,
-        previous.disabledDownloadHosts,
-        previous.disabledSourceUrls,
+        previous.disabledDownloadHosts || [],
+        previous.disabledSourceUrls || [],
       ]) !==
       JSON.stringify([
         config.sourceUrls,
@@ -92,13 +93,18 @@ if (!app.requestSingleInstanceLock()) {
         config.cachedOnly,
         config.realDebridApiKey,
         config.enabledDownloadServices,
-        config.disabledDownloadHosts,
-        config.disabledSourceUrls,
+        config.disabledDownloadHosts || [],
+        config.disabledSourceUrls || [],
       ]);
     configSecrets = [config.torboxApiKey, config.realDebridApiKey, config.archivePassword];
     background.options.initialize.config = config;
     await task('configure', config);
-    if (changed) task('catalog:sync').catch(() => {});
+    // Coalesce selection changes; catalog rebuilds reuse each cached source.
+    // Only explicit refreshes revalidate already cached source URLs.
+    if (changed) {
+      clearTimeout(catalogSyncTimer);
+      catalogSyncTimer = setTimeout(() => task('catalog:sync').catch(() => {}), 750);
+    }
   }
   function dataDirectory() {
     if (resolvedDataDirectory) return resolvedDataDirectory;
