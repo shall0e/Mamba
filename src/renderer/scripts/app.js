@@ -468,6 +468,7 @@ let keyConfigured = false;
 let toastTimer;
 let configLoaded = false;
 let settingsBusy = false;
+let settingsSavePending = false;
 let settingsSaveTimer;
 let installedGames = [];
 let settingsInitialized = false;
@@ -534,7 +535,7 @@ function updateSettingsState() {
   for (const control of document.querySelectorAll(
     '#download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config',
   ))
-    control.disabled = !configLoaded || settingsBusy;
+    control.disabled = !configLoaded || (control.type !== 'checkbox' && settingsBusy);
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
   document.querySelector('#remove-key').hidden = configLoaded && !keyConfigured;
 }
@@ -658,7 +659,11 @@ document.querySelector('#key-visibility').addEventListener('click', () => {
 
 document.querySelector('#settings-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (settingsBusy || !configLoaded || !hasSettingsChanges()) return;
+  if (settingsBusy) {
+    settingsSavePending = true;
+    return;
+  }
+  if (!configLoaded || !hasSettingsChanges()) return;
   saveStatus.textContent = '';
   saveStatus.classList.remove('error');
   const nextUrls = [...new Set(sourceLines())];
@@ -710,6 +715,10 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
   } finally {
     settingsBusy = false;
     updateSettingsState();
+    if (settingsSavePending) {
+      settingsSavePending = false;
+      scheduleSettingsSave(150);
+    }
   }
 });
 

@@ -408,7 +408,7 @@
     loadHosts,
     busy(value) {
       for (const input of form.querySelectorAll('input,select,textarea,button'))
-        input.disabled = value;
+        input.disabled = input.type === 'checkbox' ? !configLoaded : value;
       clear.hidden = !config.realDebridConfigured;
     },
     read: () => ({
