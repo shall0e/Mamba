@@ -5,8 +5,7 @@
     if (cls) el.className = cls;
     return el;
   };
-  const splash = document.querySelector('#startup-splash'),
-    brand = splash.querySelector('.startup-brand');
+  const splash = document.querySelector('#startup-splash');
   window.mamba
     .updateState()
     .then((state) => {
@@ -18,17 +17,6 @@
       homeVersion.hidden = version.hidden;
     })
     .catch(() => {});
-  const logoReady = Promise.all(
-    [
-      '../../assets/mamba.png',
-      '../../assets/mamba-mask.png',
-      '../../assets/mamba-background-mask.png',
-    ].map((src) => {
-      const image = new Image();
-      image.src = src;
-      return image.decode();
-    }),
-  );
   async function setup(config) {
     const dialog = make('dialog', null, 'welcome-dialog');
     dialog.setAttribute('aria-labelledby', 'welcome-title');
@@ -335,70 +323,12 @@
     draw();
     dialog.showModal();
   }
-  const waitAtMost = (work, milliseconds) =>
-    Promise.race([work, new Promise((resolve) => setTimeout(resolve, milliseconds))]);
-  const finishAnimation = async (animation, milliseconds) => {
-    await waitAtMost(
-      animation.finished.catch(() => {}),
-      milliseconds,
-    );
-    if (animation.playState !== 'finished') animation.finish();
-  };
-  Promise.all([
-    configReady,
-    waitAtMost(
-      logoReady.catch(() => {}),
-      400,
-    ),
-  ])
-    .then(async ([config]) => {
-      const version = document.querySelector('#startup-version');
-      brand.style.setProperty('--startup-version-width', version.scrollWidth + 'px');
-      const target = document.querySelector('#search-page .search-wordmark');
-      const to = target.getBoundingClientRect();
-      brand.style.width = to.width + 'px';
-      const from = brand.getBoundingClientRect();
-      document.body.classList.add('startup-finishing');
-      if (!reducedBackdropMotion.matches) {
-        await finishAnimation(
-          brand.animate(
-            [
-              { transform: 'translate(0,0) scale(1)' },
-              {
-                transform: `translate(${to.x - from.x}px,${to.y - from.y}px) scale(${to.width / from.width},${to.height / from.height})`,
-              },
-            ],
-            { duration: 420, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
-          ),
-          600,
-        );
-        document.body.classList.add('startup-handoff');
-        await Promise.all([
-          finishAnimation(
-            brand.animate([{ opacity: 1 }, { opacity: 0 }], {
-              duration: 140,
-              easing: 'ease-in-out',
-              fill: 'forwards',
-            }),
-            300,
-          ),
-          finishAnimation(
-            target.animate([{ opacity: 0 }, { opacity: 1 }], {
-              duration: 140,
-              easing: 'ease-in-out',
-            }),
-            300,
-          ),
-        ]);
-      }
-      document.body.classList.remove('startup-active', 'startup-finishing', 'startup-handoff');
-      splash.remove();
+  // The shell must become usable independently of settings, artwork, or IPC.
+  document.body.classList.remove('startup-active', 'startup-finishing', 'startup-handoff');
+  splash.remove();
+  configReady
+    .then(async (config) => {
       if (config.onboardingCompleted === false) await setup(config);
     })
-    .catch((error) => {
-      brand.append(make('p', 'Could not load settings. ' + String(error.message || '')));
-      const retry = make('button', 'Try again', 'primary-button');
-      retry.onclick = () => location.reload();
-      brand.append(retry);
-    });
+    .catch(() => {});
 })();
