@@ -125,12 +125,21 @@
       const primary=node('div',undefined,'detail-primary');
       const local=window.MambaPresence.installed(installedGames,data);
       const playable=data.installations.find(item=>item.status==='installed'&&item.executable)||(local?.status==='installed'&&local.executable?local:null);
+      const removeInstallation = async installation => {
+        const result = await window.mamba.removeGame(installation.id);
+        if (!result) return;
+        await refreshLibrary();
+        showPage('library');
+        showToast(installation.imported ? 'Removed from library; files kept' : 'Installation moved to Recycle Bin');
+      };
       if(local)intro.append(node('span',playable?'Installed on this PC':'Setup required','detail-owned'));
       if(playable)primary.append(action('Play',()=>window.mamba.gameAction(playable.id,'play'),'play','primary-button'));
       const existingDownload=window.MambaPresence.download(recentJobs,{...game,...data});
       if(existingDownload&&!['completed','cancelled'].includes(existingDownload.status))primary.append(action(['paused','failed'].includes(existingDownload.status)?'Resume download':'View download',async()=>{if(['paused','failed'].includes(existingDownload.status))await window.mamba.retry(existingDownload.id);showPage('activity');},'download','secondary-button'));
       else if(data.catalogId)primary.append(action(playable?'Other versions':'View downloads',()=>{const options=$('#game-downloads');if(options?.tagName==='DETAILS')options.open=true;options?.scrollIntoView({behavior:reducedBackdropMotion.matches?'instant':'smooth',block:'start'});},'download',playable?'secondary-button':'primary-button'));
       if(data.libraryId){const favorite=action(data.favorite?'Favorited':'Favorite',async()=>{await window.mamba.favorite(data.libraryId,!data.favorite);data.favorite=!data.favorite;favorite.lastChild.textContent=data.favorite?'Favorited':'Favorite';favorite.setAttribute('aria-pressed',String(data.favorite));},'star');favorite.setAttribute('aria-pressed',String(data.favorite));primary.append(favorite);}
+      const installationToRemove = playable || local || data.installations[0];
+      if (installationToRemove) primary.append(action(installationToRemove.imported ? 'Remove from library' : 'Uninstall', () => removeInstallation(installationToRemove), 'trash-2', 'text-button danger-action'));
       intro.append(primary);if(data.lastPlayed)intro.append(node('p','Last played '+date(data.lastPlayed),'field-hint'));
       hero.append(image,intro);content.append(hero);
       if(data.description)content.append(node('p',data.description,'game-description'));
@@ -148,7 +157,7 @@
           controls.append(action('Change launcher',async()=>{const result=await window.mamba.chooseLauncher(installation.id);if(result){await refreshLibrary();await openGame({id:data.libraryId||data.id,name:data.name},'library');showToast('Startup file saved');}},'folder-open'));
           controls.append(action('Open folder',()=>window.mamba.gameAction(installation.id,'folder'),'folder-open'));
           controls.append(action('Setup helper',()=>window.mamba.gameAction(installation.id,'launcher'),'settings-2'));
-          controls.append(action(installation.imported?'Remove from library':'Uninstall',async()=>{const result=await window.mamba.removeGame(installation.id);if(result){await refreshLibrary();showPage('library');showToast(installation.imported?'Removed from library; files kept':'Installation moved to Recycle Bin');}},'trash-2','text-button danger-action'));
+          card.append(action(installation.imported?'Remove from library':'Uninstall',()=>removeInstallation(installation),'trash-2','text-button danger-action'));
           manage.append(controls);card.append(manage);section.append(card);
         }content.append(section);
       }
@@ -220,3 +229,4 @@
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentPage==='activity')loadActivity();});
   setInterval(()=>{if(currentPage==='activity'&&!document.hidden)loadActivity();},5000);
 })();
+
