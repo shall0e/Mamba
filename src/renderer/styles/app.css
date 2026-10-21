@@ -3007,11 +3007,15 @@ h2 {
   background:
     linear-gradient(
       90deg,
-      var(--color-inputInset),
-      color-mix(in srgb, var(--color-inputInset) 90%, transparent) 25%,
-      transparent
+      color-mix(in srgb, var(--color-inputInset) 72%, transparent),
+      color-mix(in srgb, var(--color-inputInset) 38%, transparent) 35%,
+      transparent 70%
     ),
-    linear-gradient(0deg, color-mix(in srgb, var(--color-inputInset) 80%, transparent), transparent);
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--color-inputInset) 35%, transparent),
+      transparent 55%
+    );
 }
 .featured-content h2,
 .featured-badge {

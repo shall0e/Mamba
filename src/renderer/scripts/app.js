@@ -38,8 +38,7 @@ function renderFeaturedGame(game) {
   cover.className = 'featured-art';
   cover.alt = '';
   cover.decoding = 'async';
-  window.mamba
-    .artwork(game.id)
+  (game.cover ? Promise.resolve(game.cover) : window.mamba.artwork(game.id))
     .then((image) => {
       if (image && banner.isConnected && banner.dataset.gameId === String(game.id))
         cover.src = image;

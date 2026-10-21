@@ -74,7 +74,7 @@ function topicQueries(query) {
   const family = meaningful.length > 2 ? meaningful.slice(0, 2).join(' ') : '';
   return [...new Set([clean, withoutOne, core.join(' '), family].filter(Boolean))].slice(0, 4);
 }
-function chooseBestMatch(query, items, knownApps = []) {
+function chooseBestMatch(query, items) {
   const latest = /\b(?:latest|newest)\b/i.test(query);
   const clean = topicQueries(query)[0].replace(/\b1\b/g, '').replace(/\s+/g, ' ').trim();
   const hints = releaseHints(clean);
@@ -88,7 +88,9 @@ function chooseBestMatch(query, items, knownApps = []) {
       compactTitle(game.name.replace(/\s*\(\d{4}\)$/, '')) === wanted,
   );
   if (!exact.length) {
-    const phrase = titleKey(clean);
+    const phrase = titleKey(
+      hints.year ? clean.replace(new RegExp('\\b' + hints.year + '\\b'), '') : clean,
+    );
     if (phrase.split(' ').length >= 2)
       exact = items.filter((game) =>
         titleKey(game.name.replace(/\s*\(\d{4}\)$/, '')).endsWith(' ' + phrase),
@@ -103,18 +105,17 @@ function chooseBestMatch(query, items, knownApps = []) {
       ? candidates[0]
       : null;
   }
-  if (
-    !hints.year &&
-    new Set(
-      knownApps
-        .filter((app) => app.type === 'game' && !app.isHub && compactTitle(app.name) === wanted)
-        .map((app) => app.steamId),
-    ).size > 1
-  )
-    return null;
-  const eligible = exact.filter(
+  let eligible = exact.filter(
     (game) => game.verified && (!hints.year || String(game.releaseYear) === hints.year),
   );
+  // Preserve the user's numeral spelling when normalized titles collide.
+  const numerals = String(query).match(/\b(?:ii|iii|iv|vi|vii|viii|ix|x)\b/gi);
+  if (eligible.length > 1 && numerals?.length) {
+    const spelled = eligible.filter((game) =>
+      numerals.every((numeral) => new RegExp('\\b' + numeral + '\\b', 'i').test(game.name)),
+    );
+    if (spelled.length) eligible = spelled;
+  }
   const uncertain = exact.some(
     (game) => !game.verified && (!hints.year || String(game.releaseYear) === hints.year),
   );

@@ -188,3 +188,14 @@ test('phrase searches exclude loose words and recognize a unique title suffix', 
   );
   assert.equal(result.items[0].releaseYearLabel, 'Steam release 2023');
 });
+
+test('specific year and Roman numeral queries select one title suffix', () => {
+  const games = [
+    { id: 'original', name: 'Example: Distinct Game', releaseYear: '2023', verified: true },
+    { id: 'old', name: 'Example: Distinct Game 2 (2009)', releaseYear: '2009', verified: true },
+    { id: 'new', name: 'Example: Distinct Game II', releaseYear: '2022', verified: true },
+  ];
+  assert.equal(chooseBestMatch('distinct game 2023', games).id, 'original');
+  assert.equal(chooseBestMatch('distinct game ii', games).id, 'new');
+  assert.equal(chooseBestMatch('distinct game 2', games), null);
+});
