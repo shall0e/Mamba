@@ -82,11 +82,18 @@ function chooseBestMatch(query, items, knownApps = []) {
     hints.year ? clean.replace(new RegExp('\\b' + hints.year + '\\b'), '') : clean,
   );
   if (!wanted || wanted.length < 4) return null;
-  const exact = items.filter(
+  let exact = items.filter(
     (game) =>
       compactTitle(game.name) === wanted ||
       compactTitle(game.name.replace(/\s*\(\d{4}\)$/, '')) === wanted,
   );
+  if (!exact.length) {
+    const phrase = titleKey(clean);
+    if (phrase.split(' ').length >= 2)
+      exact = items.filter((game) =>
+        titleKey(game.name.replace(/\s*\(\d{4}\)$/, '')).endsWith(' ' + phrase),
+      );
+  }
   if (latest) {
     const candidates = items
       .filter((game) => game.verified && !game.related && game.releaseYear)
@@ -201,7 +208,17 @@ class SteamSearch {
         queries.flatMap((term) => rankedSearch(index, term, 0).items).map((app) => [app.id, app]),
       ).values(),
     ];
-    const entries = matching.map((app) => ({ app, releases: this.releasesFor(app) }));
+    const phrase = titleKey(topicQueries(query)[0])
+      .split(' ')
+      .filter((word) => !/^\d+$/.test(word))
+      .join(' ');
+    const entries = matching
+      .filter(
+        (app) =>
+          phrase.split(' ').length < 2 ||
+          (' ' + titleKey(app.name) + ' ').includes(' ' + phrase + ' '),
+      )
+      .map((app) => ({ app, releases: this.releasesFor(app) }));
     const claims = new Map();
     for (const { releases } of entries)
       for (const source of releases) claims.set(source.id, (claims.get(source.id) || 0) + 1);

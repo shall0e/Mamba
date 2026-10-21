@@ -160,7 +160,7 @@ test('modifications and numbered sequels do not silently claim base-game identit
   );
 });
 
-test('contiguous title matches outrank loose word matches and store dates are labeled', () => {
+test('phrase searches exclude loose words and recognize a unique title suffix', () => {
   const catalog = new Catalog('unused', async () => ({}));
   const names = ['Modern Naval Warfare', 'Call of Duty: Modern Warfare', 'Modern Warfare 2'];
   catalog.replace(
@@ -177,7 +177,14 @@ test('contiguous title matches outrank loose word matches and store dates are la
   );
   const result = search.localResults('modern warfare 1');
   assert.equal(result.items[0].name, names[1]);
-  assert.equal(result.items.at(-1).name, names[0]);
-  assert.equal(result.items.at(-1).related, true);
+  assert.ok(!result.items.some((game) => game.name === names[0]));
+  assert.equal(result.bestMatch.name, names[1]);
+  assert.equal(
+    chooseBestMatch('modern warfare', [
+      { name: names[1], verified: true },
+      { name: names[1], verified: true, id: 'reboot' },
+    ]),
+    null,
+  );
   assert.equal(result.items[0].releaseYearLabel, 'Steam release 2023');
 });
