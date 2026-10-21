@@ -1,5 +1,8 @@
 name: Publish Windows release
 on:
+  push:
+    branches: [main]
+    paths: [package.json]
   workflow_dispatch:
 permissions:
   contents: write
@@ -19,6 +22,8 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match package.json version' }
       - run: npm ci
+      - run: npm run format:check
+      - run: node --test
       - run: npm run release:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -29,6 +34,6 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           gh release view "v$version" *> $null
-          if ($LASTEXITCODE -ne 0) { gh release create "v$version" --title "Mamba $version" --generate-notes }
+          if ($LASTEXITCODE -ne 0) { gh release create "v$version" --target "$env:GITHUB_SHA" --title "Mamba $version" --generate-notes }
           gh release upload "v$version" dist/Mamba-Setup-*.exe dist/*.blockmap dist/latest.yml --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
