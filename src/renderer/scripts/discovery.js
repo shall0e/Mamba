@@ -43,6 +43,19 @@
   ]);
   toolbar.append(service, availability, sort);
   $('#results-list').before(toolbar);
+  const searchLoader = node('div', undefined, 'search-loader');
+  searchLoader.hidden = true;
+  searchLoader.setAttribute('role', 'progressbar');
+  searchLoader.setAttribute('aria-label', 'Searching games');
+  $('#results-list').before(searchLoader);
+  let revealResults = false;
+  const setSearching = (active) => {
+    loading = active;
+    searchLoader.hidden = !active;
+    $('#results-list').setAttribute('aria-busy', String(active));
+    $('#results-more').disabled = active;
+    if (active) $('#results-status').textContent = 'Finding the best matches…';
+  };
   function render() {
     if (loading) return;
     const library = installedGames;
@@ -224,7 +237,7 @@
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       rows.forEach((row, index) => {
         row.getAnimations().forEach((animation) => animation.cancel());
-        if (arrivals.has(row)) {
+        if (arrivals.has(row) || revealResults) {
           row.animate(
             [
               { opacity: 0, transform: 'translateY(10px)' },
@@ -252,6 +265,7 @@
           );
       });
     }
+    revealResults = false;
     if (!matches.length)
       list.append(
         node(
@@ -276,21 +290,19 @@
   window.MambaDiscovery = {
     render,
     start(more) {
-      loading = true;
-      $('#results-more').disabled = true;
+      setSearching(true);
     },
     fail(message) {
-      loading = false;
-      $('#results-more').disabled = false;
+      setSearching(false);
       $('#results-status').textContent = message;
     },
     update(result, more) {
-      loading = false;
-      $('#results-more').disabled = false;
-      if (!more && result.pending && !result.items.length && games.length) {
-        $('#results-status').textContent = 'Searching…';
+      if (result.pending) {
+        setSearching(true);
         return;
       }
+      revealResults = loading;
+      setSearching(false);
       games = more
         ? [...games, ...result.items.filter((item) => !games.some((game) => game.id === item.id))]
         : result.items;

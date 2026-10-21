@@ -6364,3 +6364,43 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
     transition: none;
   }
 }
+
+.search-loader {
+  height: 3px;
+  margin: 0 0 20px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.search-loader[hidden] {
+  display: none;
+}
+.search-loader::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--color-text);
+  animation: search-progress 1100ms ease-in-out infinite;
+}
+@keyframes search-progress {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(390%);
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-loader::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
