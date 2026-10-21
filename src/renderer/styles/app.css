@@ -5705,16 +5705,14 @@ html textarea::placeholder {
   gap: 2px;
 }
 .source-group-title {
-  margin: 0 0 2px;
+  margin: 0 0 6px;
   color: var(--color-textMuted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 .source-row {
   min-width: 0;
-  min-height: 36px;
+  min-height: 32px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -5740,7 +5738,7 @@ html textarea::placeholder {
 }
 .source-row .source-toggle {
   flex: none;
-  min-height: 18px;
+  min-height: 22px;
   margin-right: 8px;
 }
 .source-icon-button:focus-visible,
@@ -5759,7 +5757,7 @@ html textarea::placeholder {
   white-space: nowrap;
 }
 .source-row-copy strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .source-row-actions {
@@ -5776,43 +5774,55 @@ html textarea::placeholder {
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: var(--color-inputInset);
+  background: transparent;
   color: var(--color-text);
+  backdrop-filter: none;
 }
 .source-icon-button svg {
   width: 14px;
   height: 14px;
 }
-.source-icon-button:hover {
-  background: var(--color-focus);
+.source-icon-button:hover,
+.source-icon-button:focus-visible {
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
 }
 .source-toggle {
   position: relative;
-  width: 30px;
-  height: 18px;
+  width: 38px;
+  height: 22px;
   padding: 0;
-  border-radius: 10px;
-  background: var(--color-inputInset);
+  border-radius: 20px;
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
 }
 .source-toggle::after {
   content: '';
   position: absolute;
-  width: 12px;
-  height: 12px;
-  top: 3px;
-  left: 3px;
+  width: 14px;
+  height: 14px;
+  top: 4px;
+  left: 4px;
   border-radius: 50%;
-  background: var(--color-textMuted);
+  background: color-mix(
+    in srgb,
+    var(--color-textMuted) calc(var(--icons-opacity) * 100%),
+    transparent
+  );
   transition:
     transform 160ms ease,
     background 160ms ease;
 }
 .source-toggle[aria-checked='true'] {
-  background: var(--color-button);
+  background: var(--input-fill);
 }
 .source-toggle[aria-checked='true']::after {
-  background: var(--color-buttonText);
-  transform: translateX(12px);
+  background: color-mix(
+    in srgb,
+    var(--theme-icons-color, var(--color-icons)) calc(var(--icons-opacity) * 100%),
+    transparent
+  );
+  transform: translateX(16px);
 }
 .source-add-row {
   display: flex;
@@ -5826,7 +5836,8 @@ html textarea::placeholder {
   height: 36px;
   padding: 0 10px;
   border-radius: 8px;
-  background: var(--color-inputInset);
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
 }
 .source-edit-input {
   font-size: 11px;
