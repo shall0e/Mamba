@@ -64,7 +64,11 @@
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
     renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
     const list = $('#results-list');
+    const positions = new Map(
+      [...cardCache].map(([id, cached]) => [id, cached.row.getBoundingClientRect()]),
+    );
     const rows = [];
+    const arrivals = new Set();
     const visible = new Set(matches.map((game) => game.id));
     for (const [id, cached] of cardCache) {
       if (!visible.has(id)) {
@@ -89,8 +93,9 @@
         continue;
       }
       const row = node('article', undefined, 'result-card game-cover-card discovery-card');
+      if (!cached) arrivals.add(row);
+      row.style.animation = 'none';
       if (cached) {
-        row.style.animation = 'none';
         cached.row.replaceWith(row);
       }
       cardCache.set(game.id, { row, signature });
@@ -216,6 +221,37 @@
     rows.forEach((row, index) => {
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
     });
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      rows.forEach((row, index) => {
+        row.getAnimations().forEach((animation) => animation.cancel());
+        if (arrivals.has(row)) {
+          row.animate(
+            [
+              { opacity: 0, transform: 'translateY(10px)' },
+              { opacity: 1, transform: 'translateY(0)' },
+            ],
+            {
+              duration: 240,
+              delay: Math.min(index * 18, 100),
+              easing: 'cubic-bezier(.22,1,.36,1)',
+              fill: 'backwards',
+            },
+          );
+          return;
+        }
+        const id = matches[index].id;
+        const before = positions.get(id);
+        const after = row.getBoundingClientRect();
+        if (before && (before.x !== after.x || before.y !== after.y))
+          row.animate(
+            [
+              { transform: `translate(${before.x - after.x}px, ${before.y - after.y}px)` },
+              { transform: 'translate(0, 0)' },
+            ],
+            { duration: 220, easing: 'cubic-bezier(.22,1,.36,1)' },
+          );
+      });
+    }
     if (!matches.length)
       list.append(
         node(
@@ -242,7 +278,6 @@
     start(more) {
       loading = true;
       $('#results-more').disabled = true;
-      if (!more) games = [];
     },
     fail(message) {
       loading = false;
@@ -252,6 +287,10 @@
     update(result, more) {
       loading = false;
       $('#results-more').disabled = false;
+      if (!more && result.pending && !result.items.length && games.length) {
+        $('#results-status').textContent = 'Searching…';
+        return;
+      }
       games = more
         ? [...games, ...result.items.filter((item) => !games.some((game) => game.id === item.id))]
         : result.items;

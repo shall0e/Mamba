@@ -194,8 +194,6 @@ async function runSearch(more = false) {
   if (!query || !window.mamba) return;
   if (!more) {
     searchOffset = 0;
-    renderFeaturedGame(null);
-    document.querySelector('#results-list').replaceChildren();
   }
   document.querySelector('#results-status').textContent = 'Searching…';
   window.MambaDiscovery.start(more);
