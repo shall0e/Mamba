@@ -612,6 +612,23 @@ if (!app.requestSingleInstanceLock()) {
       if (error) throw new Error(error);
       return;
     }
+    const { steamLaunchUrl } = require('../core/shortcuts.cjs');
+    const { addGame } = require('../../tools/add-game.cjs');
+    const steamUrl = await steamLaunchUrl(game, {
+      setup: (selected) =>
+        addGame({
+          folder: selected.folder,
+          file: selected.executable,
+          name: selected.name,
+          desktop: async () => {},
+          xbox: async () => ({ status: 'skipped' }),
+        }),
+    });
+    if (steamUrl) {
+      await shell.openExternal(steamUrl);
+      await task('library:played', id).catch(() => {});
+      return;
+    }
     if (!/\.(exe|com)$/i.test(target)) {
       const error = await shell.openPath(target);
       if (error) throw new Error(error);
