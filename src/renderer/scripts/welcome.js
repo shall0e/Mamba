@@ -350,19 +350,31 @@
     draw();
     dialog.showModal();
   }
+  const waitAtMost = (work, milliseconds) =>
+    Promise.race([work, new Promise((resolve) => setTimeout(resolve, milliseconds))]);
+  const finishAnimation = async (animation, milliseconds) => {
+    await waitAtMost(
+      animation.finished.catch(() => {}),
+      milliseconds,
+    );
+    if (animation.playState !== 'finished') animation.finish();
+  };
   Promise.all([
     configReady,
-    versionReady,
-    logoReady,
+    waitAtMost(versionReady, 1800),
+    waitAtMost(
+      logoReady.catch(() => {}),
+      1800,
+    ),
     new Promise((resolve) => setTimeout(resolve, 1500)),
     Promise.race([
       firstArtwork.then(() => new Promise((resolve) => setTimeout(resolve, 900))),
-      new Promise((resolve) => setTimeout(resolve, 10000)),
+      new Promise((resolve) => setTimeout(resolve, 1800)),
     ]),
   ])
     .then(async ([config]) => {
       artworkObserver.disconnect();
-      await document.fonts.ready;
+      await waitAtMost(document.fonts.ready, 500);
       const version = document.querySelector('#startup-version');
       brand.style.setProperty('--startup-version-width', version.scrollWidth + 'px');
       const target = document.querySelector('#search-page .search-wordmark');
@@ -371,24 +383,35 @@
       const from = brand.getBoundingClientRect();
       document.body.classList.add('startup-finishing');
       if (!reducedBackdropMotion.matches) {
-        await brand.animate(
-          [
-            { transform: 'translate(0,0) scale(1)' },
-            {
-              transform: `translate(${to.x - from.x}px,${to.y - from.y}px) scale(${to.width / from.width},${to.height / from.height})`,
-            },
-          ],
-          { duration: 1200, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
-        ).finished;
+        await finishAnimation(
+          brand.animate(
+            [
+              { transform: 'translate(0,0) scale(1)' },
+              {
+                transform: `translate(${to.x - from.x}px,${to.y - from.y}px) scale(${to.width / from.width},${to.height / from.height})`,
+              },
+            ],
+            { duration: 1200, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
+          ),
+          1400,
+        );
         document.body.classList.add('startup-handoff');
         await Promise.all([
-          brand.animate([{ opacity: 1 }, { opacity: 0 }], {
-            duration: 220,
-            easing: 'ease-in-out',
-            fill: 'forwards',
-          }).finished,
-          target.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-in-out' })
-            .finished,
+          finishAnimation(
+            brand.animate([{ opacity: 1 }, { opacity: 0 }], {
+              duration: 220,
+              easing: 'ease-in-out',
+              fill: 'forwards',
+            }),
+            400,
+          ),
+          finishAnimation(
+            target.animate([{ opacity: 0 }, { opacity: 1 }], {
+              duration: 220,
+              easing: 'ease-in-out',
+            }),
+            400,
+          ),
         ]);
       }
       document.body.classList.remove('startup-active', 'startup-finishing', 'startup-handoff');
