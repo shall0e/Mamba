@@ -187,6 +187,39 @@ class Catalog extends EventEmitter {
   getGame(id) {
     return this.steamSearch?.get(id) || this.searchIndex?.find((entry) => entry.id === id);
   }
+  async recoveryCandidates(job, config) {
+    const hash = torrentHash(job.uri);
+    if (!hash) return [];
+    const game =
+      this.getGame(job.gameId) ||
+      this.searchIndex?.find((entry) =>
+        entry.options.some((option) => option.gameId === job.gameId),
+      );
+    const resolved = game ? await this.resolveGame(game.id) : null;
+    const options = resolved?.options || [{ gameId: job.gameId, linkIndex: 0, available: true }];
+    const result = [];
+    for (const option of options) {
+      const release = this.byId.get(option.gameId);
+      const link = release?.links[option.linkIndex];
+      if (
+        !option.available ||
+        !link ||
+        torrentHash(link.uri) !== hash ||
+        !hostAllowed(link.uri, config)
+      )
+        continue;
+      for (const service of option.services || link.services || ['torbox']) {
+        if (service === job.service || !enabledServices(config).includes(service)) continue;
+        if (
+          (service === 'torbox' && !config.torboxApiKey) ||
+          (service === 'realdebrid' && !config.realDebridApiKey)
+        )
+          continue;
+        result.push({ uri: link.uri, service });
+      }
+    }
+    return result;
+  }
   async resolveGame(id) {
     const game = this.getGame(id);
     if (!game) throw new Error('This game is no longer in the catalog. Search again.');

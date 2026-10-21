@@ -9,6 +9,22 @@ function within(root, candidate) {
     throw new Error('Path escapes the configured game folder.');
   return path.resolve(candidate);
 }
+async function safePath(root, candidate) {
+  const base = await fs.realpath(root);
+  const target = within(base, candidate);
+  let current = base;
+  for (const part of path.relative(base, target).split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    const stat = await fs.lstat(current).catch((error) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!stat) break;
+    if (stat.isSymbolicLink() || (await fs.realpath(current)) !== current)
+      throw Error('Unsafe linked game path. Existing files were preserved.');
+  }
+  return target;
+}
 function safeName(value) {
   let name = String(value)
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
@@ -39,8 +55,47 @@ async function walk(root, depth = 6) {
   await visit(root, 0);
   return files;
 }
+async function finishFlatten(root, transaction) {
+  const holding = await safePath(root, within(root, transaction.holding));
+  const nested = within(root, transaction.nested);
+  if (!path.basename(holding).startsWith('.mamba-wrapper-'))
+    throw Error('Invalid folder cleanup checkpoint.');
+  const exists = await fs.lstat(holding).catch(() => null);
+  if (exists) {
+    for (const name of transaction.children) {
+      if (path.basename(name) !== name || name === '..')
+        throw Error('Invalid folder cleanup checkpoint.');
+      const source = within(holding, path.join(holding, name));
+      const destination = await safePath(root, path.join(root, name));
+      if (await fs.lstat(source).catch(() => null)) {
+        if (await fs.lstat(destination).catch(() => null))
+          throw Error('Folder cleanup found a collision. Existing files were preserved.');
+        await fs.rename(source, destination);
+      } else if (!(await fs.lstat(destination).catch(() => null)))
+        throw Error('Folder cleanup requires review.');
+    }
+    if (transaction.duplicateHelper)
+      await fs.unlink(path.join(holding, 'ADD-GAME.cmd')).catch((error) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+    await fs.rmdir(holding);
+  } else if (!(await fs.lstat(nested).catch(() => null))) {
+    // All moves may have completed before the journal was removed.
+    for (const name of transaction.children)
+      if (!(await fs.lstat(within(root, path.join(root, name))).catch(() => null)))
+        throw Error('Folder cleanup requires review.');
+  }
+  await fs.rm(path.join(root, '.mamba-flatten.json'), { force: true });
+  return { from: nested, to: root };
+}
 async function flatten(root) {
   const moves = [];
+  const journal = path.join(root, '.mamba-flatten.json');
+  const pending = await fs.readFile(journal, 'utf8').catch((error) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (pending) moves.push(await finishFlatten(root, JSON.parse(pending)));
   for (let count = 0; count < 12; count++) {
     const entries = await fs.readdir(root, { withFileTypes: true });
     if (entries.some((entry) => entry.isSymbolicLink()))
@@ -96,6 +151,12 @@ async function flatten(root) {
       root,
       path.join(root, '.mamba-wrapper-' + require('node:crypto').randomUUID()),
     );
+    await atomicJson(journal, {
+      nested,
+      holding,
+      children,
+      duplicateHelper: Boolean(duplicateHelper),
+    });
     await fs.rename(nested, holding);
     const moved = [];
     try {
@@ -105,12 +166,14 @@ async function flatten(root) {
       }
       if (duplicateHelper) await fs.unlink(path.join(holding, 'ADD-GAME.cmd'));
       await fs.rmdir(holding);
+      await fs.rm(journal, { force: true });
       moves.push({ from: nested, to: root });
     } catch (error) {
       if (duplicateHelper) await fs.writeFile(path.join(holding, 'ADD-GAME.cmd'), duplicateHelper);
       for (const entry of moved.reverse())
         await fs.rename(path.join(root, entry), path.join(holding, entry));
       await fs.rename(holding, nested);
+      await fs.rm(journal, { force: true });
       throw error;
     }
   }
@@ -162,6 +225,11 @@ async function detect(root) {
       : ranked[0]?.file || (scripts.length === 1 ? scripts[0] : null);
   return {
     installer,
+    confidence:
+      launcher &&
+      (startScripts.length === 1 || ranked.length === 1 || ranked[0]?.score > ranked[1]?.score)
+        ? 'high'
+        : 'review',
     executable: launcher,
     executables: [
       ...new Set([launcher, ...ranked.map((entry) => entry.file), ...scripts].filter(Boolean)),
@@ -171,7 +239,7 @@ async function detect(root) {
 async function finalizeInstallation(
   folder,
   name,
-  { releaseId, executable, status = 'installed' } = {},
+  { releaseId, executable, status = 'installed', beforeRename, afterRename } = {},
 ) {
   const root = path.resolve(folder);
   const parent = path.dirname(root);
@@ -190,7 +258,9 @@ async function finalizeInstallation(
       throw new Error(
         `The folder ${safeName(name)} already exists. Both installations were preserved.`,
       );
+    await beforeRename?.(root, destination);
     await fs.rename(root, destination);
+    await afterRename?.(destination);
   }
   const actual = destination.toLowerCase() === root.toLowerCase() ? root : destination;
   if (selected) selected = path.join(actual, path.relative(root, selected));
@@ -240,13 +310,14 @@ function run(file, args, { signal, maxOutput = 32 * 1024 * 1024, acceptedCodes =
             new Error(
               exceeded
                 ? 'Archive listing is too large.'
-                : `Process failed (${code}): ${errors.slice(-300)}`,
+                : `Process failed (${code}): ${(errors + output).slice(-1500)}`,
             ),
           ),
     );
   });
 }
 function sevenZipPath() {
+  if (process.env.MAMBA_7ZIP_PATH) return process.env.MAMBA_7ZIP_PATH;
   const local = path.join(__dirname, '../..', 'vendor', '7zip', '7z.exe');
   if (require('node:fs').existsSync(local)) return local;
   return path.join(process.env.MAMBA_RESOURCES_PATH || process.resourcesPath, '7zip', '7z.exe');
@@ -262,16 +333,26 @@ function validateArchiveListing(listing, destination) {
       throw new Error('Archive contains links.');
     if (!line.startsWith('Path = ')) continue;
     const name = line.slice(7).replaceAll('\\', '/');
-    if (name.startsWith('/') || name.includes(':') || name.split('/').includes('..'))
+    if (
+      name.startsWith('/') ||
+      name.includes(':') ||
+      name.split('/').some((part) => part === '..' || /^\.mamba(?:-|$)/i.test(part))
+    )
       throw new Error('Archive contains an unsafe path.');
     within(destination, path.join(destination, name));
   }
 }
-async function extractArchive(archive, destination, { signal, password = '' } = {}) {
+async function extractArchive(
+  archive,
+  destination,
+  { signal, password = '', verifiedArchives } = {},
+) {
   const seven = sevenZipPath();
   const args = [`-p${password || '__MAMBA_NO_ARCHIVE_PASSWORD__'}`];
   const listing = await run(seven, ['l', '-slt', ...args, '--', archive], { signal });
   validateArchiveListing(listing, destination);
+  if (!verifiedArchives?.has(archive))
+    await require('./verification.cjs').testArchive(archive, { signal, password });
   await fs.mkdir(destination, { recursive: true });
   const expanded = [...listing.matchAll(/^Size = (\d+)\r?$/gm)].reduce(
     (total, match) => total + Number(match[1]),
@@ -300,12 +381,14 @@ async function unpack(downloads, payload, options, notify) {
   const initial = await detect(downloads);
   const archives = initial.installer || initial.executable ? [] : archiveStarts(files);
   if (!archives.length) {
-    for (const name of await fs.readdir(downloads))
+    for (const name of await fs.readdir(downloads)) {
+      if (/^\.mamba-transfer$/i.test(name)) continue;
       await fs.cp(path.join(downloads, name), path.join(payload, name), {
         recursive: true,
         errorOnExist: true,
         force: false,
       });
+    }
   } else {
     for (const archive of archives) {
       notify(`Extracting ${path.basename(archive)}`);
@@ -438,7 +521,10 @@ class Library {
           executable,
           installer: found.installer,
           repairPending: Boolean(manifest.repairPending),
-          status: executable ? 'installed' : 'needs-setup',
+          status:
+            !manifest.setupInterrupted && manifest.status !== 'needs-setup' && executable
+              ? 'installed'
+              : 'needs-setup',
           executables: found.executables,
         });
       } catch {}
@@ -462,6 +548,7 @@ class Library {
 module.exports = {
   Library,
   within,
+  safePath,
   safeName,
   walk,
   flatten,
@@ -470,6 +557,8 @@ module.exports = {
   run,
   validateArchiveListing,
   extractArchive,
+  sevenZipPath,
+  archiveStarts,
   unpack,
   autoInstall,
   atomicJson,

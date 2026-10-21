@@ -132,31 +132,35 @@ test('Steam registration reports shutdown timeout and makes a backup before addi
   assert.ok((await fs.readFile(path.join(dir, backup))).equals(before));
   assert.equal(parseVdf(await fs.readFile(file))[0].value.length, 2);
 });
-test('desktop shortcut points at the selected batch launcher without starting it', async (t) => {
-  const dir = await temp(t);
-  const file = path.join(dir, 'launch game.cmd');
-  await write(file, '@echo test fixture');
-  await require('../src/core/shortcuts.cjs').desktopShortcut('Fixture Game', file, dir, dir);
-  const { execFile } = require('node:child_process');
-  const exec = require('node:util').promisify(execFile);
-  const link = path.join(dir, 'Fixture Game.lnk');
-  const payload = Buffer.from(link).toString('base64');
-  const script = `$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')));@{target=$s.TargetPath;args=$s.Arguments;cwd=$s.WorkingDirectory}|ConvertTo-Json -Compress`;
-  const { stdout } = await exec(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-EncodedCommand',
-      Buffer.from(script, 'utf16le').toString('base64'),
-    ],
-    { windowsHide: true },
-  );
-  const shortcut = JSON.parse(stdout);
-  assert.match(shortcut.target, /cmd.exe$/i);
-  assert.ok(shortcut.args.includes(file));
-  assert.equal(shortcut.cwd, dir);
-});
+test(
+  'desktop shortcut points at the selected batch launcher without starting it',
+  { skip: process.platform !== 'win32' && 'Requires Windows PowerShell and WScript.Shell' },
+  async (t) => {
+    const dir = await temp(t);
+    const file = path.join(dir, 'launch game.cmd');
+    await write(file, '@echo test fixture');
+    await require('../src/core/shortcuts.cjs').desktopShortcut('Fixture Game', file, dir, dir);
+    const { execFile } = require('node:child_process');
+    const exec = require('node:util').promisify(execFile);
+    const link = path.join(dir, 'Fixture Game.lnk');
+    const payload = Buffer.from(link).toString('base64');
+    const script = `$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')));@{target=$s.TargetPath;args=$s.Arguments;cwd=$s.WorkingDirectory}|ConvertTo-Json -Compress`;
+    const { stdout } = await exec(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-EncodedCommand',
+        Buffer.from(script, 'utf16le').toString('base64'),
+      ],
+      { windowsHide: true },
+    );
+    const shortcut = JSON.parse(stdout);
+    assert.match(shortcut.target, /cmd.exe$/i);
+    assert.ok(shortcut.args.includes(file));
+    assert.equal(shortcut.cwd, dir);
+  },
+);
 test('running Steam closes normally and reopens after immediate registration; duplicates need no restart', async (t) => {
   const dir = await temp(t),
     file = path.join(dir, 'shortcuts.vdf');

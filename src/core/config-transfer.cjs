@@ -48,6 +48,7 @@ function validateSettings(value) {
     throw Error('Invalid source selection.');
   for (const key of [
     'autoInstall',
+    'automaticRecovery',
     'cachedOnly',
     'keepArchives',
     'automaticUpdates',
@@ -74,7 +75,8 @@ function validateSettings(value) {
       throw Error(key + ' must be text.');
   if (
     copy.downloadPath !== undefined &&
-    (typeof copy.downloadPath !== 'string' || !path.isAbsolute(copy.downloadPath))
+    (typeof copy.downloadPath !== 'string' ||
+      (!path.isAbsolute(copy.downloadPath) && !path.win32.isAbsolute(copy.downloadPath)))
   )
     throw Error('Choose an absolute games folder path.');
   if (

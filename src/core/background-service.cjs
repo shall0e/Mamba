@@ -38,7 +38,11 @@ class BackgroundService {
       repair: async ({ folder, manifest }) => {
         if (
           this.downloads.jobs.some(
-            (job) => job.folder === folder && this.downloads.controllers.has(job.id),
+            (job) =>
+              job.folder === folder &&
+              (this.downloads.controllers.has(job.id) ||
+                ['queued', 'waiting-retry'].includes(job.status) ||
+                job.recovery?.installerStarted),
           )
         )
           return null;
@@ -129,6 +133,11 @@ class BackgroundService {
       .then(() => this.syncXboxLibrary())
       .catch((error) =>
         this.emit('service:issue', { context: 'library:scan', message: error.message }),
+      );
+    this.downloads
+      .pump()
+      .catch((error) =>
+        this.emit('service:issue', { context: 'downloads', message: error.message }),
       );
     this.catalog.sync().catch(() => {});
     this.timer = setInterval(() => this.maintenance().catch(() => {}), 30000);

@@ -74,3 +74,12 @@ test('junctions cannot cause cleanup outside the owned staging folder', async (t
   assert.equal(await fs.readFile(stale.file, 'utf8'), 'partial');
   assert.equal(await fs.readFile(path.join(outside, 'keep'), 'utf8'), 'keep');
 });
+test('recovery checkpoints protect stale staging even when downloads need attention', async (t) => {
+  const { downloads, now, job } = await fixture(t);
+  for (const status of ['waiting-retry', 'failed', 'paused']) {
+    const item = await job(status);
+    item.item.recovery = { enabled: true, nextRetryAt: now + 1000 };
+    await downloads.clearStalePartials(now);
+    assert.equal(await fs.readFile(item.file, 'utf8'), 'partial');
+  }
+});

@@ -647,7 +647,8 @@
               </div>
               <p class="field-hint">
                 Downloads, extracted games, and installations stay inside this folder. On startup,
-                unfinished download files are cleared after 24 hours without changes.
+                unfinished download files are cleared after 24 hours without changes, except files
+                protected for automatic recovery.
               </p>
               <label class="switch-row"
                 ><span
@@ -657,6 +658,15 @@
                     manual setup.</small
                   ></span
                 ><input id="auto-install" type="checkbox" role="switch"
+              /></label>
+              <label class="switch-row"
+                ><span
+                  ><strong>Automatically recover failed downloads</strong
+                  ><small
+                    >Resume interrupted transfers and preserve files while recovery is
+                    pending.</small
+                  ></span
+                ><input id="automatic-recovery" type="checkbox" role="switch"
               /></label>
               <label class="switch-row"
                 ><span

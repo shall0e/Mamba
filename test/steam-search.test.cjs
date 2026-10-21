@@ -13,7 +13,11 @@ const release = (id, name, hash) => ({
 });
 test('Steam identities own cards; variants merge and unsupported Steam results are hidden', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-steam-search-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(async () => {
+    await Promise.all([...search.searches.values()].map((state) => state.work));
+    await search.writes;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   const catalog = new Catalog(dir, async () => ({ cachedOnly: true }), {
     apiFactory: () => ({ cached: async () => new Set(['a'.repeat(40), 'b'.repeat(40)]) }),
   });
@@ -90,7 +94,11 @@ test('title matching preserves sequel order, remasters and explicit release year
 });
 test('ambiguous sources and update-only releases cannot become game cards', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-steam-ambiguous-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(async () => {
+    await Promise.all([...search.searches.values()].map((state) => state.work));
+    await search.writes;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   const catalog = new Catalog(dir, () => ({}));
   catalog.replace([
     release('ambiguous', 'Example Game', 'a'),
@@ -120,7 +128,11 @@ test('ambiguous sources and update-only releases cannot become game cards', asyn
 });
 test('cached verified games return while Steam is still pending, without duplicate lookups', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-fast-search-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(async () => {
+    await Promise.all([...search.searches.values()].map((state) => state.work));
+    await search.writes;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   const catalog = new Catalog(dir, () => ({}));
   catalog.replace([release('portal', 'Portal 2', 'a')]);
   const app = {
