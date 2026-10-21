@@ -204,6 +204,12 @@
     row.append(text, input);
     return row;
   }
+  function sourceAction(label, handler, symbol) {
+    const control = button(label, handler, symbol, 'source-icon-button');
+    control.setAttribute('aria-label', label);
+    control.title = label;
+    return control;
+  }
   function renderSources() {
     sourceList.replaceChildren();
     const urls = [...new Set(sourceLines())];
@@ -250,14 +256,14 @@
           scheduleSettingsSave(150);
           renderSources();
         };
-        const editButton = button(
+        const editButton = sourceAction(
           'Edit',
           () => {
             const input = node('input', undefined, 'source-edit-input');
             input.type = 'url';
             input.value = uri;
             input.setAttribute('aria-label', 'Edit source URL');
-            const save = button(
+            const save = sourceAction(
               'Save',
               () => {
                 const nextValue = input.value.trim();
@@ -271,24 +277,22 @@
                 replaceUrls(urls.map((value) => (value === uri ? nextValue : value)));
               },
               'check',
-              'source-icon-button',
             );
-            const cancel = button('Cancel', renderSources, 'x', 'source-icon-button');
+            const cancel = sourceAction('Cancel', renderSources, 'x');
+            row.classList.add('is-editing');
             row.replaceChildren(input, save, cancel);
             input.focus();
             input.select();
           },
           'pencil',
-          'source-icon-button',
         );
         editButton.setAttribute('aria-label', `Edit ${title}`);
-        const remove = button(
+        const remove = sourceAction(
           'Delete',
           () => {
             replaceUrls(urls.filter((value) => value !== uri));
           },
           'trash-2',
-          'source-icon-button',
         );
         remove.setAttribute('aria-label', `Delete ${title}`);
         controls.append(toggle, editButton, remove);

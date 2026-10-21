@@ -5714,12 +5714,43 @@ html textarea::placeholder {
 }
 .source-row {
   min-width: 0;
-  min-height: 34px;
-  display: flex;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 0;
+  gap: 12px;
+  padding: 2px 0;
+}
+.source-row.is-editing {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+.source-icon-button .button-label {
+  display: none;
+}
+.source-icon-button {
+  flex: none;
+  overflow: hidden;
+}
+.source-add-row > button {
+  flex: none;
+  min-height: 36px;
+  white-space: nowrap;
+  padding-inline: 12px;
+}
+.source-row .source-toggle {
+  flex: none;
+  min-height: 18px;
+  margin-right: 8px;
+}
+.source-icon-button:focus-visible,
+.source-toggle:focus-visible {
+  background: var(--color-focus);
+}
+@media (prefers-reduced-motion: reduce) {
+  .source-toggle::after {
+    transition: none;
+  }
 }
 .source-row-copy {
   min-width: 0;
