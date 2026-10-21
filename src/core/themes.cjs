@@ -24,6 +24,22 @@ class Themes {
       throw error;
     }
   }
+  remove(id) {
+    if (typeof id !== 'string' || !id) throw Error('Select a saved theme to delete.');
+    const task = this.queue
+      .catch(() => {})
+      .then(async () => {
+        const rows = await this.list();
+        if (!rows.some((row) => row.id === id)) return false;
+        await atomicJson(
+          this.file,
+          rows.filter((row) => row.id !== id),
+        );
+        return true;
+      });
+    this.queue = task;
+    return task;
+  }
   save(value) {
     const theme = parse(value);
     const task = this.queue

@@ -29,9 +29,9 @@ function subscribe(channel, callback) {
 }
 contextBridge.exposeInMainWorld('mamba', {
   onSearchResults: (callback) => subscribe('catalog:results', callback),
-  uploadThemeFont: () => ipcRenderer.invoke('themes:font'),
   themes: () => ipcRenderer.invoke('themes:list'),
   saveTheme: (theme) => ipcRenderer.invoke('themes:save', theme),
+  deleteTheme: (id) => ipcRenderer.invoke('themes:delete', id),
   exportTheme: (theme) => ipcRenderer.invoke('themes:export', theme),
   importTheme: () => ipcRenderer.invoke('themes:import'),
   downloadOptions: () => ipcRenderer.invoke('catalog:download-options'),
@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('mamba', {
   importGame: () => ipcRenderer.invoke('library:import'),
   chooseLauncher: (id) => ipcRenderer.invoke('library:choose-launcher', id),
   removeGame: (id) => ipcRenderer.invoke('library:remove', id),
+  scanCleanup: () => ipcRenderer.invoke('cleanup:scan'),
+  removeCleanup: (scan, ids) => ipcRenderer.invoke('cleanup:remove', scan, ids),
   storage: () => ipcRenderer.invoke('storage:check'),
   activity: () => ipcRenderer.invoke('app:activity'),
   retrySetupAsAdmin: (id) => ipcRenderer.invoke('issues:setup-admin', id),

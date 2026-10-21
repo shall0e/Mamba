@@ -237,21 +237,26 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
   ipcMain.handle('catalog:download-options', () => task('catalog:download-options'));
-  ipcMain.handle('themes:font', async (event) => {
-    const selected = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
-      filters: [{ name: 'Font', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
-      properties: ['openFile'],
-    });
-    if (selected.canceled || !selected.filePaths[0]) return null;
-    const file = selected.filePaths[0];
-    if ((await fs.stat(file)).size > 5 * 1024 * 1024)
-      throw Error('Choose a font smaller than 5 MB.');
-    const font = { name: path.basename(file), data: (await fs.readFile(file)).toString('base64') };
-    parseTheme({ ...require('../shared/theme-model.js').presets[0], fonts: [font] });
-    return font;
-  });
   ipcMain.handle('themes:list', () => getThemeStore().list());
   ipcMain.handle('themes:save', (_event, theme) => getThemeStore().save(parseTheme(theme)));
+  ipcMain.handle('themes:delete', async (event, id) => {
+    if (typeof id !== 'string') throw Error('Invalid theme.');
+    const saved = (await getThemeStore().list()).find((row) => row.id === id);
+    if (!saved)
+      throw Error('Select a saved custom theme to delete. Default themes cannot be deleted.');
+    const choice = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+      type: 'question',
+      title: 'Delete theme?',
+      message: 'Delete ' + saved.theme.name + '?',
+      detail: 'The saved theme will be removed. Appearance will return to Dark.',
+      buttons: ['Cancel', 'Delete theme'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (choice.response !== 1) return false;
+    return getThemeStore().remove(id);
+  });
   ipcMain.handle('themes:export', async (event, value) => {
     const theme = parseTheme(value);
     const filename = require('../core/library.cjs').safeName(theme.name) + '.mamba-theme.json';
@@ -334,6 +339,30 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
   ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
   ipcMain.handle('downloads:clear-finished', () => task('downloads:clear-finished'));
+  ipcMain.handle('cleanup:scan', () => task('cleanup:scan'));
+  ipcMain.handle('cleanup:remove', async (event, scanId, ids) => {
+    const selection = await task('cleanup:preview', scanId, ids);
+    const answer = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+      type: 'warning',
+      title: 'Delete leftover files?',
+      message:
+        'Permanently delete ' +
+        selection.count +
+        ' selected ' +
+        (selection.count === 1 ? 'item' : 'items') +
+        '?',
+      detail:
+        selection.paths.slice(0, 8).join('\n') +
+        (selection.count > 8 ? '\n…and ' + (selection.count - 8) + ' more' : '') +
+        '\n\nThis bypasses the Recycle Bin and cannot be undone. Installed games and unfinished downloads are excluded.',
+      buttons: ['Cancel', 'Delete selected'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (answer.response !== 1) return null;
+    return task('cleanup:remove', scanId, ids);
+  });
   ipcMain.handle('library:scan', () => task('library:scan'));
   ipcMain.handle('game:details', (_event, id) => task('game:details', String(id)));
   ipcMain.handle('downloads:pause', (_event, id) => task('downloads:pause', String(id)));

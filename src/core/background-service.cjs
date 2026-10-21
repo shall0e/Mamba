@@ -11,6 +11,7 @@ const { registerXbox } = require('./xbox.cjs');
 const { openGameHelper } = require('./game-helper.cjs');
 const { SteamSearch } = require('./steam-search.cjs');
 const { SteamFeatured } = require('./steam-featured.cjs');
+const { FileCleanup } = require('./file-cleanup.cjs');
 const { addGame } = require('../../tools/add-game.cjs');
 const { LibraryState, sizeBytes, storageInfo, authorizeGame } = require('./experience.cjs');
 const { desktopShortcut } = require('./shortcuts.cjs');
@@ -80,6 +81,11 @@ class BackgroundService {
       reviewSetup: openGameHelper,
     });
 
+    this.cleanup = new FileCleanup({
+      root: () => this.config.downloadPath,
+      games: () => this.library.installations || this.library.items || [],
+      jobs: () => this.downloads.jobs,
+    });
     const scan = this.library.scan.bind(this.library);
     this.library.scan = () => {
       if (this.scanPending) return this.scanPending;
@@ -292,6 +298,11 @@ class BackgroundService {
     }
   }
   async call(method, args = []) {
+    if (
+      this.cleanup?.removing &&
+      ['downloads:best', 'downloads:start', 'downloads:retry'].includes(method)
+    )
+      throw Error('Wait for file cleanup to finish before starting downloads.');
     switch (method) {
       case 'initialize':
         return this.initialize(args);
@@ -368,6 +379,13 @@ class BackgroundService {
       }
       case 'game:details':
         return this.gameDetails(...args);
+      case 'cleanup:scan':
+        await this.library.scan();
+        return this.cleanup.scan();
+      case 'cleanup:preview':
+        return this.cleanup.preview(...args);
+      case 'cleanup:remove':
+        return this.cleanup.remove(...args);
       case 'storage:check':
         return storageInfo(this.config.downloadPath, 0, { probe: true });
       case 'library:import':

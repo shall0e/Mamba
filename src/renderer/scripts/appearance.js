@@ -199,12 +199,49 @@
       'secondary-button',
     ),
   );
+  const deleteTheme = button(
+    'Delete theme',
+    async () => {
+      const saved = custom.find((row) => row.id === currentId);
+      if (!saved || !(await window.mamba.deleteTheme(saved.id))) return;
+      custom = custom.filter((row) => row.id !== saved.id);
+      theme = model.parse(model.presets[0]);
+      currentId = model.presets[0].name.toLowerCase();
+      populate();
+      apply();
+      scheduleSettingsSave(100);
+      showToast('Theme deleted.');
+    },
+    'trash-2',
+    'secondary-button danger-action',
+  );
+  actions.append(deleteTheme);
   share.append(nameLabel, name, nameError, actions);
   editor.append(share);
   const legacy = $('#palette-fields');
   legacy.hidden = true;
   panel.append(legacy);
   old.replaceWith(panel);
+  sectionButton('navigation', 'Navigation', 'Choose where page buttons appear');
+  const navigationPanel = node('section', undefined, 'theme-role');
+  navigationPanel.append(node('h3', 'Navigation'));
+  const navigationLabel = node('label', undefined, 'field-label');
+  navigationLabel.append(node('span', 'Position'));
+  const navigationPosition = node('select', undefined, 'settings-input');
+  navigationPosition.setAttribute('aria-label', 'Navigation position');
+  for (const [value, label] of Object.entries(model.navigationPositions)) {
+    const option = node('option', label);
+    option.value = value;
+    navigationPosition.append(option);
+  }
+  navigationPosition.onchange = () => {
+    theme.navigation = { position: navigationPosition.value };
+    customize();
+  };
+  navigationLabel.append(navigationPosition);
+  navigationPanel.append(navigationLabel);
+  sectionPanels.navigation = navigationPanel;
+  editor.insertBefore(navigationPanel, share);
   const fontPanel = node('section', undefined, 'theme-fonts');
   fontPanel.append(node('h3', 'Fonts'));
   const fontControls = {};
@@ -222,26 +259,9 @@
     fontPanel.append(row);
   }
   const fontStatus = node('p', '', 'field-hint');
-  fontPanel.append(
-    button(
-      'Upload font',
-      async () => {
-        const font = await window.mamba.uploadThemeFont();
-        if (!font) return;
-        theme = model.parse({
-          ...theme,
-          fonts: [...(theme.fonts || []).filter((item) => item.name !== font.name), font],
-        });
-        customize();
-        populate();
-      },
-      'folder-open',
-      'secondary-button',
-    ),
-    fontStatus,
-  );
+  fontPanel.append(fontStatus);
   sectionPanels.fonts = fontPanel;
-  sectionButton('fonts', 'Fonts', 'Choose fonts for each part of the app');
+  const fontsButton = sectionButton('fonts', 'Fonts', 'Fonts saved in this theme');
   editor.insertBefore(fontPanel, share);
   selectSection(activeSection);
   let fontGeneration = 0,
@@ -280,7 +300,8 @@
     } catch {
       if (generation === fontGeneration) {
         fontSignature = '';
-        fontStatus.textContent = 'This font could not be loaded. Try another font file.';
+        fontStatus.textContent =
+          'A font saved in this theme could not be loaded. Using the default font.';
         for (const role of Object.keys(model.fontRoles))
           document.documentElement.style.removeProperty('--font-' + role);
       }
@@ -314,6 +335,13 @@
       picker.append(option);
     }
     picker.value = currentId;
+    navigationPosition.value = theme.navigation.position;
+    deleteTheme.disabled = !custom.some((row) => row.id === currentId);
+    deleteTheme.title = deleteTheme.disabled
+      ? 'Select a saved custom theme to delete'
+      : 'Delete this saved theme';
+    fontsButton.hidden = !theme.fonts?.length;
+    if (activeSection === 'fonts' && fontsButton.hidden) selectSection('background');
     for (const [role, select] of Object.entries(fontControls)) {
       select.replaceChildren();
       const fallback = node('option', 'Default');
@@ -350,6 +378,7 @@
   function apply() {
     for (const key of model.keys) swatches[key].style.background = theme.colors[key];
     applyFonts();
+    document.documentElement.dataset.navigation = theme.navigation.position;
     applyPalette(model.palette(theme));
     const style = document.documentElement.style,
       copyColor = model.palette(theme).text;
@@ -424,7 +453,8 @@
           (item) =>
             JSON.stringify(model.parse(item).colors) === JSON.stringify(theme.colors) &&
             JSON.stringify(model.parse(item).effects) === JSON.stringify(theme.effects) &&
-            !theme.fonts?.length,
+            !theme.fonts?.length &&
+            model.parse(item).navigation.position === theme.navigation.position,
         )
         ?.name.toLowerCase() || 'custom';
     try {

@@ -1,5 +1,12 @@
 (function (root) {
   const keys = ['background', 'foreground', 'input', 'icons', 'text', 'supportingText'];
+  const navigationPositions = {
+    default: 'Default sidebar',
+    left: 'Center left',
+    right: 'Center right',
+    top: 'Top center',
+    bottom: 'Bottom center',
+  };
   const fontRoles = {
     body: 'Body text',
     headings: 'Headings',
@@ -105,7 +112,16 @@
             : effect.blur,
       };
     }
+    const navigation = value.navigation ?? { position: 'default' };
+    if (
+      !navigation ||
+      typeof navigation !== 'object' ||
+      Array.isArray(navigation) ||
+      !Object.hasOwn(navigationPositions, navigation.position)
+    )
+      throw Error('Invalid navigation position.');
     const result = {
+      navigation: { position: navigation.position },
       schemaVersion: 1,
       name,
       colors,
@@ -242,6 +258,7 @@
   const api = {
     glowOpacity,
     fontRoles,
+    navigationPositions,
     keys,
     presets,
     parse,

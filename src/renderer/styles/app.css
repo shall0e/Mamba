@@ -187,7 +187,8 @@ svg {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 8px 14px;
+  padding: 14px 8px;
+  justify-content: flex-start;
   background: color-mix(in srgb, var(--color-sidebar) 68%, transparent);
   backdrop-filter: blur(26px) saturate(145%);
   -webkit-backdrop-filter: blur(26px) saturate(145%);
@@ -196,13 +197,10 @@ body.home-active .sidebar {
   background: color-mix(in srgb, var(--color-sidebar) 44%, transparent);
 }
 .sidebar nav {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: 100%;
-}
-.sidebar-bottom {
-  width: 100%;
-  margin-top: auto;
-  padding-top: 24px;
 }
 .nav-button {
   position: relative;
@@ -4491,7 +4489,9 @@ body.home-active .sidebar {
 }
 
 .settings-content {
-  width: min(1100px, 100%);
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
 }
 .settings-layout {
   display: grid;
@@ -5905,5 +5905,202 @@ html[data-theme] button:is(.download-button, .play-button) :is(svg, .button-labe
 @media (max-width: 600px) {
   .rotating-search-hint {
     font-size: 14px;
+  }
+}
+
+.file-cleanup {
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--foreground-fill, var(--color-surface));
+  backdrop-filter: blur(var(--foreground-blur, 0px));
+}
+.file-cleanup > .field-hint {
+  margin: 12px 0;
+}
+.cleanup-selection,
+.cleanup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+.cleanup-selection label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cleanup-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.cleanup-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--input-fill, var(--color-input));
+  cursor: pointer;
+}
+.cleanup-row:has(input:checked),
+.cleanup-row:focus-within {
+  background: var(--color-focus);
+}
+.cleanup-row input,
+.cleanup-selection input {
+  accent-color: var(--theme-icons-color, var(--color-icons));
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.cleanup-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cleanup-info strong,
+.cleanup-info small {
+  overflow-wrap: anywhere;
+}
+.cleanup-info small {
+  font-size: 11px;
+}
+.cleanup-size {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cleanup-actions {
+  justify-content: flex-end;
+}
+@media (max-width: 600px) {
+  .file-cleanup {
+    padding: 18px;
+  }
+  .cleanup-selection {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.sidebar #settings-open {
+  margin-top: auto;
+}
+html[data-navigation]:not([data-navigation='default']) .sidebar {
+  justify-content: center;
+  padding: 8px;
+}
+html[data-navigation]:not([data-navigation='default']) .sidebar nav {
+  height: auto;
+}
+html[data-navigation]:not([data-navigation='default']) .sidebar #settings-open {
+  margin-top: 0;
+}
+html[data-navigation='right'] .sidebar {
+  left: auto;
+  right: 0;
+}
+html[data-navigation='right'] .workspace {
+  margin-left: 0;
+  margin-right: var(--sidebar-width);
+}
+html[data-navigation='right'] .sidebar::after {
+  left: 0;
+  right: auto;
+}
+html[data-navigation='right'] .nav-button span {
+  left: auto;
+  right: calc(100% + 14px);
+}
+html[data-navigation='right'] .toast {
+  left: calc(50% - var(--sidebar-width) / 2);
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar {
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 64px;
+  flex-direction: row;
+}
+html[data-navigation='top'][data-navigation] .sidebar {
+  top: 0;
+  height: 56px;
+  padding: 4px 8px;
+  -webkit-app-region: drag;
+}
+html[data-navigation='bottom'] .sidebar {
+  top: auto;
+  bottom: 0;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar nav {
+  flex-direction: row;
+  width: auto;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .workspace {
+  margin-left: 0;
+  margin-right: 0;
+}
+html[data-navigation='top'] .workspace {
+  padding-top: 56px;
+}
+html[data-navigation='top'] .window-controls {
+  top: 14px;
+}
+html[data-navigation='top'] .window-drag-area {
+  height: 56px;
+}
+html[data-navigation='bottom'] .workspace {
+  padding-bottom: 64px;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar::after {
+  left: 16px;
+  right: 16px;
+  top: auto;
+  bottom: 0;
+  width: auto;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--divider-ink, var(--color-icons)) 24%, transparent) 20%,
+    color-mix(in srgb, var(--divider-ink, var(--color-icons)) 24%, transparent) 80%,
+    transparent
+  );
+}
+html[data-navigation='bottom'] .sidebar::after {
+  top: 0;
+  bottom: auto;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .toast {
+  left: 50%;
+  max-width: calc(100vw - 32px);
+}
+html[data-navigation='bottom'] .toast {
+  bottom: 84px;
+}
+html[data-navigation='top'] .nav-button span {
+  left: 50%;
+  top: calc(100% + 12px);
+  transform: translate(-50%, 3px);
+}
+html[data-navigation='bottom'] .nav-button span {
+  left: 50%;
+  top: auto;
+  bottom: calc(100% + 12px);
+  transform: translate(-50%, -3px);
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:hover span,
+html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-visible span {
+  transform: translate(-50%, 0);
+}
+
+@media (max-width: 480px) {
+  html[data-navigation='top'] .sidebar nav {
+    transform: translateX(-56px);
   }
 }
