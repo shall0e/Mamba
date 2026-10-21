@@ -7,7 +7,7 @@
   };
   const splash = document.querySelector('#startup-splash'),
     brand = splash.querySelector('.startup-brand');
-  const versionReady = window.mamba
+  window.mamba
     .updateState()
     .then((state) => {
       const version = document.querySelector('#startup-version');
@@ -29,21 +29,6 @@
       return image.decode();
     }),
   );
-  const homeArt = document.querySelector('#steam-backdrop');
-  let artworkReady;
-  const firstArtwork = new Promise((resolve) => (artworkReady = resolve));
-  const syncArtwork = () => {
-    if (homeArt?.querySelector('img.visible')) artworkReady();
-  };
-  const artworkObserver = new MutationObserver(syncArtwork);
-  if (homeArt)
-    artworkObserver.observe(homeArt, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-  syncArtwork();
   async function setup(config) {
     const dialog = make('dialog', null, 'welcome-dialog');
     dialog.setAttribute('aria-labelledby', 'welcome-title');
@@ -361,20 +346,12 @@
   };
   Promise.all([
     configReady,
-    waitAtMost(versionReady, 1800),
     waitAtMost(
       logoReady.catch(() => {}),
-      1800,
+      400,
     ),
-    new Promise((resolve) => setTimeout(resolve, 1500)),
-    Promise.race([
-      firstArtwork.then(() => new Promise((resolve) => setTimeout(resolve, 900))),
-      new Promise((resolve) => setTimeout(resolve, 1800)),
-    ]),
   ])
     .then(async ([config]) => {
-      artworkObserver.disconnect();
-      await waitAtMost(document.fonts.ready, 500);
       const version = document.querySelector('#startup-version');
       brand.style.setProperty('--startup-version-width', version.scrollWidth + 'px');
       const target = document.querySelector('#search-page .search-wordmark');
@@ -391,26 +368,26 @@
                 transform: `translate(${to.x - from.x}px,${to.y - from.y}px) scale(${to.width / from.width},${to.height / from.height})`,
               },
             ],
-            { duration: 1200, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
+            { duration: 420, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
           ),
-          1400,
+          600,
         );
         document.body.classList.add('startup-handoff');
         await Promise.all([
           finishAnimation(
             brand.animate([{ opacity: 1 }, { opacity: 0 }], {
-              duration: 220,
+              duration: 140,
               easing: 'ease-in-out',
               fill: 'forwards',
             }),
-            400,
+            300,
           ),
           finishAnimation(
             target.animate([{ opacity: 0 }, { opacity: 1 }], {
-              duration: 220,
+              duration: 140,
               easing: 'ease-in-out',
             }),
-            400,
+            300,
           ),
         ]);
       }
@@ -419,7 +396,6 @@
       if (config.onboardingCompleted === false) await setup(config);
     })
     .catch((error) => {
-      artworkObserver.disconnect();
       brand.append(make('p', 'Could not load settings. ' + String(error.message || '')));
       const retry = make('button', 'Try again', 'primary-button');
       retry.onclick = () => location.reload();
