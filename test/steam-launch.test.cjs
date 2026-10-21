@@ -35,3 +35,19 @@ test('Steam launch registers missing shortcuts once and uses the saved shortcut 
   );
   assert.equal(registrations, 1);
 });
+
+test('Steam launch follows a launcher moved by Add Game folder cleanup', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-steam-move-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'shortcuts.vdf');
+  const game = { name: 'Example', folder: dir, executable: path.join(dir, 'old', 'game.exe') };
+  const moved = { ...game, executable: path.join(dir, 'new', 'game.exe') };
+  const url = await steamLaunchUrl(game, {
+    profile: async () => file,
+    setup: async () => {
+      await fs.writeFile(file, addShortcut(Buffer.alloc(0), moved));
+      return { ...moved, steam: { status: 'added' } };
+    },
+  });
+  assert.match(url, /^steam:\/\/rungameid\/\d+$/);
+});

@@ -338,13 +338,15 @@ async function steamLaunchUrl(game, { profile = steamProfile, setup } = {}) {
       throw error;
     });
   let buffer = await read();
+  let registered = game;
   if (!addShortcut(buffer, game).equals(buffer)) {
     const result = await setup(game);
     if (result.steam?.status !== 'added')
       throw Error(result.steam?.message || 'Could not add this game to Steam.');
+    registered = { ...game, ...result };
     buffer = await read();
   }
-  const launch = launchTarget(game.executable);
+  const launch = launchTarget(registered.executable);
   const root = parseVdf(buffer).find((node) => node.key === 'shortcuts');
   const entry = root?.value.find(
     (node) =>
@@ -357,7 +359,7 @@ async function steamLaunchUrl(game, { profile = steamProfile, setup } = {}) {
       node.value.some(
         (field) =>
           field.key.toLowerCase() === 'appname' &&
-          String(field.value).toLowerCase() === game.name.toLowerCase(),
+          String(field.value).toLowerCase() === registered.name.toLowerCase(),
       ),
   );
   const appid = entry?.value.find((field) => field.key.toLowerCase() === 'appid')?.value;

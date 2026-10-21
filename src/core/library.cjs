@@ -10,8 +10,9 @@ function within(root, candidate) {
   return path.resolve(candidate);
 }
 async function safePath(root, candidate) {
+  const relative = path.relative(path.resolve(root), within(root, candidate));
   const base = await fs.realpath(root);
-  const target = within(base, candidate);
+  const target = within(base, path.join(base, relative));
   let current = base;
   for (const part of path.relative(base, target).split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
@@ -20,7 +21,7 @@ async function safePath(root, candidate) {
       throw error;
     });
     if (!stat) break;
-    if (stat.isSymbolicLink() || (await fs.realpath(current)) !== current)
+    if (stat.isSymbolicLink() || path.relative(await fs.realpath(current), current) !== '')
       throw Error('Unsafe linked game path. Existing files were preserved.');
   }
   return target;
