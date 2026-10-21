@@ -1,3 +1,3 @@
 @echo off
-start "" wscript.exe "%~dp0START.vbs"
+start "" wscript.exe "%~dp0tools\start.vbs"
 exit /b

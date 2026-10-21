@@ -1,9 +1,43 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');const {installGameHelper,registerHelperRuntime}=require('../lib/game-helper.cjs');const {finalizeInstallation,flatten}=require('../lib/library.cjs');
-test('every installation gets identical portable commands with no user, game or project paths',async t=>{
- const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mamba-universal-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let previous;
- for(const name of ['First Game','Completely Different Game']){const root=path.join(dir,name+'-release');await fs.mkdir(root);await fs.writeFile(path.join(root,'game.exe'),'fixture');const result=await finalizeInstallation(root,name);const command=await fs.readFile(path.join(result.folder,'ADD-GAME.cmd'),'utf8');assert.ok(command.includes('%~dp0.'));assert.ok(command.includes('%LOCALAPPDATA%'));assert.ok(!command.includes(process.cwd()));assert.ok(!command.includes(os.homedir()));if(previous)assert.equal(command,previous);previous=command;}
- const runtime=path.join(dir,'runtime');await registerHelperRuntime(runtime,'C:\\Different User\\Mamba.exe');const saved=JSON.parse(await fs.readFile(path.join(runtime,'helper-runtime.json'),'utf8'));assert.equal(saved.executable,'C:\\Different User\\Mamba.exe');assert.ok(await fs.stat(path.join(runtime,'run-game-helper.ps1')));
+const test = require('node:test'),
+  assert = require('node:assert/strict'),
+  fs = require('node:fs/promises'),
+  os = require('node:os'),
+  path = require('node:path');
+const { installGameHelper, registerHelperRuntime } = require('../src/core/game-helper.cjs');
+const { finalizeInstallation, flatten } = require('../src/core/library.cjs');
+test('every installation gets identical portable commands with no user, game or project paths', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-universal-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  let previous;
+  for (const name of ['First Game', 'Completely Different Game']) {
+    const root = path.join(dir, name + '-release');
+    await fs.mkdir(root);
+    await fs.writeFile(path.join(root, 'game.exe'), 'fixture');
+    const result = await finalizeInstallation(root, name);
+    const command = await fs.readFile(path.join(result.folder, 'ADD-GAME.cmd'), 'utf8');
+    assert.ok(command.includes('%~dp0.'));
+    assert.ok(command.includes('%LOCALAPPDATA%'));
+    assert.ok(!command.includes(process.cwd()));
+    assert.ok(!command.includes(os.homedir()));
+    if (previous) assert.equal(command, previous);
+    previous = command;
+  }
+  const runtime = path.join(dir, 'runtime');
+  await registerHelperRuntime(runtime, 'C:\\Different User\\Mamba.exe');
+  const saved = JSON.parse(await fs.readFile(path.join(runtime, 'helper-runtime.json'), 'utf8'));
+  assert.equal(saved.executable, 'C:\\Different User\\Mamba.exe');
+  assert.ok(await fs.stat(path.join(runtime, 'run-game-helper.ps1')));
 });
-test('owned legacy helper is upgraded, unrelated commands preserved, duplicate helpers do not block flattening',async t=>{
- const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mamba-helper-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));await fs.mkdir(path.join(dir,'Nested'));await fs.writeFile(path.join(dir,'Nested','game.exe'),'fixture');await fs.writeFile(path.join(dir,'Nested','ADD-GAME.cmd'),'set MAMBA_GAME_FOLDER=old');await installGameHelper(dir);await flatten(dir);assert.ok(await fs.stat(path.join(dir,'game.exe')));await fs.writeFile(path.join(dir,'ADD-GAME.cmd'),'unrelated command');await assert.rejects(installGameHelper(dir),/unrelated/);assert.equal(await fs.readFile(path.join(dir,'ADD-GAME.cmd'),'utf8'),'unrelated command');
+test('owned legacy helper is upgraded, unrelated commands preserved, duplicate helpers do not block flattening', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-helper-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  await fs.mkdir(path.join(dir, 'Nested'));
+  await fs.writeFile(path.join(dir, 'Nested', 'game.exe'), 'fixture');
+  await fs.writeFile(path.join(dir, 'Nested', 'ADD-GAME.cmd'), 'set MAMBA_GAME_FOLDER=old');
+  await installGameHelper(dir);
+  await flatten(dir);
+  assert.ok(await fs.stat(path.join(dir, 'game.exe')));
+  await fs.writeFile(path.join(dir, 'ADD-GAME.cmd'), 'unrelated command');
+  await assert.rejects(installGameHelper(dir), /unrelated/);
+  assert.equal(await fs.readFile(path.join(dir, 'ADD-GAME.cmd'), 'utf8'), 'unrelated command');
 });

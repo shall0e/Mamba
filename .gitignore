@@ -22,3 +22,6 @@ issues.json*
 
 steam-search.json*
 themes.json*
+
+data/
+dist-preview*/

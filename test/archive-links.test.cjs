@@ -1,4 +1,25 @@
-const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');const {validateArchiveListing}=require('../lib/library.cjs');
-const listing=fields=>'7-Zip archive header\r\n----------\r\nPath = Game\\data.bin\r\nAttributes = A\r\n'+fields;
-test('ordinary RAR entries with blank link fields are accepted',()=>{assert.doesNotThrow(()=>validateArchiveListing(listing('Symbolic Link = \r\nHard Link = \r\nCopy Link = \r\n'),path.resolve('fixture')));});
-test('actual link targets and unsafe archive paths remain blocked',()=>{for(const type of ['Symbolic Link','Hard Link','Copy Link'])assert.throws(()=>validateArchiveListing(listing(type+' = ..\\outside\r\n'),path.resolve('fixture')),/contains links/);assert.throws(()=>validateArchiveListing('----------\nPath = ../outside\n',path.resolve('fixture')),/unsafe path/);});
+const test = require('node:test'),
+  assert = require('node:assert/strict'),
+  path = require('node:path');
+const { validateArchiveListing } = require('../src/core/library.cjs');
+const listing = (fields) =>
+  '7-Zip archive header\r\n----------\r\nPath = Game\\data.bin\r\nAttributes = A\r\n' + fields;
+test('ordinary RAR entries with blank link fields are accepted', () => {
+  assert.doesNotThrow(() =>
+    validateArchiveListing(
+      listing('Symbolic Link = \r\nHard Link = \r\nCopy Link = \r\n'),
+      path.resolve('fixture'),
+    ),
+  );
+});
+test('actual link targets and unsafe archive paths remain blocked', () => {
+  for (const type of ['Symbolic Link', 'Hard Link', 'Copy Link'])
+    assert.throws(
+      () => validateArchiveListing(listing(type + ' = ..\\outside\r\n'), path.resolve('fixture')),
+      /contains links/,
+    );
+  assert.throws(
+    () => validateArchiveListing('----------\nPath = ../outside\n', path.resolve('fixture')),
+    /unsafe path/,
+  );
+});
