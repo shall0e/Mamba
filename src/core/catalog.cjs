@@ -289,7 +289,7 @@ class Catalog extends EventEmitter {
     if (cached?.modified) headers['If-Modified-Since'] = cached.modified;
     const response = await this.fetch(url, {
       headers,
-      signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
     });
     if (response.status === 304 && cached) return cached.source;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -323,6 +323,7 @@ class Catalog extends EventEmitter {
     );
     const signature = digest(
       JSON.stringify([
+        'candidate-index-v2',
         sourceUrls,
         digest(config.torboxApiKey || ''),
         config.cachedOnly,
@@ -381,7 +382,8 @@ class Catalog extends EventEmitter {
             });
         }
       };
-      if (!resume) await Promise.all([worker(), worker()]);
+      if (!resume)
+        await Promise.all(Array.from({ length: Math.min(4, sourceUrls.length) }, worker));
       signal.throwIfAborted();
       if (!resume && !sourceCount && sourceUrls.length)
         throw new Error('No sources could be fetched. Your previous catalog is preserved.');
@@ -436,18 +438,6 @@ class Catalog extends EventEmitter {
           errors,
         });
       }
-      const api = this.apiFactory(config.torboxApiKey);
-      await atomicJson(this.file, {
-        version: 1,
-        signature,
-        phase: 'checking',
-        updatedAt: new Date().toISOString(),
-        games: this.games,
-        pending: merged.games,
-        duplicates,
-        errors,
-        sourceHosts: this.sourceHosts,
-      });
       this.pending = merged.games;
       this.signature = signature;
       allLinks = new Map();
@@ -462,86 +452,14 @@ class Catalog extends EventEmitter {
           errors.push({ source: 'Real-Debrid', message: error.message });
         }
       }
+      // Index supported candidates immediately. Per-game resolution verifies
+      // live cache availability before choosing a download.
       for (const link of allLinks.values()) {
         link.services = candidates(link, config, rdHosts);
-        if (link.services.length) valid.add(link.identity);
-      }
-      this.status({
-        phase: 'checking',
-        completed: 0,
-        total: allLinks.size,
-        message: 'Checking download services…',
-      });
-      let completed = 0;
-      let hosters = [];
-      if (torboxEnabled && !config.cachedOnly) {
-        const data = await api.request('/webdl/hosters', { signal });
-        const values = Array.isArray(data) ? data : Object.values(data || {});
-        hosters = values
-          .filter((host) => host.status !== false)
-          .flatMap((host) => host.domains || host.supported_domains || [host.domain || host.name])
-          .filter((host) => typeof host === 'string')
-          .map((host) =>
-            host
-              .toLowerCase()
-              .replace(/^https?:\/\//, '')
-              .replace(/\/$/, ''),
-          );
-      }
-      for (const kind of ['torrents', 'webdl']) {
-        const links = [...allLinks.values()].filter(
-          (link) => link.kind === kind && hostAllowed(link.uri, config),
-        );
-        for (let i = 0; i < links.length; i += 5000) {
-          signal.throwIfAborted();
-          const batch = links.slice(i, i + 5000);
-          const unknown = batch.filter(
-            (link) =>
-              !this.availability[`${kind}:${link.hash}`] ||
-              Date.now() - this.availability[`${kind}:${link.hash}`].at > 3600000,
-          );
-          const cached = torboxEnabled
-            ? await api.cached(
-                kind,
-                unknown.map((link) => link.hash),
-                signal,
-              )
-            : new Set();
-          for (const link of torboxEnabled ? unknown : [])
-            this.availability[`${kind}:${link.hash}`] = {
-              cached: cached.has(link.hash),
-              at: Date.now(),
-            };
-          for (const link of batch) {
-            link.cached =
-              torboxEnabled && this.availability[`${kind}:${link.hash}`]?.cached === true;
-            const supported =
-              kind === 'torrents' ||
-              hosters.some(
-                (host) =>
-                  new URL(link.uri).hostname === host ||
-                  new URL(link.uri).hostname.endsWith('.' + host),
-              );
-            if (
-              torboxEnabled &&
-              hostAllowed(link.uri, config) &&
-              (link.cached || (!config.cachedOnly && supported))
-            ) {
-              valid.add(link.identity);
-              link.services.push('torbox');
-            }
-          }
-          completed += batch.length;
-          this.status({
-            completed,
-            message: `Checked ${completed.toLocaleString()} of ${allLinks.size.toLocaleString()} links`,
-          });
-          if (i % 50000 === 0) {
-            await atomicJson(this.availabilityFile, this.availability);
-            if (!preserveCatalog) this.replace(publish());
-            this.status({ count: this.games.length });
-          }
-        }
+        if (torboxEnabled && hostAllowed(link.uri, config)) link.services.push('torbox');
+        link.cached = this.availability[`${link.kind}:${link.hash}`]?.cached === true;
+        if (link.services.length || (link.kind === 'torrents' && hostAllowed(link.uri, config)))
+          valid.add(link.identity);
       }
       const games = publish();
       signal.throwIfAborted();

@@ -293,7 +293,7 @@ class SteamSearch {
     };
     const directTask = (async () => {
       let index = 0;
-      const work = candidates.slice(0, 6);
+      const work = candidates.slice(0, 24);
       await Promise.all(
         Array.from({ length: Math.min(3, work.length) }, async () => {
           while (index < work.length && revision === this.searchRevision) {
@@ -312,7 +312,7 @@ class SteamSearch {
               .filter((item) => !directNames.has(compactTitle(item.name)))
               .map((item) => [compactTitle(item.name), item]),
           ).values(),
-        ].slice(0, 6)
+        ].slice(0, 24)
       : [];
     const sourceTask = (async () => {
       let index = 0;

@@ -119,7 +119,7 @@
             methods
               .map((id) => labels[id])
               .filter(Boolean)
-              .join(' · '),
+              .join(' · ') || 'Connect a download service',
           ]
             .filter(Boolean)
             .join(' · '),

@@ -247,7 +247,8 @@ function rankOptions(options, preferences = {}) {
       const reasons = [
         option.cached
           ? 'Cached on TorBox'
-          : (option.services || ['torbox']).map((id) => names[id] || id).join(' / '),
+          : (option.services || ['torbox']).map((id) => names[id] || id).join(' / ') ||
+            'Connect a download service',
       ];
       if (traits.english) reasons.push('English / multilingual');
       if (traits.portable) reasons.push('Portable or pre-installed');

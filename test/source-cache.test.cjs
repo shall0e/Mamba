@@ -63,3 +63,60 @@ test('failed refresh preserves the last valid cached source', async (t) => {
   await assert.rejects(catalog.readSource(url, signal(), true));
   assert.equal((await catalog.readSource(url, signal())).downloads[0].title, 'Kept');
 });
+
+test('catalog indexing never scans service availability; resolution checks only the selected game', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-source-cache-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const hashes = ['a', 'b', 'c'].map((char) => char.repeat(40));
+  let serviceCalls = 0;
+  const catalog = new Catalog(
+    directory,
+    async () => ({
+      sourceUrls: ['https://sources.test/one'],
+      torboxApiKey: 'fixture',
+      cachedOnly: true,
+      enabledDownloadServices: ['torbox'],
+    }),
+    {
+      transport: async () =>
+        Response.json({
+          downloads: hashes.map((hash, i) => ({
+            title: 'Game ' + (i + 1),
+            uris: ['magnet:?xt=urn:btih:' + hash],
+          })),
+        }),
+      apiFactory: () => ({
+        cached: async (_kind, requested) => {
+          serviceCalls++;
+          assert.deepEqual(requested, [hashes[1]]);
+          return new Set(requested);
+        },
+      }),
+    },
+  );
+  await catalog.sync();
+  assert.equal(catalog.state.phase, 'ready');
+  assert.equal(catalog.games.length, 3);
+  assert.equal(serviceCalls, 0);
+  const game = catalog.search('Game 2').items.find((item) => item.name === 'Game 2');
+  assert.ok((await catalog.resolveGame(game.id)).best);
+  assert.equal(serviceCalls, 1);
+});
+
+test('torrent games remain discoverable when a service still needs connecting', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-source-cache-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const catalog = new Catalog(
+    directory,
+    async () => ({ sourceUrls: ['https://sources.test/one'], enabledDownloadServices: ['direct'] }),
+    {
+      transport: async () =>
+        Response.json({
+          downloads: [{ title: 'Torrent Game', uris: ['magnet:?xt=urn:btih:' + 'a'.repeat(40)] }],
+        }),
+    },
+  );
+  await catalog.sync();
+  assert.equal(catalog.search('Torrent Game').total, 1);
+  assert.equal((await catalog.resolveGame(catalog.search('Torrent Game').items[0].id)).best, null);
+});

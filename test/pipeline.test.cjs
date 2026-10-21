@@ -59,7 +59,7 @@ test('merge deduplicates titles and torrent hashes without erasing different rel
   assert.equal(merged.games[0].occurrences, 2);
   assert.equal(torrentHash(magnet), hash);
 });
-test('catalog publishes only TorBox-verified entries, writes duplicate report, searches and preserves prior catalog on source failure', async () => {
+test('catalog indexes candidates immediately, verifies on resolution and preserves prior catalog on source failure', async () => {
   const dir = await temp();
   let broken = false;
   const transport = async () =>
@@ -85,14 +85,16 @@ test('catalog publishes only TorBox-verified entries, writes duplicate report, s
   await catalog.sync(true);
   assert.equal(catalog.state.phase, 'ready');
   assert.equal(catalog.search('cached game').total, 1);
-  assert.equal(catalog.search('not cached').total, 0);
+  assert.equal(catalog.search('not cached').total, 1);
+  assert.ok((await catalog.resolveGame(catalog.search('cached game').items[0].id)).best);
+  assert.equal((await catalog.resolveGame(catalog.search('not cached').items[0].id)).best, null);
   const merged = JSON.parse(await fs.readFile(path.join(dir, 'catalog.json'), 'utf8'));
-  assert.equal(merged.games.length, 1);
+  assert.equal(merged.games.length, 2);
   assert.equal(merged.duplicates.length, 1);
   broken = true;
   await catalog.sync(true);
   assert.equal(catalog.state.phase, 'error');
-  assert.equal(catalog.games.length, 1);
+  assert.equal(catalog.games.length, 2);
 });
 test('TorBox requests use authentication and JSON batch payloads', async () => {
   let observed;
@@ -121,7 +123,7 @@ test('extractor removes wrapper nesting and rejects path traversal before extrac
   assert.throws(() => within(output, path.join(output, '..', 'escape')), /escapes/);
 });
 
-test('rate limits preserve verified results and schedule a resumable catalog retry', async () => {
+test('per-game rate limits leave the indexed catalog intact without a full-catalog retry', async () => {
   const dir = await temp();
   const config = {
     sourceUrls: ['https://sources.test/games.json'],
@@ -149,12 +151,16 @@ test('rate limits preserve verified results and schedule a resumable catalog ret
   });
   try {
     await catalog.sync(true);
-    assert.equal(catalog.state.phase, 'waiting');
+    assert.equal(catalog.state.phase, 'ready');
     assert.equal(catalog.search('Cached Game').total, 1);
-    assert.ok(catalog.retryTimer);
+    assert.equal(catalog.retryTimer, null);
+    const web = catalog.search('Web Game').items[0];
+    await assert.rejects(catalog.resolveGame(web.id), /Rate limited/);
+    assert.equal(catalog.games.length, 2);
+    assert.equal(catalog.state.phase, 'ready');
     const saved = JSON.parse(await fs.readFile(path.join(dir, 'catalog.json'), 'utf8'));
-    assert.equal(saved.games.length, 1);
-    assert.equal(saved.pending.length, 2);
+    assert.equal(saved.games.length, 2);
+    assert.equal(saved.pending, undefined);
   } finally {
     clearTimeout(catalog.retryTimer);
   }
