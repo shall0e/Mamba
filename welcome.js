@@ -1,7 +1,8 @@
 (() => {
   const make=(tag,text,cls)=>{const el=document.createElement(tag);if(text)el.textContent=text;if(cls)el.className=cls;return el;};
   const splash=document.querySelector('#startup-splash'),brand=splash.querySelector('.startup-brand');
-  const versionReady=window.mamba.updateState().then(state=>{const version=document.querySelector('#startup-version');version.textContent=state.version?'v'+state.version:'';version.hidden=!state.version;}).catch(()=>{});
+  const versionReady=window.mamba.updateState().then(state=>{const version=document.querySelector('#startup-version');version.textContent=state.version?'v'+state.version:'';version.hidden=!state.version;const homeVersion=document.querySelector('#search-version');homeVersion.textContent=version.textContent;homeVersion.hidden=version.hidden;}).catch(()=>{});
+  const logoReady=Promise.all(['assets/mamba.png','assets/mamba-mask.png','assets/mamba-background-mask.png'].map(src=>{const image=new Image();image.src=src;return image.decode();}));
   const homeArt=document.querySelector('#steam-backdrop');let artworkReady;const firstArtwork=new Promise(resolve=>artworkReady=resolve);
   const syncArtwork=()=>{if(homeArt?.querySelector('img.visible'))artworkReady();};
   const artworkObserver=new MutationObserver(syncArtwork);if(homeArt)artworkObserver.observe(homeArt,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});syncArtwork();
@@ -60,12 +61,18 @@
     }
     dialog.addEventListener('cancel',event=>event.preventDefault());draw();dialog.showModal();
   }
-  Promise.all([configReady,versionReady,new Promise(resolve=>setTimeout(resolve,1500)),Promise.race([firstArtwork.then(()=>new Promise(resolve=>setTimeout(resolve,900))),new Promise(resolve=>setTimeout(resolve,10000))])]).then(async([config])=>{
+  Promise.all([configReady,versionReady,logoReady,new Promise(resolve=>setTimeout(resolve,1500)),Promise.race([firstArtwork.then(()=>new Promise(resolve=>setTimeout(resolve,900))),new Promise(resolve=>setTimeout(resolve,10000))])]).then(async([config])=>{
     artworkObserver.disconnect();
+    await document.fonts.ready;
+    const version=document.querySelector('#startup-version');brand.style.setProperty('--startup-version-width',version.scrollWidth+'px');
     const target=document.querySelector('#search-page .search-wordmark');const to=target.getBoundingClientRect();brand.style.width=to.width+'px';const from=brand.getBoundingClientRect();
     document.body.classList.add('startup-finishing');
-    if(!reducedBackdropMotion.matches)await brand.animate([{transform:'translate(0,0) scale(1)'},{transform:`translate(${to.x-from.x}px,${to.y-from.y}px) scale(${to.width/from.width},${to.height/from.height})`}],{duration:850,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'}).finished;
-    document.body.classList.remove('startup-active','startup-finishing');splash.remove();
+    if(!reducedBackdropMotion.matches){
+      await brand.animate([{transform:'translate(0,0) scale(1)'},{transform:`translate(${to.x-from.x}px,${to.y-from.y}px) scale(${to.width/from.width},${to.height/from.height})`}],{duration:1200,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).finished;
+      document.body.classList.add('startup-handoff');
+      await Promise.all([brand.animate([{opacity:1},{opacity:0}],{duration:220,easing:'ease-in-out',fill:'forwards'}).finished,target.animate([{opacity:0},{opacity:1}],{duration:220,easing:'ease-in-out'}).finished]);
+    }
+    document.body.classList.remove('startup-active','startup-finishing','startup-handoff');splash.remove();
     if(config.onboardingCompleted===false)await setup(config);
   }).catch(error=>{
     artworkObserver.disconnect();brand.append(make('p','Could not load settings. '+String(error.message||'')));

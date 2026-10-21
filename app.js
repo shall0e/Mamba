@@ -60,9 +60,13 @@ async function advanceSteamBackdrop() {
   steamSlideBusy = true;
   try {
     for (let attempt = 0; attempt < steamSlides.length; attempt++) {
-      steamSlideIndex = (steamSlideIndex + 1) % steamSlides.length;
+      steamSlideIndex++;
+      if (steamSlideIndex >= steamSlides.length) {
+        shuffleSteamSlides();
+        steamSlideIndex = 0;
+      }
       const game = steamSlides[steamSlideIndex];
-      if (backdrop.lastElementChild?.dataset.appId === String(game.id)) return;
+      if (backdrop.lastElementChild?.dataset.appId === String(game.id)) continue;
       const image = document.createElement('img');
       image.crossOrigin = 'anonymous';
       image.src = game.image;
@@ -93,19 +97,30 @@ async function advanceSteamBackdrop() {
   } finally { steamSlideBusy = false; }
 }
 
+function shuffleSteamSlides() {
+  for (let index = steamSlides.length - 1; index > 0; index--) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [steamSlides[index], steamSlides[swap]] = [steamSlides[swap], steamSlides[index]];
+  }
+  const current = document.querySelector('#steam-backdrop img:last-child')?.dataset.appId;
+  if (steamSlides.length > 1 && String(steamSlides[0].id) === current) {
+    [steamSlides[0], steamSlides[1]] = [steamSlides[1], steamSlides[0]];
+  }
+}
 async function loadSteamBackdrop() {
   if (!window.mamba?.featuredGames) return;
   try {
     const games = await window.mamba.featuredGames();
     if (!Array.isArray(games) || !games.length) return;
-    steamSlides = games;
+    steamSlides = games.filter(game => { try { const url = new URL(game.image); return url.protocol === 'https:' && url.hostname.endsWith('.steamstatic.com'); } catch { return false; } });
+    shuffleSteamSlides();
     steamSlideIndex = -1;
     await advanceSteamBackdrop();
   } catch { /* The search page remains usable when Steam artwork is offline. */ }
 }
 loadSteamBackdrop();
 setInterval(advanceSteamBackdrop, 10000);
-setInterval(loadSteamBackdrop, 30 * 60 * 1000);
+setInterval(loadSteamBackdrop, 60 * 1000);
 
 function updateHomeBackdrop() {
   const home = !document.querySelector('#search-page').hidden && !document.querySelector('#main-search').value.trim();
@@ -179,8 +194,9 @@ function icon(name) { return document.querySelector(`#icon-${name}`)?.content.cl
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button'); control.type = 'button'; control.className = className;
   if(iconName==='play')control.classList.add('play-button');
+  if(iconName==='download'&&/^Download\b/i.test(label))control.classList.add('download-button');
   if (iconName) control.append(icon(iconName));
-  control.append(document.createTextNode(label));
+  const labelNode=document.createElement('span');labelNode.className='button-label';labelNode.textContent=label;control.append(labelNode);
   control.addEventListener('click', async (event) => {
     control.disabled = true;control.setAttribute('aria-busy','true');
     try { await action(event); } catch (error) { window.MambaExperience?.handleError(error) || showToast(error.message); } finally { control.removeAttribute('aria-busy');control.disabled = control.dataset.locked === 'true'; }
@@ -252,6 +268,11 @@ async function runSearch(more = false) {
   } catch (error) { if(generation!==searchGeneration)return;renderFeaturedGame(null); window.MambaDiscovery.fail(error.message); }
 }
 async function openGame(game) { return window.MambaExperience.openGame(game); }
+window.mamba?.onSearchResults(({query,result})=>{
+  if(query!==document.querySelector('#main-search').value.trim()||searchOffset>40)return;
+  window.MambaDiscovery.update(result,false);searchOffset=result.items.length;
+  document.querySelector('#results-more').hidden=searchOffset>=result.total;
+});
 function renderJobs(jobs) {
   window.MambaExperience?.jobsChanged(jobs);
   const jobIds = new Set(jobs.map((job) => job.id));
@@ -518,7 +539,7 @@ function showToast(message, actionLabel, action) {
 document.querySelector('#settings-open').addEventListener('click', openSettings);
 document.querySelector('#search-setup').addEventListener('click', openSettings);
 document.querySelector('#main-search').addEventListener('input', updateSearchState);
-document.querySelector('#main-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => runSearch(), 400); });
+document.querySelector('#main-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => runSearch(), 180); });
 document.querySelector('#main-search').addEventListener('keydown', (event) => { if (event.key === 'Enter') { clearTimeout(searchTimer); runSearch(); } });
 document.querySelector('#results-more').addEventListener('click', () => runSearch(true));
 document.querySelector('#sync-catalog').addEventListener('click', () => window.mamba.sync().catch((error) => showToast(error.message)));
@@ -610,36 +631,6 @@ function applyPalette(palette) {
   for (const [name,color] of Object.entries(palette || {})) if (/^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty('--color-'+name,color);
 }
 
-// Adapt only text and icon ink. Composite visible art, surface opacity, and
-// translucent UI fills first so each item moves in proportion to its backdrop.
-const adaptivePixels=new WeakMap(),adaptivePending=new Set();
-const adaptiveTargets='button,input:not([type=color]):not([type=range]):not([type=checkbox]),textarea,select,.page,.settings-card,.filter-empty,.game-card,.version-card,.transfer-row,.quiet-state,.speed-card,.recent-card,p,label,small,output,.field-label,.search-wordmark,.search-shortcut,.sidebar,h1,h2,h3,h4,strong,span,a,li,summary,legend,dt,dd,th,td,svg';
-const adaptiveCanvas=document.createElement('canvas');adaptiveCanvas.width=adaptiveCanvas.height=1;
-const adaptiveContext=adaptiveCanvas.getContext('2d',{willReadFrequently:true});
-const adaptiveColorCache=new Map();let adaptiveFrame;
-function rgbaFor(value){let result=adaptiveColorCache.get(value);if(result)return result;adaptiveContext.clearRect(0,0,1,1);adaptiveContext.fillStyle='#000000';adaptiveContext.fillStyle=value;adaptiveContext.fillRect(0,0,1,1);result=[...adaptiveContext.getImageData(0,0,1,1).data];adaptiveColorCache.set(value,result);if(adaptiveColorCache.size>256)adaptiveColorCache.clear();return result;}
-function overColor(base,layer,opacity=1){const alpha=layer[3]/255*opacity,remain=1-alpha;return [0,1,2].map(index=>Math.round(layer[index]*alpha+base[index]*remain)).concat(255);}
-function displayedBackground(element){
-  const rootStyle=getComputedStyle(document.documentElement),base=rgbaFor(rootStyle.getPropertyValue('--color-primary').trim()||'#181818');let result=base;
-  const backdrop=document.querySelector('#steam-backdrop');let sampled=false;
-  if(backdrop){const bounds=element.getBoundingClientRect(),x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;
-    for(const image of backdrop.querySelectorAll('img')){const opacity=Number(getComputedStyle(image).opacity);if(!image.naturalWidth||opacity<=0)continue;
-      if(!adaptivePixels.has(image)){try{const canvas=document.createElement('canvas');canvas.width=80;canvas.height=50;const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0,80,50);adaptivePixels.set(image,context.getImageData(0,0,80,50).data);}catch{adaptivePixels.set(image,null);}}
-      const pixels=adaptivePixels.get(image);if(!pixels)continue;const rect=image.getBoundingClientRect(),scale=Math.max(rect.width/image.naturalWidth,rect.height/image.naturalHeight),width=image.naturalWidth*scale,height=image.naturalHeight*scale;
-      const px=Math.max(0,Math.min(79,Math.round((x-rect.left+(width-rect.width)/2)/width*80))),py=Math.max(0,Math.min(49,Math.round((y-rect.top+(height-rect.height)/2)/height*50))),offset=(py*80+px)*4;
-      result=overColor(result,[pixels[offset],pixels[offset+1],pixels[offset+2],255],opacity);sampled=true;
-    }
-    if(sampled){const tint=Number(rootStyle.getPropertyValue('--background-opacity'))||0;result=overColor(result,base,tint);const groupOpacity=Number(getComputedStyle(backdrop).opacity);result=overColor(base,result,groupOpacity);}
-  }
-  const layers=[];for(let node=element;node&&node!==document.body&&node!==document.documentElement;node=node.parentElement)layers.push(node);
-  for(let index=layers.length-1;index>=0;index--){const node=layers[index],fill=getComputedStyle(node).backgroundColor;if(fill!=='rgba(0, 0, 0, 0)'&&fill!=='transparent')result=overColor(result,rgbaFor(fill));}
-  return '#'+result.slice(0,3).map(value=>value.toString(16).padStart(2,'0')).join('');
-}
-function queueAdaptiveColors(root=document){if(root.matches?.(adaptiveTargets))adaptivePending.add(root);root.querySelectorAll?.(adaptiveTargets).forEach(element=>adaptivePending.add(element));if(adaptiveFrame)return;adaptiveFrame=requestAnimationFrame(()=>{adaptiveFrame=null;const api=window.MambaThemes;if(!api)return;const styles=getComputedStyle(document.documentElement),textColor=styles.getPropertyValue('--theme-text-color').trim()||styles.getPropertyValue('--color-text').trim(),iconColor=styles.getPropertyValue('--theme-icons-color').trim()||styles.getPropertyValue('--color-icons').trim();for(const element of adaptivePending){if(!element.isConnected||!element.getClientRects().length)continue;const background=displayedBackground(element),textInk=api.adaptiveColor(textColor,background),iconInk=api.adaptiveColor(iconColor,background);element.style.setProperty('--body-ink',textInk);element.style.setProperty('--button-ink',textInk);element.style.setProperty('--heading-ink',textInk);element.style.setProperty('--icon-ink',iconInk);element.style.setProperty('--divider-ink',iconInk);element.style.setProperty('--scrollbar-ink',iconInk);if(element.matches('.page,.source-errors,textarea'))for(const track of document.querySelectorAll('.ui-scrollbar'))if(track.getAttribute('aria-controls')===element.id)track.style.setProperty('--scrollbar-ink',iconInk);}adaptivePending.clear();});}
-window.MambaAppearanceContrast={refresh:()=>queueAdaptiveColors(document)};
-new MutationObserver(records=>{for(const record of records){if(record.type==='attributes')queueAdaptiveColors(record.target);for(const node of record.addedNodes)if(node.nodeType===1)queueAdaptiveColors(node);}}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','aria-pressed']});
-setInterval(()=>{if(!document.hidden)queueAdaptiveColors(document);},450);
-queueAdaptiveColors(document);
 function applyLoadedConfig(config) {
   urls=config.sourceUrls; keyConfigured=config.configured; keyInput.value='';
   downloadPreferences={downloadPath:config.downloadPath,autoInstall:config.autoInstall,cachedOnly:config.cachedOnly,archivePassword:config.archivePassword||'',keepArchives:!!config.keepArchives,transferTimeoutMinutes:config.transferTimeoutMinutes||120,automaticUpdates:config.automaticUpdates!==false,palette:config.palette||{},preferredLanguage:config.preferredLanguage||'english',preferredRelease:config.preferredRelease||'any',notifications:config.notifications!==false,enabledDownloadServices:config.enabledDownloadServices||['torbox','direct'],preferredDownloadService:config.preferredDownloadService||'auto',disabledDownloadHosts:config.disabledDownloadHosts||[],disabledSourceUrls:config.disabledSourceUrls||[]};
@@ -736,3 +727,4 @@ function renderUpdate(state){
 document.querySelector('#check-updates').addEventListener('click',async()=>{try{renderUpdate(await window.mamba.checkUpdates());}catch(error){showToast(error.message);}});
 document.querySelector('#install-update').addEventListener('click',async()=>{try{await window.mamba.installUpdate();}catch(error){showToast(error.message);}});
 if(window.mamba){window.mamba.onUpdate(renderUpdate);window.mamba.updateState().then(renderUpdate).catch(error=>showToast(error.message));}
+

@@ -1,4 +1,8 @@
 const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, utilityProcess, Notification, Tray, Menu } = require('electron');
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+app.on('second-instance', () => restoreWindow());
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('./palette-defaults.json');
@@ -361,6 +365,7 @@ app.whenReady().then(async () => {
   }), {initialize:{directory:dataDirectory(), config:await readConfig(), resourcesPath:process.resourcesPath}});
   background.on('catalog:changed', state => { catalogState = state; broadcast('catalog:changed', state);if(state.phase==='error')reportIssue(new Error(state.message),'catalog:sync'); });
   background.on('library:changed', games => { installedGames = games; broadcast('library:changed', games); });
+  background.on('catalog:results', result => broadcast('catalog:results', result));
   const previousStatuses=new Map();
   background.on('downloads:changed', jobs => {
     for(const job of jobs){
@@ -406,7 +411,7 @@ app.whenReady().then(async () => {
   });
   configWatcher.on('error', () => {});
   updates.start();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow();else restoreWindow(); });
 }).catch(error => {
   dialog.showErrorBox('Mamba could not start', 'Check your config.json and games folder. '+error.message);
   app.quit();
@@ -419,3 +424,4 @@ app.on('before-quit', event => {
   Promise.resolve(background?.close()).catch(()=>{}).finally(() => app.quit());
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+}

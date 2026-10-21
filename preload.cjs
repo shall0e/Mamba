@@ -28,6 +28,7 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 contextBridge.exposeInMainWorld('mamba', {
+  onSearchResults: callback => subscribe('catalog:results', callback),
   uploadThemeFont:()=>ipcRenderer.invoke('themes:font'),
   themes:()=>ipcRenderer.invoke('themes:list'),
   saveTheme:theme=>ipcRenderer.invoke('themes:save',theme),

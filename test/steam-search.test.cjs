@@ -9,6 +9,7 @@ test('Steam identities own cards; variants merge and unsupported Steam results a
   catalog.replace([release('one','Project Zomboid PC','a'),release('two','Project Zomboid License GOG','b'),release('weak','Project Zomboid Something Else','c'),release('tool','Tool','d')]);
   let calls=0;const identity={details:async id=>({steamId:id,name:id===108600?'Project Zomboid':'Tool',type:id===108600?'game':'music',cover:'https://example.com/'+id+'.jpg'}),save:async()=>{}};
   const search=new SteamSearch(dir,catalog,identity,async()=>{calls++;return Response.json({items:[{id:108600,name:'Project Zomboid'},{id:108600,name:'Project Zomboid'},{id:999,name:'Unrelated Game'},{id:10,name:'Tool'}]});});catalog.steamSearch=search;
+  assert.equal((await search.search('zomboid')).pending,true);await search.searches.get('zomboid').work;
   const result=await search.search('zomboid');assert.equal(result.total,1);assert.equal(result.items[0].id,'steam:108600');assert.equal(result.items[0].options.length,2);assert.equal(result.items[0].name,'Project Zomboid');assert.ok(result.items[0].cover);
   assert.equal((await catalog.resolveGame('steam:108600')).options.length,2);
   await search.search('zomboid');assert.equal(calls,1);
@@ -26,5 +27,18 @@ test('ambiguous sources and update-only releases cannot become game cards',async
   const catalog=new Catalog(dir,()=>({}));catalog.replace([release('ambiguous','Example Game','a'),release('patch','Other Game [Update only]','b')]);
   const identity={details:async id=>({steamId:id,type:'game',name:id===3?'Other Game':id===1?'Example Game (2007)':'Example Game (2023)',cover:'https://example.com/header.jpg'}),save:async()=>{}};
   const search=new SteamSearch(dir,catalog,identity,async()=>Response.json({items:[{id:1,name:'Example Game (2007)'},{id:2,name:'Example Game (2023)'},{id:3,name:'Other Game'}]}));
-  assert.equal((await search.search('game')).total,0);
+  await search.search('game');await search.searches.get('game').work;assert.equal((await search.search('game')).total,0);
+});
+test('cached verified games return while Steam is still pending, without duplicate lookups',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mamba-fast-search-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+ const catalog=new Catalog(dir,()=>({}));catalog.replace([release('portal','Portal 2','a')]);
+ const app={steamId:620,name:'Portal 2',type:'game',cover:'https://shared.fastly.steamstatic.com/portal.jpg'};
+ let respond,calls=0;const identity={cache:new Map([['app:620',{data:app}]]),details:async()=>app,save:async()=>{}};
+ const search=new SteamSearch(dir,catalog,identity,()=>{calls++;return new Promise(resolve=>respond=resolve);});await search.load();
+ const events=[];search.onResults=(query,result)=>events.push({query,result});
+ const initial=await Promise.race([search.search('portal'),new Promise(resolve=>setImmediate(()=>resolve(null)))]);
+ assert.ok(initial,'the local result must not await Steam');assert.equal(initial.items[0].steamId,620);assert.equal(initial.pending,true);
+ const work=search.searches.get('portal').work;await search.search('portal');assert.equal(search.searches.get('portal').work,work);assert.equal(calls,1);
+ respond(Response.json({items:[{id:620,name:'Portal 2'}]}));await work;
+ assert.equal(events.at(-1).result.pending,false);assert.equal((await search.search('portal')).pending,false);
 });

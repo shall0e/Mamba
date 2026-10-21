@@ -391,7 +391,7 @@ button svg { flex-shrink: 0; }
 button[aria-busy="true"] { cursor: progress; }
 
 .search-wordmark { display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; }
-.search-wordmark img { width: 144px; height: 144px; object-fit: cover; border-radius: 50%; box-shadow: 0 0 42px color-mix(in srgb, var(--color-selection) 42%, transparent); }
+.search-wordmark :is(img,.mamba-mark) { width: 144px; height: 144px; object-fit: cover; border-radius: 50%; box-shadow: 0 0 42px color-mix(in srgb, var(--color-selection) 42%, transparent); }
 .search-wordmark span { font-size: 26px; letter-spacing: -.065em; }
 #updates-title { display: flex; align-items: center; gap: 10px; }
 .settings-brand-icon { object-fit: contain; border-radius: 8px; }
@@ -431,8 +431,8 @@ button:disabled { scale: 1; }
 .game-list > :nth-child(n+4), #results-list > :nth-child(n+4), .settings-card:nth-child(n+4) { animation-delay: 90ms; }
 .search-field { transition: background 250ms var(--ease-smooth), box-shadow 400ms var(--ease-smooth), scale 450ms var(--ease-spring); }
 body.home-active .search-field:focus-within { scale: 1.012; }
-.search-wordmark img { transition: transform 550ms var(--ease-spring); }
-.search-wordmark:hover img { transform: translateY(-3px) rotate(-3deg); }
+.search-wordmark :is(img,.mamba-mark) { transition: transform 550ms var(--ease-spring); }
+.search-wordmark:hover :is(img,.mamba-mark) { transform: translateY(-3px) rotate(-3deg); }
 .switch-row input { transition: background 250ms var(--ease-smooth); }
 .switch-row input::after { transition: transform 350ms var(--ease-spring), background 250ms var(--ease-smooth); }
 .appearance-card summary svg { transition: transform 350ms var(--ease-spring); }
@@ -441,6 +441,6 @@ body.home-active .search-field:focus-within { scale: 1.012; }
 .toast { transition: opacity 220ms var(--ease-smooth), transform 420ms var(--ease-spring); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  .game-card:hover, .result-card.game-cover-card:hover, .nav-button:hover, .search-wordmark:hover img { transform: none; }
+  .game-card:hover, .result-card.game-cover-card:hover, .nav-button:hover, .search-wordmark:hover :is(img,.mamba-mark) { transform: none; }
   button:active:not(:disabled), body.home-active .search-field:focus-within { scale: 1; }
 }

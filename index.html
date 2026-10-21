@@ -13,14 +13,16 @@
   <script src="game-presence.js" defer></script>
   <script src="discovery.js" defer></script>
   <script src="settings-menu.js" defer></script>
+  <script src="default-theme-presets.js" defer></script>
   <script src="theme-model.js" defer></script>
   <script src="appearance.js" defer></script>
   <script src="experience.js" defer></script>
   <script src="scrollbar.js" defer></script>
   <script src="welcome.js" defer></script>
+  <script src="search-prompts.js" defer></script>
 </head>
 <body class="home-active startup-active">
-  <div id="startup-splash" class="startup-splash" role="status" aria-label="Starting Mamba"><div class="search-wordmark startup-brand" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="144" height="144"><div class="search-brand-line"><span>mamba</span><small id="startup-version" class="search-version" hidden></small></div></div></div>
+  <div id="startup-splash" class="startup-splash" role="status" aria-label="Starting Mamba"><div class="search-wordmark startup-brand" aria-label="Mamba"><span class="mamba-mark" aria-hidden="true"><img class="startup-original-mark" src="assets/mamba.png" alt=""></span><div class="search-brand-line"><span>mamba</span><small id="startup-version" class="search-version"></small></div></div></div>
   <div class="window-drag-area" aria-hidden="true"></div>
   <div class="steam-backdrop" id="steam-backdrop" aria-hidden="true"></div>
   <div class="ambient-edge-glow" aria-hidden="true"><div id="ambient-art"></div></div>
@@ -150,7 +152,7 @@
   <main class="workspace">
     <section class="page search-page" id="search-page" aria-label="Home">
       <div class="search-content">
-        <div class="search-wordmark" aria-label="Mamba"><img src="assets/mamba.png" alt="" width="56" height="56"><div class="search-brand-line"><span>mamba</span><small id="search-version" class="search-version" hidden></small></div></div>
+        <div class="search-wordmark" aria-label="Mamba"><span class="mamba-mark" aria-hidden="true"></span><div class="search-brand-line"><span>mamba</span><small id="search-version" class="search-version" hidden></small></div></div>
         <div class="search-field">
           <svg aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
@@ -351,7 +353,7 @@ Load config</button><button class="secondary-button" id="export-config" type="bu
 </svg>
 
 Export config</button></div><p class="field-hint">Exports include every saved setting, your API keys, passwords, sources, and palette in plain text. Loading a config creates a backup first.</p></section>
-        <section class="settings-card" aria-labelledby="updates-title"><div class="settings-card-heading"><div><h2 id="updates-title"><img class="settings-brand-icon" src="assets/mamba.png" alt="" width="28" height="28">Mamba <span id="app-version" class="version-label"></span></h2><p>Updates from shall0e/Mamba on GitHub.</p></div><span id="update-badge" class="connection-badge">Checking version…</span></div><label class="switch-row"><span><strong>Automatic updates</strong><small>Check on startup, download new versions, and install when Mamba closes.</small></span><input id="automatic-updates" type="checkbox" role="switch"></label><p id="update-status" class="field-hint" role="status"></p><div class="settings-actions"><button id="check-updates" type="button" class="secondary-button"><svg aria-hidden="true" class="lucide lucide-refresh-cw"
+        <section class="settings-card" aria-labelledby="updates-title"><div class="settings-card-heading"><div><h2 id="updates-title"><span class="settings-brand-icon mamba-mark" aria-hidden="true"></span>Mamba <span id="app-version" class="version-label"></span></h2><p>Updates from shall0e/Mamba on GitHub.</p></div><span id="update-badge" class="connection-badge">Checking version…</span></div><label class="switch-row"><span><strong>Automatic updates</strong><small>Check on startup, download new versions, and install when Mamba closes.</small></span><input id="automatic-updates" type="checkbox" role="switch"></label><p id="update-status" class="field-hint" role="status"></p><div class="settings-actions"><button id="check-updates" type="button" class="secondary-button"><svg aria-hidden="true" class="lucide lucide-refresh-cw"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
   height="24"
