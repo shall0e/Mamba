@@ -100,7 +100,6 @@
     copy.append(node('strong', title), node('small', description));
     const input = node('input');
     input.type = 'checkbox';
-    input.setAttribute('role', 'switch');
     input.setAttribute('aria-label', 'Use ' + title);
     input.onchange = () => scheduleSettingsSave(200);
     row.append(copy, input);
@@ -202,7 +201,9 @@
       change(input.checked);
       scheduleSettingsSave(250);
     };
-    row.append(text, input);
+    const control = node('span', undefined, 'catalog-checkbox');
+    control.append(input);
+    row.append(text, control);
     return row;
   }
   function sourceAction(label, handler, symbol) {
@@ -252,19 +253,19 @@
         details.append(node('strong', title));
         details.title = uri;
         const controls = node('div', undefined, 'source-row-actions');
-        const toggle = node('button', undefined, 'source-toggle');
-        toggle.type = 'button';
-        toggle.setAttribute('role', 'switch');
-        toggle.setAttribute('aria-checked', String(!isDisabled));
-        toggle.setAttribute('aria-label', `${isDisabled ? 'Enable' : 'Disable'} ${title}`);
-        toggle.title = isDisabled ? 'Enable source' : 'Disable source';
-        toggle.onclick = () => {
-          disabledSources = isDisabled
+        const checkbox = node('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !isDisabled;
+        checkbox.setAttribute('aria-label', `Use ${title}`);
+        checkbox.onchange = () => {
+          disabledSources = checkbox.checked
             ? disabledSources.filter((item) => item !== uri)
             : [...new Set([...disabledSources, uri])];
+          row.classList.toggle('is-disabled', !checkbox.checked);
           scheduleSettingsSave(150);
-          renderSources();
         };
+        const toggle = node('span', undefined, 'catalog-checkbox');
+        toggle.append(checkbox);
         const editButton = sourceAction(
           'Edit',
           () => {

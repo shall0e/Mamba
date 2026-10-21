@@ -5744,20 +5744,6 @@ html textarea::placeholder {
   white-space: nowrap;
   padding-inline: 12px;
 }
-.source-row .source-toggle {
-  flex: none;
-  min-height: 22px;
-  margin-right: 8px;
-}
-.source-icon-button:focus-visible,
-.source-toggle:focus-visible {
-  background: var(--color-focus);
-}
-@media (prefers-reduced-motion: reduce) {
-  .source-toggle::after {
-    transition: none;
-  }
-}
 .source-row-copy {
   min-width: 0;
   overflow: hidden;
@@ -5794,43 +5780,6 @@ html textarea::placeholder {
 .source-icon-button:focus-visible {
   background: var(--input-fill);
   backdrop-filter: blur(var(--input-blur));
-}
-.source-toggle {
-  position: relative;
-  width: 38px;
-  height: 22px;
-  padding: 0;
-  border-radius: 20px;
-  background: var(--input-fill);
-  backdrop-filter: blur(var(--input-blur));
-}
-.source-toggle::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  top: 4px;
-  left: 4px;
-  border-radius: 50%;
-  background: color-mix(
-    in srgb,
-    var(--color-textMuted) calc(var(--icons-opacity) * 100%),
-    transparent
-  );
-  transition:
-    transform 160ms ease,
-    background 160ms ease;
-}
-.source-toggle[aria-checked='true'] {
-  background: var(--input-fill);
-}
-.source-toggle[aria-checked='true']::after {
-  background: color-mix(
-    in srgb,
-    var(--theme-icons-color, var(--color-icons)) calc(var(--icons-opacity) * 100%),
-    transparent
-  );
-  transform: translateX(16px);
 }
 .source-add-row {
   display: flex;
@@ -6279,5 +6228,135 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
 @media (max-width: 480px) {
   html[data-navigation='top'] .sidebar nav {
     transform: translateX(-56px);
+  }
+}
+
+/* Catalog checkboxes retain a visible check independently of theme shadows. */
+#settings-sources .catalog-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  flex: none;
+}
+#settings-sources .source-row-copy,
+#settings-sources .source-icon-button {
+  transition:
+    opacity 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+#settings-sources .source-icon-button:hover {
+  transform: translateY(-1px);
+}
+#settings-sources .host-picker .host-row {
+  min-height: 46px;
+  padding-block: 8px;
+  border-radius: 8px;
+  transition: background 180ms ease;
+}
+#settings-sources .host-row:hover {
+  background: var(--input-fill);
+}
+#settings-sources .host-row small {
+  margin-top: 3px;
+  line-height: 1.4;
+}
+#settings-sources .settings-card {
+  animation: catalog-enter 220ms ease both;
+}
+@keyframes catalog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #settings-sources .settings-card {
+    animation: none;
+  }
+  #settings-sources
+    :is(
+      .catalog-checkbox input,
+      .catalog-checkbox svg,
+      .source-row-copy,
+      .source-icon-button,
+      .host-row
+    ) {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* One checkbox treatment for settings, onboarding, sources and cleanup. */
+:root body input[type='checkbox'] {
+  appearance: none;
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  background: var(--input-fill, var(--color-input));
+  backdrop-filter: blur(var(--input-blur));
+  transition:
+    background 180ms ease,
+    transform 180ms var(--ease-pop),
+    opacity 180ms ease;
+}
+:root body input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: var(--theme-icons-color, var(--color-icons));
+  mask: url('./check.svg') center / contain no-repeat;
+  -webkit-mask: url('./check.svg') center / contain no-repeat;
+  filter: blur(var(--icons-blur));
+  opacity: 0;
+  transform: scale(0.5) rotate(-12deg);
+  pointer-events: none;
+  transition:
+    transform 220ms var(--ease-pop),
+    opacity 140ms ease;
+}
+:root body input[type='checkbox']:checked {
+  background: var(--input-fill, var(--color-input));
+}
+:root body input[type='checkbox']:checked::after {
+  background: var(--theme-icons-color, var(--color-icons));
+  opacity: var(--icons-opacity);
+  transform: scale(1) rotate(0deg);
+}
+:root body input[type='checkbox']:is(:hover, :focus-visible):not(:disabled) {
+  background: var(--color-focus);
+}
+:root body input[type='checkbox']:active:not(:disabled) {
+  transform: scale(0.9);
+}
+:root body input[type='checkbox']:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root body input[type='checkbox'],
+  :root body input[type='checkbox']::after {
+    transition: none;
   }
 }
