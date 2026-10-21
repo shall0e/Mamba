@@ -7,6 +7,7 @@
   const node = (tag, text, className) => { const element=document.createElement(tag);if(text!==undefined)element.textContent=text;if(className)element.className=className;return element; };
   function handleError(error) {
     const text=String(error?.message||error||'This task could not finish.').replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+    if(/background service (?:stopped|is unavailable)/i.test(text))return true;
     showToast(text+' · See Activity for help');
     window.mamba.reportIssue(text).catch(()=>{});return true;
   }

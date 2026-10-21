@@ -14,7 +14,7 @@ const {Themes}=require('./lib/themes.cjs');
 const {parse:parseTheme}=require('./theme-model.js');
 const issues=new Issues();let issueQueue=Promise.resolve();
 let configSecrets=[];
-function reportIssue(error,context='app'){const issue=issues.add(error,context,configSecrets);broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});return issue;}
+function reportIssue(error,context='app'){if(closing)return;if(context!=='background'&&/background service (?:stopped|is unavailable)/i.test(String(error?.message||error)))return;const issue=issues.add(error,context,configSecrets);broadcast('issues:changed',issues.items);issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});return issue;}
 const { registerHelperRuntime, openGameHelper } = require('./lib/game-helper.cjs');
 const { validateSettings, decodeConfig, encodeConfig } = require('./lib/config-transfer.cjs');
 const { Updates } = require('./lib/updates.cjs');
@@ -384,16 +384,32 @@ app.whenReady().then(async () => {
     downloadJobs=jobs;broadcast('downloads:changed',jobs);
   });
   background.on('service:issue',issue=>reportIssue(new Error(issue.message),issue.context));
+  let backgroundIssueTimer;
+  background.on('ready', () => {
+    clearTimeout(backgroundIssueTimer);
+    const paused=downloadJobs.some(job=>job.status==='paused'&&/background service interrupted/i.test(job.message||''));
+    if(paused)reportIssue(new Error('The background service recovered. Interrupted downloads are paused; resume them in Activity.'),'background');
+    else {
+      for(const issue of issues.items)if(issue.code==='background'&&!issue.resolved)issues.resolve(issue.id);
+      broadcast('issues:changed',issues.items);
+      issueQueue=issueQueue.catch(()=>{}).then(()=>fs.writeFile(path.join(dataDirectory(),'issues.json'),JSON.stringify(issues.items))).catch(()=>{});
+    }
+  });
   background.on('interrupted', ({code}) => {
+    if(closing)return;
     downloadJobs = downloadJobs.map(job => ['queued','preparing','downloading','extracting','installing'].includes(job.status) ? {...job,status:'paused',speed:0,message:'Background service interrupted. Retry after it reconnects.'} : job);
     broadcast('downloads:changed', downloadJobs);
-    reportIssue(new Error('The background service stopped. Unfinished downloads are paused.'),'background');
+    clearTimeout(backgroundIssueTimer);
+    backgroundIssueTimer=setTimeout(()=>{if(!closing)reportIssue(new Error('The background service stopped. Unfinished downloads are paused.'),'background');},10000);
     catalogState = {...catalogState,phase:'interrupted',message:'Background service restarting. Unfinished tasks are paused.'};
     broadcast('catalog:changed',catalogState);
     // Log the exit code only; never write API keys, request payloads or download URLs.
     fs.appendFile(path.join(dataDirectory(),'background-crashes.log'),new Date().toISOString()+' background exit '+String(code)+'\n').catch(()=>{});
   });
   background.on('unavailable', () => {
+    clearTimeout(backgroundIssueTimer);
+    if(closing)return;
+    reportIssue(new Error('Background service could not recover. Restart Mamba.'),'background');
     catalogState = {...catalogState,phase:'error',message:'Background service could not recover. Restart Mamba.'};
     broadcast('catalog:changed',catalogState);
   });
