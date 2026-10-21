@@ -420,10 +420,16 @@
     }),
     autoDisableSources(uris) {
       const known = new Set(sourceLines());
-      const failing = [...new Set(uris)].filter((uri) => known.has(uri));
-      const next = [...new Set([...disabledSources, ...failing])];
-      if (next.length === disabledSources.length) return false;
-      disabledSources = next;
+      const failing = [...new Set(uris)].filter(
+        (uri) => known.has(uri) && !disabledSources.includes(uri),
+      );
+      if (!failing.length) return false;
+      disabledSources = [...disabledSources, ...failing];
+      const order = sourceOrder || [...known];
+      sourceOrder = [
+        ...order.filter((uri) => !failing.includes(uri)),
+        ...order.filter((uri) => failing.includes(uri)),
+      ];
       renderSources();
       scheduleSettingsSave(150);
       return true;
