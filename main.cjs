@@ -251,10 +251,14 @@ ipcMain.handle('library:remove', async (event,id)=>{
   if(downloadJobs.some(job=>job.folder===game.folder&&['preparing','downloading','extracting','installing'].includes(job.status)))throw Error('Finish or cancel the active download before removing this installation.');
   const config=await readConfig();authorizeGame(config,game.imported?[game.folder]:[],game);
   if(game.imported)return task('library:forget',game.folder);
-  const selected=await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender),{type:'warning',title:'Uninstall '+game.name+'?',message:'Move this installation to the Recycle Bin?',detail:game.folder+'\n\nOther installations will remain. Saved games outside this folder are not removed. Steam and Xbox shortcuts may need to be removed from those apps.',buttons:['Keep game','Uninstall'],defaultId:0,cancelId:0,noLink:true});
+  const selected=await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender),{type:'warning',title:'Uninstall '+game.name+'?',message:'Permanently delete this installation?',detail:game.folder+'\n\nThis permanently deletes the game folder and its contents without using the Recycle Bin. This cannot be undone. Other installations will remain. Saved games outside this folder are not removed. Steam and Xbox shortcuts may need to be removed from those apps.',buttons:['Keep game','Uninstall'],defaultId:0,cancelId:0,noLink:true});
   if(selected.response!==1)return false;
   if((await fs.lstat(game.folder)).isSymbolicLink())throw Error('The game folder changed. Refresh the library.');
-  await shell.trashItem(game.folder);await task('library:scan');return true;
+  const gamesRoot=await fs.realpath(config.downloadPath);
+  const targetFolder=await fs.realpath(game.folder);
+  within(gamesRoot,targetFolder);
+  if(path.resolve(gamesRoot).toLowerCase()===path.resolve(targetFolder).toLowerCase())throw Error('The games root cannot be uninstalled.');
+  await fs.rm(targetFolder,{recursive:true,force:true,maxRetries:3,retryDelay:300});await task('library:scan');return true;
 });
 function activityStatus(){return {version:app.getVersion(),worker:{connected:!!background?.child,pid:background?.child?.pid||null,pending:background?.pending.size||0,lastHeartbeat:background?.lastHeartbeat||null},catalog:{phase:catalogState.phase,count:catalogState.count||0,unavailableSources:catalogState.errors?.length||0,message:catalogState.message},libraryCount:installedGames.length,jobs:downloadJobs,issues:issues.items};}
 ipcMain.handle('app:activity',()=>activityStatus());

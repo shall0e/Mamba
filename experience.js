@@ -131,7 +131,7 @@
         if (!result) return;
         await refreshLibrary();
         showPage('library');
-        showToast(installation.imported ? 'Removed from library; files kept' : 'Installation moved to Recycle Bin');
+        showToast(installation.imported ? 'Removed from library; files kept' : 'Game uninstalled');
       };
       if(local)intro.append(node('span',playable?'Installed on this PC':'Setup required','detail-owned'));
       if(playable)primary.append(action('Play',()=>window.mamba.gameAction(playable.id,'play'),'play','primary-button'));
