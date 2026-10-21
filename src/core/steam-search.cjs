@@ -96,7 +96,14 @@ function chooseBestMatch(query, items, knownApps = []) {
       ? candidates[0]
       : null;
   }
-  if (!hints.year && knownApps.filter((app) => compactTitle(app.name) === wanted).length > 1)
+  if (
+    !hints.year &&
+    new Set(
+      knownApps
+        .filter((app) => app.type === 'game' && !app.isHub && compactTitle(app.name) === wanted)
+        .map((app) => app.steamId),
+    ).size > 1
+  )
     return null;
   const eligible = exact.filter(
     (game) => game.verified && (!hints.year || String(game.releaseYear) === hints.year),
@@ -345,7 +352,7 @@ class SteamSearch {
           const result = this.localResults(query);
           this.onResults?.(query, {
             ...result,
-            bestMatch: state.pending ? null : result.bestMatch,
+            bestMatch: result.bestMatch,
             pending: state.pending,
           });
         }
@@ -362,7 +369,7 @@ class SteamSearch {
     const result = this.localResults(query, offset);
     return {
       ...result,
-      bestMatch: state.pending ? null : result.bestMatch,
+      bestMatch: result.bestMatch,
       pending: state.pending,
     };
   }

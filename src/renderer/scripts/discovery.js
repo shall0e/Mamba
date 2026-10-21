@@ -6,6 +6,7 @@
     pending = false,
     loading = false;
   const queueing = new Set();
+  const cardCache = new Map();
   const labels = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' };
   const node = (tag, text, className) => {
     const item = document.createElement(tag);
@@ -64,12 +65,36 @@
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
     renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
     const list = $('#results-list');
-    const cards = document.createDocumentFragment();
-    list.replaceChildren();
+    const rows = [];
+    const visible = new Set(matches.map((game) => game.id));
+    for (const [id, cached] of cardCache) {
+      if (!visible.has(id)) {
+        cached.row.remove();
+        cardCache.delete(id);
+      }
+    }
+    list.querySelectorAll('.search-no-results').forEach((item) => item.remove());
     for (const game of matches) {
       const owned = ownership.get(game.id);
       const job = window.MambaPresence.download(window.MambaExperience?.jobs || [], game);
+      const signature = JSON.stringify([
+        game,
+        owned,
+        job,
+        queueing.has(game.id),
+        cardJobs.get(game.id),
+      ]);
+      const cached = cardCache.get(game.id);
+      if (cached?.signature === signature) {
+        rows.push(cached.row);
+        continue;
+      }
       const row = node('article', undefined, 'result-card game-cover-card discovery-card');
+      if (cached) {
+        row.style.animation = 'none';
+        cached.row.replaceWith(row);
+      }
+      cardCache.set(game.id, { row, signature });
       const cover = button(
         '',
         () => window.MambaExperience.openGame(game, 'search'),
@@ -198,9 +223,11 @@
       }
       actions.append(control);
       row.append(cover, info, actions);
-      cards.append(row);
+      rows.push(row);
     }
-    list.append(cards);
+    rows.forEach((row, index) => {
+      if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+    });
     if (!matches.length)
       list.append(
         node(

@@ -137,10 +137,10 @@ test('cached verified games return while Steam is still pending, without duplica
     await fs.rm(dir, { recursive: true, force: true });
   });
   const catalog = new Catalog(dir, () => ({}));
-  catalog.replace([release('portal', 'Portal 2', 'a')]);
+  catalog.replace([release('portal', 'Portal', 'a')]);
   const app = {
     steamId: 620,
-    name: 'Portal 2',
+    name: 'Portal',
     type: 'game',
     cover: 'https://shared.fastly.steamstatic.com/portal.jpg',
   };
@@ -165,11 +165,12 @@ test('cached verified games return while Steam is still pending, without duplica
   assert.ok(initial, 'the local result must not await Steam');
   assert.equal(initial.items[0].steamId, 620);
   assert.equal(initial.pending, true);
+  assert.equal(initial.bestMatch.id, 'steam:620');
   const work = search.searches.get('portal').work;
   await search.search('portal');
   assert.equal(search.searches.get('portal').work, work);
   assert.equal(calls, 1);
-  respond(Response.json({ items: [{ id: 620, name: 'Portal 2' }] }));
+  respond(Response.json({ items: [{ id: 620, name: 'Portal' }] }));
   await work;
   assert.equal(events.at(-1).result.pending, false);
   assert.equal((await search.search('portal')).pending, false);

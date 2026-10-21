@@ -141,7 +141,7 @@ test('year-specific releases attach only to the matching app and never borrow a 
   assert.equal(old.releaseYear, '2003');
   assert.ok(result.items.every((game) => game.verified && !game.identityUncertain));
   assert.ok(!result.items.some((game) => game.id === 'steam:2'));
-  assert.equal(result.bestMatch, null);
+  assert.equal(result.bestMatch.id, 'steam:1');
   assert.equal(search.localResults('call of duty 2003').bestMatch.id, 'steam:1');
 });
 
