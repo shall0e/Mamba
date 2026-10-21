@@ -1,8 +1,19 @@
-<img src="assets/mamba.png" alt="Mamba logo" width="256">
+<div align="center">
+
+<img src="assets/mamba.png" alt="Mamba logo" width="192">
 
 # Mamba Launcher
 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/shall0e/Mamba/total?style=plastic) ![GitHub Release](https://img.shields.io/github/v/release/shall0e/Mamba) ![GitHub Repo stars](https://img.shields.io/github/stars/shall0e/Mamba) ![GitHub Issues](https://img.shields.io/github/issues/shall0e/Mamba)
+<p><a href="https://github.com/shall0e/Mamba/releases/latest"><img src="https://img.shields.io/github/v/release/shall0e/Mamba?style=flat-square&label=release&labelColor=202020&color=5cffce" alt="GitHub Release"></a>
+<a href="https://github.com/shall0e/Mamba/releases"><img src="https://img.shields.io/github/downloads/shall0e/Mamba/total?style=flat-square&label=downloads&labelColor=202020&color=5cffce" alt="GitHub Downloads (all assets, all releases)"></a>
+<a href="https://github.com/shall0e/Mamba/stargazers"><img src="https://img.shields.io/github/stars/shall0e/Mamba?style=flat-square&label=stars&labelColor=202020&color=5cffce" alt="GitHub Repo stars"></a>
+<a href="https://github.com/shall0e/Mamba/issues"><img src="https://img.shields.io/github/issues/shall0e/Mamba?style=flat-square&label=issues&labelColor=202020&color=5cffce" alt="GitHub Issues"></a></p>
+
+**[Screenshots](#screenshots) &nbsp; · &nbsp; [Features](#features) &nbsp; · &nbsp; [Mamba vs. Hydra](#mamba-vs-hydra) &nbsp; · &nbsp; [Development](#development)**
+
+</div>
+
+<p align="center"><img src="assets/readme/divider.svg" width="100%" height="8" alt=""></p>
 
 ## What if Hydra's heads never grew back?
 
@@ -10,36 +21,52 @@
 
 While Hydra aims to be an all-in-one gaming platform, Mamba takes a different approach: **actually downloading the games**
 
+<p align="center"><img src="assets/readme/divider.svg" width="100%" height="8" alt=""></p>
+
 ## Screenshots
 
-| Home                                                                 | Library                                                                         |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| <img src="assets/screenshots/home.png" alt="Mamba home" width="480"> | <img src="assets/screenshots/library.png" alt="Mamba game library" width="480"> |
+<table>
+<tr><th align="left" width="50%">Home</th><th align="left" width="50%">Library</th></tr>
+<tr><td><a href="assets/screenshots/home.png"><img src="assets/screenshots/home.png" alt="Mamba home" width="540"></a></td><td><a href="assets/screenshots/library.png"><img src="assets/screenshots/library.png" alt="Mamba game library" width="540"></a></td></tr>
+<tr><th align="left" width="50%">Search</th><th align="left" width="50%">Activity</th></tr>
+<tr><td><a href="assets/screenshots/search.png"><img src="assets/screenshots/search.png" alt="Mamba game search" width="540"></a></td><td><a href="assets/screenshots/activity.png"><img src="assets/screenshots/activity.png" alt="Mamba activity dashboard" width="540"></a></td></tr>
+</table>
 
-| Search                                                                        | Activity                                                                               |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| <img src="assets/screenshots/search.png" alt="Mamba game search" width="480"> | <img src="assets/screenshots/activity.png" alt="Mamba activity dashboard" width="480"> |
+<p align="center"><img src="assets/readme/divider.svg" width="100%" height="8" alt=""></p>
 
 ## Features
 
-### Game Discovery
+<table>
+<tr>
+<td valign="top" width="33%">
+<h3>Game Discovery</h3>
+<ul>
+<li><strong>Extensive game catalog</strong> - Bring all of your Hydra links over, Mamba sorts through the garbage.</li>
+<li><strong>One-click downloads</strong> - Just search and hit download.</li>
+<li><strong>Centralized interface</strong> - Discover available downloads from one application.</li>
+</ul>
+</td>
+<td valign="top" width="33%">
+<h3>Download Management</h3>
+<ul>
+<li><strong>Download progress tracking</strong> - Monitor active downloads and their progress.</li>
+<li><strong>Download history</strong> - Keep track of download activity.</li>
+<li><strong>Download diagnostics</strong> - Collect troubleshooting information when downloads fail.</li>
+</ul>
+</td>
+<td valign="top" width="33%">
+<h3>Desktop Experience</h3>
+<ul>
+<li><strong>Minimalist interface</strong> - Designed around simplicity rather than extensive navigation.</li>
+<li><strong>Lightweight workflow</strong> - Avoid the complexity of managing an entire gaming library.</li>
+<li><strong>Focused functionality</strong> - Download games without distractions or unnecessary extras.</li>
+<li><strong>Customizability</strong> - Make it yours and express yourself through color!</li>
+</ul>
+</td>
+</tr>
+</table>
 
-- **Extensive game catalog** - Bring all of your Hydra links over, Mamba sorts through the garbage.
-- **One-click downloads** - Just search and hit download.
-- **Centralized interface** - Discover available downloads from one application.
-
-### Download Management
-
-- **Download progress tracking** - Monitor active downloads and their progress.
-- **Download history** - Keep track of download activity.
-- **Download diagnostics** - Collect troubleshooting information when downloads fail.
-
-### Desktop Experience
-
-- **Minimalist interface** - Designed around simplicity rather than extensive navigation.
-- **Lightweight workflow** - Avoid the complexity of managing an entire gaming library.
-- **Focused functionality** - Download games without distractions or unnecessary extras.
-- **Customizability** - Make it yours and express yourself through color!
+<p align="center"><img src="assets/readme/divider.svg" width="100%" height="8" alt=""></p>
 
 ## Mamba vs. Hydra
 
@@ -60,6 +87,8 @@ While Hydra aims to be an all-in-one gaming platform, Mamba takes a different ap
 | Achievements               |  ❌   |                       ✅                        |
 | Subscription service       |  ❌   |                       ✅                        |
 
+<p align="center"><img src="assets/readme/divider.svg" width="100%" height="8" alt=""></p>
+
 ## Development
 
 Run `npm ci` then `npm start`. On Windows, `START.cmd` launches without a terminal.
@@ -68,7 +97,8 @@ Run `npm ci` then `npm start`. On Windows, `START.cmd` launches without a termin
 - `npm run release:win`: build an installer without publishing.
 - `npm run format` / `npm run format:check`: format source / check formatting.
 
-### Project layout
+<details>
+<summary><strong>Project layout</strong></summary>
 
 | Folder         | Contents                                                     |
 | -------------- | ------------------------------------------------------------ |
@@ -84,3 +114,5 @@ Run `npm ci` then `npm start`. On Windows, `START.cmd` launches without a termin
 | `dist`         | Generated builds, excluded from Git                          |
 
 Development data previously stored in the project root is moved to `data/` automatically. Installed apps continue using their existing user data directory.
+
+</details>
