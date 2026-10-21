@@ -82,7 +82,7 @@ class GameIdentity {
     if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) return null;
     const key = 'app:' + id,
       saved = this.cache.get(key);
-    if (saved && saved.data.detailsVersion === 5 && Date.now() - saved.at < 30 * 86400000)
+    if (saved && saved.data.detailsVersion === 6 && Date.now() - saved.at < 30 * 86400000)
       return saved.data;
     const response = await this.fetch(
       'https://store.steampowered.com/api/appdetails?appids=' + id + '&l=english&cc=CA',
@@ -104,7 +104,8 @@ class GameIdentity {
         /nudity|sexual content|adult.only|sexually explicit/i.test(String(value)),
       );
     const data = {
-      detailsVersion: 5,
+      detailsVersion: 6,
+      isFree: app.is_free === true,
       isHub: /\b(?:game launcher|launch hub|central hub|launch platform)\b/i.test(
         String(app.short_description || ''),
       ),
@@ -152,6 +153,7 @@ class GameIdentity {
     if (
       saved &&
       saved.data.identityVersion === IDENTITY_VERSION &&
+      saved.data.detailsVersion === 6 &&
       Date.now() - saved.at < (saved.data.verified ? 30 : 0.05) * 86400000
     )
       return saved.data;

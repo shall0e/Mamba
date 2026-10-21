@@ -98,7 +98,7 @@ function chooseBestMatch(query, items) {
   }
   if (latest) {
     const candidates = items
-      .filter((game) => game.verified && !game.related && game.releaseYear)
+      .filter((game) => !game.isFree && game.verified && !game.related && game.releaseYear)
       .sort((a, b) => Number(b.releaseYear) - Number(a.releaseYear));
     return candidates.length &&
       (candidates.length === 1 || candidates[0].releaseYear !== candidates[1].releaseYear)
@@ -106,7 +106,8 @@ function chooseBestMatch(query, items) {
       : null;
   }
   let eligible = exact.filter(
-    (game) => game.verified && (!hints.year || String(game.releaseYear) === hints.year),
+    (game) =>
+      !game.isFree && game.verified && (!hints.year || String(game.releaseYear) === hints.year),
   );
   // Preserve the user's numeral spelling when normalized titles collide.
   const numerals = String(query).match(/\b(?:ii|iii|iv|vi|vii|viii|ix|x)\b/gi);
@@ -117,7 +118,8 @@ function chooseBestMatch(query, items) {
     if (spelled.length) eligible = spelled;
   }
   const uncertain = exact.some(
-    (game) => !game.verified && (!hints.year || String(game.releaseYear) === hints.year),
+    (game) =>
+      !game.isFree && !game.verified && (!hints.year || String(game.releaseYear) === hints.year),
   );
   return eligible.length === 1 && !uncertain ? eligible[0] : null;
 }
@@ -143,7 +145,13 @@ class SteamSearch {
       this.queries = new Map(JSON.parse(await fs.readFile(this.file, 'utf8')));
     } catch {}
     for (const { data } of this.identity.cache?.values() || [])
-      if (data?.type === 'game' && data.steamId && data.cover)
+      if (
+        data?.type === 'game' &&
+        !data.isFree &&
+        data.detailsVersion !== 5 &&
+        data.steamId &&
+        data.cover
+      )
         this.apps.set('steam:' + data.steamId, data);
     this.indexSources();
   }
@@ -305,7 +313,7 @@ class SteamSearch {
     }
   }
   group(app, releases) {
-    if (!releases.length) return null;
+    if (app.isFree || !releases.length) return null;
     const combined = createSearchIndex(releases.map((release) => ({ ...release, name: app.name })));
     const group = combined[0];
     if (!group) return null;
@@ -350,7 +358,7 @@ class SteamSearch {
     };
   }
   forApp(app) {
-    if (!app || app.type !== 'game' || !app.steamId || !app.cover) return null;
+    if (!app || app.isFree || app.type !== 'game' || !app.steamId || !app.cover) return null;
     this.apps.set('steam:' + app.steamId, app);
     const releases = this.releasesFor(app).filter((source) => !this.ambiguous.has(source.id));
     return this.group(app, releases);
@@ -425,7 +433,7 @@ class SteamSearch {
     ];
     const sourceResults = [...new Map(sourceLists.flat().map((item) => [item.id, item])).values()];
     const record = (app) => {
-      if (app?.type !== 'game') return;
+      if (app?.type !== 'game' || app.isFree) return;
       this.apps.set('steam:' + app.steamId, app);
       if (revision === this.searchRevision) publish();
     };

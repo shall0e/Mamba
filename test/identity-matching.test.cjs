@@ -199,3 +199,21 @@ test('specific year and Roman numeral queries select one title suffix', () => {
   assert.equal(chooseBestMatch('distinct game ii', games).id, 'new');
   assert.equal(chooseBestMatch('distinct game 2', games), null);
 });
+
+test('free to play games never produce a card or Best Match', () => {
+  const catalog = new Catalog('unused', async () => ({}));
+  catalog.replace([
+    {
+      id: 'free',
+      name: 'Free Example',
+      sources: ['fixture'],
+      links: [{ kind: 'torrents', uri: 'magnet:?xt=urn:btih:' + 'a'.repeat(40) }],
+    },
+  ]);
+  const search = new SteamSearch('unused', catalog, {});
+  const app = { steamId: 1, name: 'Free Example', type: 'game', isFree: true, cover: 'cover' };
+  search.apps.set('steam:1', app);
+  assert.equal(search.localResults('Free Example').total, 0);
+  assert.equal(search.forApp(app), null);
+  assert.equal(chooseBestMatch('Free Example', [{ ...app, verified: true }]), null);
+});

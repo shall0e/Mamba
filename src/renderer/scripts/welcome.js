@@ -323,12 +323,28 @@
     draw();
     dialog.showModal();
   }
-  // The shell must become usable independently of settings, artwork, or IPC.
-  document.body.classList.remove('startup-active', 'startup-finishing', 'startup-handoff');
-  splash.remove();
-  configReady
-    .then(async (config) => {
+  Promise.all([configReady, new Promise((resolve) => setTimeout(resolve, 1500))])
+    .then(async ([config]) => {
+      document.body.classList.add('startup-finishing', 'startup-handoff');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const fade = splash.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: 280,
+          fill: 'forwards',
+        });
+        await Promise.race([
+          fade.finished.catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 400)),
+        ]);
+      }
+      document.body.classList.remove('startup-active', 'startup-finishing', 'startup-handoff');
+      splash.remove();
       if (config.onboardingCompleted === false) await setup(config);
     })
-    .catch(() => {});
+    .catch((error) => {
+      const brand = splash.querySelector('.startup-brand');
+      brand.append(make('p', 'Could not load settings. ' + String(error.message || '')));
+      const retry = make('button', 'Try again', 'primary-button');
+      retry.onclick = () => location.reload();
+      brand.append(retry);
+    });
 })();
