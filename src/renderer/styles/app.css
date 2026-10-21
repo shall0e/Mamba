@@ -5719,6 +5719,14 @@ html textarea::placeholder {
   gap: 12px;
   padding: 2px 0;
 }
+.source-row.is-disabled .source-row-copy,
+.source-row.is-disabled .source-icon-button {
+  opacity: 0.45;
+}
+.source-row.is-disabled .source-icon-button:hover,
+.source-row.is-disabled .source-icon-button:focus-visible {
+  opacity: 1;
+}
 .source-row.is-editing {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px;

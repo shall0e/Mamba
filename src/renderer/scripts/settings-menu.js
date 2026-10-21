@@ -10,6 +10,7 @@
     hosts = [],
     disabledHosts = [],
     disabledSources = [];
+  let sourceOrder = null;
   const form = $('#settings-form');
   const layout = node('div', undefined, 'settings-layout');
   const nav = node('nav', undefined, 'settings-nav');
@@ -213,8 +214,15 @@
   function renderSources() {
     sourceList.replaceChildren();
     const urls = [...new Set(sourceLines())];
-    const active = urls.filter((uri) => !disabledSources.includes(uri));
-    const disabled = urls.filter((uri) => disabledSources.includes(uri));
+    // Snapshot enabled/disabled ordering once per renderer session.
+    sourceOrder ??= [
+      ...urls.filter((uri) => !disabledSources.includes(uri)),
+      ...urls.filter((uri) => disabledSources.includes(uri)),
+    ];
+    sourceOrder = [
+      ...sourceOrder.filter((uri) => urls.includes(uri)),
+      ...urls.filter((uri) => !sourceOrder.includes(uri)),
+    ];
     const replaceUrls = (next) => {
       const previous = new Set(urls);
       const nextUrls = [...new Set(next)];
@@ -225,11 +233,11 @@
       renderSources();
       scheduleSettingsSave(200);
     };
-    const renderGroup = (title, entries, isDisabled) => {
+    const renderGroup = (entries) => {
       if (!entries.length) return;
       const group = node('section', undefined, 'source-group');
-      group.append(node('h3', title, 'source-group-title'));
       for (const uri of entries) {
+        const isDisabled = disabledSources.includes(uri);
         let title = uri;
         try {
           const url = new URL(uri);
@@ -239,6 +247,7 @@
             url.hostname;
         } catch {}
         const row = node('div', undefined, 'source-row');
+        row.classList.toggle('is-disabled', isDisabled);
         const details = node('div', undefined, 'source-row-copy');
         details.append(node('strong', title));
         details.title = uri;
@@ -274,6 +283,7 @@
                   input.reportValidity();
                   return;
                 }
+                sourceOrder = sourceOrder.map((value) => (value === uri ? nextValue : value));
                 replaceUrls(urls.map((value) => (value === uri ? nextValue : value)));
               },
               'check',
@@ -301,8 +311,7 @@
       }
       sourceList.append(group);
     };
-    renderGroup('Enabled sources', active, false);
-    renderGroup('Disabled sources', disabled, true);
+    renderGroup(sourceOrder);
     if (!urls.length) sourceList.append(node('p', 'Add a source URL below.', 'field-hint'));
   }
   const addRow = node('div', undefined, 'source-add-row');
