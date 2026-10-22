@@ -22,6 +22,7 @@ test('installation hook resolves the game identity and writes after metadata ext
   const { BackgroundService } = require('../src/core/background-service.cjs');
   const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-appid-hook-'));
   t.after(() => fs.rm(folder, { recursive: true, force: true }));
+  await fs.writeFile(path.join(folder, '.mamba-game.json'), '{}');
   const service = {
     installMetadata: {
       apply: async () => fs.writeFile(path.join(folder, 'steam_appid.txt'), 'stale archive ID'),
@@ -36,10 +37,26 @@ test('installation hook resolves the game identity and writes after metadata ext
   };
   await BackgroundService.prototype.applyInstallMetadata.call(service, folder, {
     name: 'Portal 2',
+    installSource: 'hydra',
+    id: 'download-id',
   });
   assert.equal(await fs.readFile(path.join(folder, 'steam_appid.txt'), 'utf8'), '620\n');
-  service.identity.identify = async () => ({ verified: false, steamId: 999 });
-  service.installMetadata.apply = async () => {};
-  await BackgroundService.prototype.applyInstallMetadata.call(service, folder, { name: 'Unknown' });
+  service.identity.identify = async () => assert.fail('must not resolve identity again');
+  service.installMetadata.apply = async () => assert.fail('must not extract again');
+  await BackgroundService.prototype.applyInstallMetadata.call(service, folder, {
+    name: 'Portal 2',
+    installSource: 'hydra',
+    id: 'download-id',
+  });
   assert.equal(await fs.readFile(path.join(folder, 'steam_appid.txt'), 'utf8'), '620\n');
+});
+
+test('imported and unmarked installations never receive install extras', async () => {
+  const { BackgroundService } = require('../src/core/background-service.cjs');
+  const service = {
+    installMetadata: { apply: () => assert.fail('must not extract') },
+    identity: { identify: () => assert.fail('must not resolve identity') },
+  };
+  for (const game of [{}, { id: 'existing' }, { installSource: 'hydra' }])
+    await BackgroundService.prototype.applyInstallMetadata.call(service, 'unused', game);
 });
