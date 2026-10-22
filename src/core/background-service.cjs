@@ -77,7 +77,7 @@ class BackgroundService {
     this.downloads = new Downloads(directory, getConfig, this.catalog, this.library, {
       resolveName: (name) => this.metadata.resolveName(name),
       registerGame: registerSteam,
-      installMetadata: (folder) => this.applyInstallMetadata(folder),
+      installMetadata: (folder, game) => this.applyInstallMetadata(folder, game),
       registerXbox: (game) => this.addXboxGame(game),
       setupGame: (game) =>
         addGame({
@@ -148,7 +148,7 @@ class BackgroundService {
             });
             return;
           }
-          for (const game of games) await this.applyInstallMetadata(game.folder);
+          for (const game of games) await this.applyInstallMetadata(game.folder, game);
         }
       })
       .catch((error) =>
@@ -163,13 +163,27 @@ class BackgroundService {
     this.timer = setInterval(() => this.maintenance().catch(() => {}), 30000);
     return true;
   }
-  async applyInstallMetadata(folder) {
+  async applyInstallMetadata(folder, game = {}) {
     try {
       await this.installMetadata.apply(folder);
     } catch (error) {
       this.emit('service:issue', { context: 'installation:metadata', message: error.message });
     }
+    try {
+      const identity = game.identity?.verified
+        ? game.identity
+        : await this.identity.identify(game.release || game.name || path.basename(folder));
+      if (identity?.verified)
+        await require('./steam-appid.cjs').writeSteamAppId(
+          folder,
+          game.executable,
+          identity.steamId,
+        );
+    } catch (error) {
+      this.emit('service:issue', { context: 'installation:steam-appid', message: error.message });
+    }
   }
+
   async gameDetails(id) {
     const installed =
       this.library.get(id) ||
