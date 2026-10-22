@@ -17,7 +17,7 @@ test('only the reviewed text metadata formats are accepted', () => {
     /text/,
   );
 });
-test('metadata is added to every installation and missing files are restored', async (t) => {
+test('metadata is added to every game root, restores missing files, and replaces changed files', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-install-metadata-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const installer = new InstallMetadata(dir, () => assert.fail('No network expected'));
@@ -36,10 +36,7 @@ test('metadata is added to every installation and missing files are restored', a
     ]);
     await fs.writeFile(path.join(folder, 'metadata.json'), '{"existing":true}');
     await installer.apply(folder);
-    assert.equal(
-      await fs.readFile(path.join(folder, 'metadata.json'), 'utf8'),
-      '{"existing":true}',
-    );
+    assert.equal(await fs.readFile(path.join(folder, 'metadata.json'), 'utf8'), '');
   }
 });
 test('unreviewed downloads are rejected without caching or installing files', async (t) => {

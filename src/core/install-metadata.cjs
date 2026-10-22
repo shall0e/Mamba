@@ -93,7 +93,7 @@ class InstallMetadata {
         if (error.code === 'ENOENT') return null;
         throw error;
       });
-      if (previous !== null) continue;
+      if (previous?.equals(files[name])) continue;
       const temporary = await safePath(folder, target + '.' + randomUUID() + '.tmp');
       try {
         await fs.writeFile(temporary, files[name]);
