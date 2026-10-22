@@ -279,6 +279,7 @@ class Downloads extends EventEmitter {
       registerGame = async () => null,
       registerXbox = async () => null,
       setupGame,
+      installMetadata = async () => {},
       checkDisk = ensureSpace,
       reviewSetup = async () => {},
       isOnline = recovery.online,
@@ -309,6 +310,7 @@ class Downloads extends EventEmitter {
     this.checkDisk = checkDisk;
     this.pauseRequests = new Set();
     this.setupGame = setupGame;
+    this.installMetadata = installMetadata;
     this.reviewSetup = reviewSetup;
   }
   snapshot() {
@@ -1145,6 +1147,7 @@ class Downloads extends EventEmitter {
       await this.reviewSetup(destination);
     }
     signal.throwIfAborted();
+    await this.installMetadata(destination);
     if (!config.keepArchives) {
       const stagingRoot = within(job.root, path.join(job.root, '.mamba-downloads'));
       within(stagingRoot, stage);

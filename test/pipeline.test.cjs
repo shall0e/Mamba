@@ -237,13 +237,16 @@ test('complete queue downloads, extracts, flattens, and registers a portable gam
   const archive = zip('Outer/Inner/Fixture.exe', 'fixture, never executed');
   const game = { id: 'fixture-game', name: 'Fixture Game', links: [{ uri: magnet }] };
   const library = new Library(async () => config);
-  let automaticSettings;
+  let automaticSettings, metadataFolder;
   const jobs = new Downloads(
     dir,
     async () => config,
     { byId: new Map([[game.id, game]]) },
     library,
     {
+      installMetadata: async (folder) => {
+        metadataFolder = folder;
+      },
       setupGame: async (settings) => {
         automaticSettings = settings;
         return { folder: settings.folder, executable: settings.file, steam: { status: 'added' } };
@@ -272,6 +275,7 @@ test('complete queue downloads, extracts, flattens, and registers a portable gam
   });
   await jobs.start(game.id);
   await finished;
+  assert.equal(metadataFolder, path.join(config.downloadPath, 'Fixture Game'));
   assert.equal(automaticSettings.name, 'Fixture Game');
   assert.equal(automaticSettings.folder, path.join(config.downloadPath, 'Fixture Game'));
   assert.equal(path.basename(automaticSettings.file), 'Fixture.exe');

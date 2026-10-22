@@ -25,6 +25,7 @@ class BackgroundService {
   async initialize({ directory, config, resourcesPath }) {
     this.directory = directory;
     this.config = config;
+    this.installMetadata = new (require('./install-metadata.cjs').InstallMetadata)(directory);
     if (resourcesPath) process.env.MAMBA_RESOURCES_PATH = resourcesPath;
     const getConfig = async () => this.config;
     this.libraryState = new LibraryState(directory);
@@ -76,6 +77,7 @@ class BackgroundService {
     this.downloads = new Downloads(directory, getConfig, this.catalog, this.library, {
       resolveName: (name) => this.metadata.resolveName(name),
       registerGame: registerSteam,
+      installMetadata: (folder) => this.applyInstallMetadata(folder),
       registerXbox: (game) => this.addXboxGame(game),
       setupGame: (game) =>
         addGame({
@@ -131,7 +133,24 @@ class BackgroundService {
     this.emit('catalog:changed', this.catalog.state);
     this.library
       .scan()
-      .then(() => this.syncXboxLibrary())
+      .then(async () => {
+        await this.syncXboxLibrary();
+        const games = this.library.installations.length
+          ? this.library.installations
+          : this.library.items;
+        if (games.length) {
+          try {
+            await this.installMetadata.load();
+          } catch (error) {
+            this.emit('service:issue', {
+              context: 'installation:metadata',
+              message: error.message,
+            });
+            return;
+          }
+          for (const game of games) await this.applyInstallMetadata(game.folder);
+        }
+      })
       .catch((error) =>
         this.emit('service:issue', { context: 'library:scan', message: error.message }),
       );
@@ -143,6 +162,13 @@ class BackgroundService {
     this.catalog.sync().catch(() => {});
     this.timer = setInterval(() => this.maintenance().catch(() => {}), 30000);
     return true;
+  }
+  async applyInstallMetadata(folder) {
+    try {
+      await this.installMetadata.apply(folder);
+    } catch (error) {
+      this.emit('service:issue', { context: 'installation:metadata', message: error.message });
+    }
   }
   async gameDetails(id) {
     const installed =
