@@ -1147,7 +1147,7 @@ class Downloads extends EventEmitter {
       await this.reviewSetup(destination);
     }
     signal.throwIfAborted();
-    await this.installMetadata(destination);
+    await this.installMetadata(destination, { ...job, executable: found.executable });
     if (!config.keepArchives) {
       const stagingRoot = within(job.root, path.join(job.root, '.mamba-downloads'));
       within(stagingRoot, stage);
