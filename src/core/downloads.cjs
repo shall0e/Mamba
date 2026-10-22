@@ -483,6 +483,7 @@ class Downloads extends EventEmitter {
       release: game.name,
       id: randomUUID(),
       gameId: game.id,
+      installSource: 'hydra',
       name: displayName || indexed?.name || displayTitle(game.name),
       uri: link.uri,
       status: 'queued',
@@ -1147,7 +1148,8 @@ class Downloads extends EventEmitter {
       await this.reviewSetup(destination);
     }
     signal.throwIfAborted();
-    await this.installMetadata(destination, { ...job, executable: found.executable });
+    if (status === 'installed')
+      await this.installMetadata(destination, { ...job, executable: found.executable });
     if (!config.keepArchives) {
       const stagingRoot = within(job.root, path.join(job.root, '.mamba-downloads'));
       within(stagingRoot, stage);

@@ -135,21 +135,6 @@ class BackgroundService {
       .scan()
       .then(async () => {
         await this.syncXboxLibrary();
-        const games = this.library.installations.length
-          ? this.library.installations
-          : this.library.items;
-        if (games.length) {
-          try {
-            await this.installMetadata.load();
-          } catch (error) {
-            this.emit('service:issue', {
-              context: 'installation:metadata',
-              message: error.message,
-            });
-            return;
-          }
-          for (const game of games) await this.applyInstallMetadata(game.folder, game);
-        }
       })
       .catch((error) =>
         this.emit('service:issue', { context: 'library:scan', message: error.message }),
@@ -164,6 +149,11 @@ class BackgroundService {
     return true;
   }
   async applyInstallMetadata(folder, game = {}) {
+    if (game.installSource !== 'hydra' || !game.id) return;
+    const manifestFile = path.join(folder, '.mamba-game.json');
+    const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
+    if (manifest.installExtrasAttempted) return;
+    await atomicJson(manifestFile, { ...manifest, installExtrasAttempted: true });
     try {
       await this.installMetadata.apply(folder);
     } catch (error) {
