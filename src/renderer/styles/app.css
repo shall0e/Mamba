@@ -6404,3 +6404,17 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
     opacity: 0.5;
   }
 }
+
+.launch-options-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.launch-options-editor label {
+  display: grid;
+  gap: 8px;
+}
+.launch-options-editor input {
+  width: 100%;
+  min-width: 0;
+}

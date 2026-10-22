@@ -423,6 +423,24 @@ class BackgroundService {
         this.emit('library:changed', this.library.items);
         return true;
       }
+      case 'library:launch-options': {
+        const game = this.library.get(args[0]);
+        if (!game) throw Error('Game not found. Refresh your library.');
+        authorizeGame(this.config, this.libraryState.data.imports, game);
+        if (this.installationBusy(game))
+          throw Error('Wait for installation to finish before changing launch options.');
+        const { normalizeLaunchOptions, launchConfiguration } = require('./launch-options.cjs');
+        const launchOptions = normalizeLaunchOptions(args[1]);
+        const launch = launchConfiguration({ ...game, launchOptions });
+        await require('./library.cjs').safePath(game.folder, launch.cwd);
+        if (!(await fs.stat(launch.cwd)).isDirectory())
+          throw Error('Choose an existing working directory inside the game folder.');
+        const file = path.join(game.folder, '.mamba-game.json');
+        const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
+        await atomicJson(file, { ...manifest, name: game.name, launchOptions });
+        await this.library.scan();
+        return launchOptions;
+      }
       case 'library:launcher':
         return this.selectLauncher(...args);
       case 'shutdown':

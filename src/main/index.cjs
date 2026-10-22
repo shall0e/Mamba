@@ -410,6 +410,9 @@ if (!app.requestSingleInstanceLock()) {
     if (chosen.canceled || !chosen.filePaths[0]) return null;
     return task('library:launcher', game.id, chosen.filePaths[0]);
   });
+  ipcMain.handle('library:launch-options', (_event, id, options) =>
+    task('library:launch-options', String(id), options),
+  );
   ipcMain.handle('library:remove', async (event, id) => {
     const game = await task('library:get', String(id));
     if (!game) throw Error('Game not found.');
@@ -612,6 +615,10 @@ if (!app.requestSingleInstanceLock()) {
       if (error) throw new Error(error);
       return;
     }
+    const launch = require('../core/launch-options.cjs').launchConfiguration(game);
+    if (!(await fs.stat(launch.cwd)).isDirectory())
+      throw Error('The working directory is unavailable.');
+    await require('../core/library.cjs').safePath(game.folder, launch.cwd);
     const { steamLaunchUrl } = require('../core/shortcuts.cjs');
     const { addGame } = require('../../tools/add-game.cjs');
     const steamUrl = await steamLaunchUrl(game, {
@@ -620,6 +627,7 @@ if (!app.requestSingleInstanceLock()) {
           folder: selected.folder,
           file: selected.executable,
           name: selected.name,
+          launchOptions: selected.launchOptions,
           desktop: async () => {},
           xbox: async () => ({ status: 'skipped' }),
         }),
@@ -629,20 +637,31 @@ if (!app.requestSingleInstanceLock()) {
       await task('library:played', id).catch(() => {});
       return;
     }
-    if (!/\.(exe|com)$/i.test(target)) {
+    if (
+      !/\.(exe|com)$/i.test(target) &&
+      !launch.arguments &&
+      !game.launchOptions?.workingDirectory
+    ) {
       const error = await shell.openPath(target);
       if (error) throw new Error(error);
       await task('library:played', id).catch(() => {});
       return;
     }
     await new Promise((resolve, reject) => {
-      const child = spawn(target, [], {
-        cwd: path.dirname(target),
-        detached: true,
-        stdio: 'ignore',
-        shell: false,
-        windowsHide: true,
-      });
+      const wrapped = require('../core/shortcuts.cjs').launchTarget(target, launch.arguments);
+      const native = /\.(exe|com)$/i.test(target);
+      const child = spawn(
+        native ? target : wrapped.exe.slice(1, -1),
+        native ? launch.argv : [wrapped.args],
+        {
+          windowsVerbatimArguments: !native,
+          cwd: launch.cwd,
+          detached: true,
+          stdio: 'ignore',
+          shell: false,
+          windowsHide: true,
+        },
+      );
       child.once('error', reject);
       child.once('spawn', () => {
         child.unref();

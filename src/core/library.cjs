@@ -520,6 +520,7 @@ class Library {
           version: manifest.version || null,
           installedAt: manifest.installedAt || null,
           launcherSelected: !!manifest.launcherSelected,
+          launchOptions: manifest.launchOptions || {},
           executable,
           installer: found.installer,
           repairPending: Boolean(manifest.repairPending),

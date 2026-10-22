@@ -53,6 +53,7 @@ async function addGame({
   folder,
   name,
   resolveName = async (value) => value,
+  launchOptions,
   desktop = desktopShortcut,
   steam = registerSteam,
   xbox = registerXbox,
@@ -65,7 +66,12 @@ async function addGame({
     executable: file,
     status: 'installed',
   });
-  const game = { name: title, executable: result.executable, folder: result.folder };
+  const game = {
+    name: title,
+    executable: result.executable,
+    folder: result.folder,
+    launchOptions: launchOptions || result.manifest.launchOptions || {},
+  };
   const xboxRegistration = await xbox(game).catch((error) => ({
     status: 'pending',
     message: error.message,

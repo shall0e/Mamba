@@ -617,7 +617,63 @@
               'text-button danger-action',
             ),
           );
-          manage.append(controls);
+          const launchEditor = node('div', undefined, 'launch-options-editor');
+          launchEditor.append(node('h3', 'Launch options'));
+          const launchArguments = node('input');
+          launchArguments.type = 'text';
+          launchArguments.maxLength = 4096;
+          launchArguments.placeholder = '-windowed -width 1920';
+          launchArguments.value = installation.launchOptions?.arguments || '';
+          const argumentsLabel = node('label', 'Arguments');
+          argumentsLabel.append(launchArguments);
+          const workingDirectory = node('input');
+          workingDirectory.type = 'text';
+          workingDirectory.maxLength = 2048;
+          workingDirectory.placeholder = 'Default: startup file folder';
+          workingDirectory.value = installation.launchOptions?.workingDirectory || '';
+          const directoryLabel = node('label', 'Working directory');
+          directoryLabel.append(workingDirectory);
+          const saveLaunch = action(
+            'Save launch options',
+            async () => {
+              saveLaunch.disabled = true;
+              try {
+                installation.launchOptions = await window.mamba.saveLaunchOptions(installation.id, {
+                  arguments: launchArguments.value,
+                  workingDirectory: workingDirectory.value,
+                });
+                await refreshLibrary();
+                showToast('Launch options saved');
+              } finally {
+                saveLaunch.disabled = false;
+              }
+            },
+            'check',
+            'primary-button',
+          );
+          const launchActions = node('div', undefined, 'game-actions');
+          launchActions.append(
+            saveLaunch,
+            action(
+              'Clear',
+              () => {
+                launchArguments.value = '';
+                workingDirectory.value = '';
+              },
+              'rotate-ccw',
+            ),
+          );
+          launchEditor.append(
+            argumentsLabel,
+            directoryLabel,
+            node(
+              'p',
+              'Use quotes around arguments containing spaces. Working directories are relative to the game folder. Leave blank for defaults. Saved options are applied when you next launch from Mamba.',
+              'field-hint',
+            ),
+            launchActions,
+          );
+          manage.append(controls, launchEditor);
           card.append(manage);
           section.append(card);
         }
