@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('mamba', {
   favorite: (id, value) => ipcRenderer.invoke('library:favorite', id, value),
   saveView: (view) => ipcRenderer.invoke('config:view', view),
   importGame: () => ipcRenderer.invoke('library:import'),
+  saveLaunchOptions: (id, options) => ipcRenderer.invoke('library:launch-options', id, options),
   chooseLauncher: (id) => ipcRenderer.invoke('library:choose-launcher', id),
   removeGame: (id) => ipcRenderer.invoke('library:remove', id),
   scanCleanup: () => ipcRenderer.invoke('cleanup:scan'),

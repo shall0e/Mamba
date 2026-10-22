@@ -4,12 +4,16 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const exec = promisify(execFile);
 const quote = (value) => '"' + String(value).replace(/"/g, '') + '"';
-function launchTarget(file) {
+function launchTarget(file, argumentsText = '') {
+  const extra = require('./launch-options.cjs').normalizeLaunchOptions({
+    arguments: argumentsText,
+  }).arguments;
+  const suffix = extra ? ' ' + extra : '';
   const ext = path.extname(file).toLowerCase();
   if (['.bat', '.cmd'].includes(ext))
     return {
       exe: quote(process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe'),
-      args: '/d /s /c "' + quote(file) + '"',
+      args: '/d /s /c "' + quote(file) + suffix + '"',
     };
   if (ext === '.ps1')
     return {
@@ -22,16 +26,16 @@ function launchTarget(file) {
           'powershell.exe',
         ),
       ),
-      args: '-NoProfile -File ' + quote(file),
+      args: '-NoProfile -File ' + quote(file) + suffix,
     };
   if (ext === '.lnk')
     return {
       exe: quote(path.join(process.env.SystemRoot || 'C:\\Windows', 'explorer.exe')),
-      args: quote(file),
+      args: quote(file) + suffix,
     };
   if (ext !== '.exe' && ext !== '.com')
     throw new Error('Choose an EXE, COM, BAT, CMD, PS1 or shortcut file.');
-  return { exe: quote(file), args: '' };
+  return { exe: quote(file), args: extra };
 }
 async function desktopShortcut(name, file, folder, desktopDirectory) {
   const target = launchTarget(file);
@@ -112,7 +116,8 @@ function addShortcut(buffer, game) {
   const roots = buffer.length ? parseVdf(buffer) : [{ key: 'shortcuts', type: 0, value: [] }];
   const root = roots.find((node) => node.key === 'shortcuts' && node.type === 0);
   if (!root) throw Error('Missing Steam shortcuts object.');
-  const launch = launchTarget(game.executable);
+  const options = require('./launch-options.cjs').launchConfiguration(game);
+  const launch = launchTarget(game.executable, options.arguments);
   const entry = root.value.find(
     (node) =>
       node.type === 0 &&
@@ -124,24 +129,26 @@ function addShortcut(buffer, game) {
             String(f.value).toLowerCase() === game.name.toLowerCase()),
       ),
   );
-  if (
-    entry &&
-    ['exe', 'appname'].every((key) =>
-      entry.value.some(
-        (f) =>
-          f.key.toLowerCase() === key &&
-          String(f.value).toLowerCase() === (key === 'exe' ? launch.exe : game.name).toLowerCase(),
-      ),
-    )
-  )
-    return Buffer.from(buffer);
   const values = {
     appid: (crc32(launch.exe + game.name) | 0x80000000) >>> 0,
     appname: game.name,
     exe: launch.exe,
-    StartDir: quote(path.dirname(game.executable)),
+    StartDir: quote(options.cwd),
     LaunchOptions: launch.args,
   };
+  if (
+    entry &&
+    Object.entries(values).every(([key, value]) =>
+      entry.value.some(
+        (field) =>
+          field.key.toLowerCase() === key.toLowerCase() &&
+          (typeof value === 'number'
+            ? Buffer.isBuffer(field.value) && field.value.readUInt32LE(0) === value
+            : String(field.value) === value),
+      ),
+    )
+  )
+    return Buffer.from(buffer);
   let shortcut;
   if (entry) {
     const remaining = new Map(Object.entries(values).map(([k, v]) => [k.toLowerCase(), [k, v]]));
