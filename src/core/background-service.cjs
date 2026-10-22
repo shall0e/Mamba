@@ -4,7 +4,8 @@ const { Catalog } = require('./catalog.cjs');
 const { Library, finalizeInstallation, atomicJson } = require('./library.cjs');
 const { Downloads } = require('./downloads.cjs');
 const { Metadata } = require('./metadata.cjs');
-const { GameIdentity } = require('./game-identity.cjs');
+const { GameIdentity, cleanTitle } = require('./game-identity.cjs');
+const { identityKey } = require('./identity-match.cjs');
 const { Artwork } = require('./artwork.cjs');
 const { registerSteam } = require('./shortcuts.cjs');
 const { registerXbox } = require('./xbox.cjs');
@@ -156,24 +157,27 @@ class BackgroundService {
     if (!installed && !catalogGame)
       throw Error('This game is unavailable. Refresh your library or search again.');
     const name = installed?.name || catalogGame.name;
+    const sourceTitle = installed?.sourceName || catalogGame?.identityTitle || name;
     const steamId = installed?.steamId || catalogGame?.steamId;
     const identity = steamId
       ? await this.identity.details(steamId).catch(() => null)
-      : await this.identity.identify(name);
+      : await this.identity.identify(sourceTitle);
     const info = identity?.steamId
       ? await this.identity.details(identity.steamId).catch(() => identity)
       : identity;
+    const sameInstallation = (game) => {
+      const appId = game.steamId || game.identity?.steamId;
+      if (info?.steamId && appId) return Number(appId) === Number(info.steamId);
+      if (info?.steamId || appId) return false;
+      return (
+        identityKey(sourceTitle, cleanTitle(name).toLowerCase()) ===
+        identityKey(game.sourceName || game.name, cleanTitle(game.name).toLowerCase())
+      );
+    };
     const installations = installed
       ? installed.installations || [installed]
-      : this.library.installations.filter(
-          (game) =>
-            game.name === name || (info?.steamId && game.identity?.steamId === info.steamId),
-        );
-    const base =
-      installed ||
-      this.library.items.find(
-        (game) => (game.steamId && game.steamId === info?.steamId) || game.name === name,
-      );
+      : this.library.installations.filter(sameInstallation);
+    const base = installed || this.library.items.find(sameInstallation);
     const source = (info?.steamId ? this.steamSearch.forApp(info) : null) || catalogGame;
     await this.identity.save().catch(() => {});
     let space = null;

@@ -1,11 +1,12 @@
 (() => {
   const $ = (selector) => document.querySelector(selector);
   let games = [],
+    bestMatch = null,
     total = 0,
     pending = false,
     loading = false;
   const queueing = new Set();
-  const labels = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' };
+  const cardCache = new Map();
   const node = (tag, text, className) => {
     const item = document.createElement(tag);
     if (text !== undefined) item.textContent = text;
@@ -42,6 +43,19 @@
   ]);
   toolbar.append(service, availability, sort);
   $('#results-list').before(toolbar);
+  const searchLoader = node('div', undefined, 'search-loader');
+  searchLoader.hidden = true;
+  searchLoader.setAttribute('role', 'progressbar');
+  searchLoader.setAttribute('aria-label', 'Searching games');
+  $('#results-list').before(searchLoader);
+  let revealResults = false;
+  const setSearching = (active) => {
+    loading = active;
+    searchLoader.hidden = !active;
+    $('#results-list').setAttribute('aria-busy', String(active));
+    $('#results-more').disabled = active;
+    if (active) $('#results-status').textContent = 'Finding the best matches…';
+  };
   function render() {
     if (loading) return;
     const library = installedGames;
@@ -61,13 +75,43 @@
     if (sort.value === 'name') matches.sort((a, b) => a.name.localeCompare(b.name));
     if (sort.value === 'year')
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
+    renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
     const list = $('#results-list');
-    const cards = document.createDocumentFragment();
-    list.replaceChildren();
+    const positions = new Map(
+      [...cardCache].map(([id, cached]) => [id, cached.row.getBoundingClientRect()]),
+    );
+    const rows = [];
+    const arrivals = new Set();
+    const visible = new Set(matches.map((game) => game.id));
+    for (const [id, cached] of cardCache) {
+      if (!visible.has(id)) {
+        cached.row.remove();
+        cardCache.delete(id);
+      }
+    }
+    list.querySelectorAll('.search-no-results').forEach((item) => item.remove());
     for (const game of matches) {
       const owned = ownership.get(game.id);
       const job = window.MambaPresence.download(window.MambaExperience?.jobs || [], game);
+      const signature = JSON.stringify([
+        game,
+        owned,
+        job,
+        queueing.has(game.id),
+        cardJobs.get(game.id),
+      ]);
+      const cached = cardCache.get(game.id);
+      if (cached?.signature === signature) {
+        rows.push(cached.row);
+        continue;
+      }
       const row = node('article', undefined, 'result-card game-cover-card discovery-card');
+      if (!cached) arrivals.add(row);
+      row.style.animation = 'none';
+      if (cached) {
+        cached.row.replaceWith(row);
+      }
+      cardCache.set(game.id, { row, signature });
       const cover = button(
         '',
         () => window.MambaExperience.openGame(game, 'search'),
@@ -107,20 +151,10 @@
         ),
       );
       info.append(title);
-      const methods = [
-        ...new Set((game.options || []).flatMap((option) => option.services || ['torbox'])),
-      ];
       info.append(
         node(
           'p',
-          [
-            game.releaseYear,
-            game.downloadSize,
-            methods
-              .map((id) => labels[id])
-              .filter(Boolean)
-              .join(' · '),
-          ]
+          [game.releaseYearLabel || game.releaseYear, game.downloadSize]
             .filter(Boolean)
             .join(' · '),
           'game-card-meta',
@@ -195,9 +229,43 @@
       }
       actions.append(control);
       row.append(cover, info, actions);
-      cards.append(row);
+      rows.push(row);
     }
-    list.append(cards);
+    rows.forEach((row, index) => {
+      if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+    });
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      rows.forEach((row, index) => {
+        row.getAnimations().forEach((animation) => animation.cancel());
+        if (arrivals.has(row) || revealResults) {
+          row.animate(
+            [
+              { opacity: 0, transform: 'translateY(10px)' },
+              { opacity: 1, transform: 'translateY(0)' },
+            ],
+            {
+              duration: 240,
+              delay: Math.min(index * 18, 100),
+              easing: 'cubic-bezier(.22,1,.36,1)',
+              fill: 'backwards',
+            },
+          );
+          return;
+        }
+        const id = matches[index].id;
+        const before = positions.get(id);
+        const after = row.getBoundingClientRect();
+        if (before && (before.x !== after.x || before.y !== after.y))
+          row.animate(
+            [
+              { transform: `translate(${before.x - after.x}px, ${before.y - after.y}px)` },
+              { transform: 'translate(0, 0)' },
+            ],
+            { duration: 220, easing: 'cubic-bezier(.22,1,.36,1)' },
+          );
+      });
+    }
+    revealResults = false;
     if (!matches.length)
       list.append(
         node(
@@ -222,23 +290,25 @@
   window.MambaDiscovery = {
     render,
     start(more) {
-      loading = true;
-      $('#results-more').disabled = true;
-      if (!more) games = [];
+      setSearching(true);
     },
     fail(message) {
-      loading = false;
-      $('#results-more').disabled = false;
+      setSearching(false);
       $('#results-status').textContent = message;
     },
     update(result, more) {
-      loading = false;
-      $('#results-more').disabled = false;
+      if (result.pending) {
+        setSearching(true);
+        return;
+      }
+      revealResults = loading;
+      setSearching(false);
       games = more
         ? [...games, ...result.items.filter((item) => !games.some((game) => game.id === item.id))]
         : result.items;
       total = result.total;
       pending = !!result.pending;
+      bestMatch = result.bestMatch || null;
       render();
     },
   };

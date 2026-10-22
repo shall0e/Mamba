@@ -78,7 +78,7 @@ class SteamFeatured {
           const item = candidates[next++];
           const details = await this.identity.details(Number(item.id)).catch(() => null);
 
-          if (details?.type !== 'game' || details.mature !== false) continue;
+          if (details?.type !== 'game' || details.isFree || details.mature !== false) continue;
           const image =
             steamArtwork(item.large_capsule_image) ||
             steamArtwork(item.header_image) ||

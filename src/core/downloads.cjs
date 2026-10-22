@@ -742,7 +742,6 @@ class Downloads extends EventEmitter {
     const raw = path.join(stage, 'raw');
     const payload = path.join(stage, 'payload');
     await fs.mkdir(job.root, { recursive: true });
-    job.root = await fs.realpath(job.root);
     await safePath(job.root, raw);
     await fs.mkdir(raw, { recursive: true });
     let destination = job.folder

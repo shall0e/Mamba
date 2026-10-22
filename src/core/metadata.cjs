@@ -1,11 +1,16 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { tokens, gameTitle } = require('./search.cjs');
+const { identityKey, assessIdentity } = require('./identity-match.cjs');
 const { atomicJson } = require('./library.cjs');
-const key = (name) => tokens(gameTitle(name).replace(/[’']/g, '')).join(' ');
+const key = (name) => identityKey(name, tokens(gameTitle(name).replace(/[’']/g, '')).join(' '));
 function matchGame(name, items) {
-  const wanted = key(name);
-  const exact = items.filter((item) => Number.isSafeInteger(item.id) && key(item.name) === wanted);
+  const exact = items.filter(
+    (item) =>
+      Number.isSafeInteger(item.id) &&
+      tokens(gameTitle(item.name)).join(' ') === tokens(gameTitle(name)).join(' ') &&
+      assessIdentity(name, item).accepted,
+  );
   return exact.length === 1 ? exact[0] : null;
 }
 class Metadata {

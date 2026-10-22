@@ -194,9 +194,16 @@ async function steamProfile() {
     'reg.exe',
     ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'],
     { windowsHide: true },
-  );
+  ).catch(() => {
+    throw Error('Steam installation was not found.');
+  });
   const root = stdout.match(/SteamPath\s+REG_SZ\s+([^\r\n]+)/i)?.[1].trim();
   if (!root) throw Error('Steam installation was not found.');
+  try {
+    await fs.access(path.join(root, 'steam.exe'));
+  } catch {
+    throw Error('Steam installation was not found.');
+  }
   let user;
   try {
     const active = await exec(
@@ -317,4 +324,55 @@ function registerSteam(
   queue = task;
   return task;
 }
-module.exports = { launchTarget, desktopShortcut, parseVdf, addShortcut, registerSteam };
+async function steamLaunchUrl(game, { profile = steamProfile, setup } = {}) {
+  let file;
+  try {
+    file = await profile();
+  } catch (error) {
+    if (error.message === 'Steam installation was not found.') return null;
+    throw error;
+  }
+  const read = () =>
+    fs.readFile(file).catch((error) => {
+      if (error.code === 'ENOENT') return Buffer.alloc(0);
+      throw error;
+    });
+  let buffer = await read();
+  let registered = game;
+  if (!addShortcut(buffer, game).equals(buffer)) {
+    const result = await setup(game);
+    if (result.steam?.status !== 'added')
+      throw Error(result.steam?.message || 'Could not add this game to Steam.');
+    registered = { ...game, ...result };
+    buffer = await read();
+  }
+  const launch = launchTarget(registered.executable);
+  const root = parseVdf(buffer).find((node) => node.key === 'shortcuts');
+  const entry = root?.value.find(
+    (node) =>
+      node.type === 0 &&
+      node.value.some(
+        (field) =>
+          field.key.toLowerCase() === 'exe' &&
+          String(field.value).toLowerCase() === launch.exe.toLowerCase(),
+      ) &&
+      node.value.some(
+        (field) =>
+          field.key.toLowerCase() === 'appname' &&
+          String(field.value).toLowerCase() === registered.name.toLowerCase(),
+      ),
+  );
+  const appid = entry?.value.find((field) => field.key.toLowerCase() === 'appid')?.value;
+  if (!Buffer.isBuffer(appid) || appid.length !== 4)
+    throw Error('Steam shortcut could not be located after registration.');
+  const gameId = (BigInt(appid.readUInt32LE(0)) << 32n) | 0x02000000n;
+  return 'steam://rungameid/' + gameId;
+}
+module.exports = {
+  launchTarget,
+  desktopShortcut,
+  parseVdf,
+  addShortcut,
+  registerSteam,
+  steamLaunchUrl,
+};

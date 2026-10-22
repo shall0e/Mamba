@@ -3007,11 +3007,15 @@ h2 {
   background:
     linear-gradient(
       90deg,
-      var(--color-inputInset),
-      color-mix(in srgb, var(--color-inputInset) 90%, transparent) 25%,
-      transparent
+      color-mix(in srgb, var(--color-inputInset) 72%, transparent),
+      color-mix(in srgb, var(--color-inputInset) 38%, transparent) 35%,
+      transparent 70%
     ),
-    linear-gradient(0deg, color-mix(in srgb, var(--color-inputInset) 80%, transparent), transparent);
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--color-inputInset) 35%, transparent),
+      transparent 55%
+    );
 }
 .featured-content h2,
 .featured-badge {
@@ -6358,5 +6362,45 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
   :root body input[type='checkbox'],
   :root body input[type='checkbox']::after {
     transition: none;
+  }
+}
+
+.search-loader {
+  height: 3px;
+  margin: 0 0 20px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.search-loader[hidden] {
+  display: none;
+}
+.search-loader::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--color-text);
+  animation: search-progress 1100ms ease-in-out infinite;
+}
+@keyframes search-progress {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(390%);
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-loader::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
   }
 }
