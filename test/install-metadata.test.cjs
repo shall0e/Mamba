@@ -57,12 +57,44 @@ test('metadata backs up Steam DLLs and extracts beside them, preserving original
   await fs.writeFile(path.join(directories[1], 'steam_api64.dll'), 'other64');
   for (let attempt = 0; attempt < 2; attempt++) {
     await metadata.apply(game);
-    assert.equal(await fs.readFile(path.join(directories[0], 'steam_api_o.dll'), 'utf8'), 'original32');
-    assert.equal(await fs.readFile(path.join(directories[0], 'steam_api64_o.dll'), 'utf8'), 'original64');
-    assert.equal(await fs.readFile(path.join(directories[1], 'steam_api64_o.dll'), 'utf8'), 'other64');
+    assert.equal(
+      await fs.readFile(path.join(directories[0], 'steam_api_o.dll'), 'utf8'),
+      'original32',
+    );
+    assert.equal(
+      await fs.readFile(path.join(directories[0], 'steam_api64_o.dll'), 'utf8'),
+      'original64',
+    );
+    assert.equal(
+      await fs.readFile(path.join(directories[1], 'steam_api64_o.dll'), 'utf8'),
+      'other64',
+    );
     for (const directory of directories)
       for (const name of ['steam_api.dll', 'steam_api64.dll'])
         assert.equal(await fs.readFile(path.join(directory, name), 'utf8'), 'replacement');
     await assert.rejects(fs.access(path.join(game, 'steam_api.dll')), { code: 'ENOENT' });
   }
+});
+
+test('integration reinstall finds a nested Steam backup even when the active DLL was deleted', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-metadata-backup-only-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, 'source');
+  await fs.mkdir(source);
+  await fs.writeFile(path.join(source, 'steam_api64.dll'), 'replacement');
+  const zip = path.join(root, 'metadata.zip');
+  execFileSync(path.resolve('vendor/7zip/7z.exe'), ['a', zip, '.'], { cwd: source });
+  const bytes = await fs.readFile(zip);
+  const metadata = new InstallMetadata(root, async () => ({
+    ok: true,
+    arrayBuffer: async () => bytes,
+  }));
+  const game = path.join(root, 'game');
+  const target = path.join(game, 'Binaries', 'Win64');
+  await fs.mkdir(target, { recursive: true });
+  await fs.writeFile(path.join(target, 'steam_api64_o.dll'), 'original');
+  await metadata.apply(game);
+  assert.equal(await fs.readFile(path.join(target, 'steam_api64.dll'), 'utf8'), 'replacement');
+  assert.equal(await fs.readFile(path.join(target, 'steam_api64_o.dll'), 'utf8'), 'original');
+  await assert.rejects(fs.access(path.join(game, 'steam_api64.dll')), { code: 'ENOENT' });
 });
