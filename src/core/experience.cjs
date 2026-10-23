@@ -103,9 +103,10 @@ class LibraryState {
     }
     result.push(...current.values());
     await this.change((data) => {
-      for (const game of result) data.remembered[this.key(game)] = game;
+      for (const game of result)
+        if (!data.hidden[this.key(game)]) data.remembered[this.key(game)] = game;
     });
-    return this.decorate(result);
+    return this.decorate(result.filter((game) => !this.data.hidden[this.key(game)]));
   }
   async remove(game) {
     await this.change((data) => {

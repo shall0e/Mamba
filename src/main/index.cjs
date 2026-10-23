@@ -356,17 +356,31 @@ if (!app.requestSingleInstanceLock()) {
       const entry = await task('library:get', String(libraryId));
       if (!entry) throw Error('Game not found. Refresh the library.');
       const config = await readConfig();
+      const remainingFiles =
+        entry.status === 'not-installed' &&
+        entry.folder &&
+        (await fs.stat(entry.folder).then(
+          (stat) => stat.isDirectory(),
+          () => false,
+        ));
       const chosen = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
         type: 'question',
         title: 'Install ' + entry.name,
         message: 'Install the selected release?',
-        detail: 'Installation folder: ' + config.downloadPath,
-        buttons: ['Cancel', 'Choose folder', 'Install'],
+        detail:
+          'Installation folder: ' +
+          config.downloadPath +
+          (remainingFiles
+            ? '\n\nFiles remain in the old installation folder. Uninstall them before reinstalling here, or choose another folder.'
+            : ''),
+        buttons: ['Cancel', 'Choose folder', remainingFiles ? 'Uninstall and install' : 'Install'],
         defaultId: 2,
         cancelId: 0,
         noLink: true,
       });
       if (chosen.response === 0) return false;
+      if (chosen.response === 2 && remainingFiles && !(await uninstallGame(event, entry.id)))
+        return false;
       if (chosen.response === 1) {
         const folder = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
           title: 'Choose the Games folder for this installation',
@@ -484,7 +498,8 @@ if (!app.requestSingleInstanceLock()) {
     await task('library:locate', game.id, chosen.filePaths[0]);
     return true;
   });
-  ipcMain.handle('library:remove', async (event, id) => {
+  ipcMain.handle('library:remove', uninstallGame);
+  async function uninstallGame(event, id) {
     const game = await task('library:get', String(id));
     if (!game) throw Error('Game not found.');
     if (await task('library:busy', game.id))
@@ -534,7 +549,7 @@ if (!app.requestSingleInstanceLock()) {
     await fs.rm(targetFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
     await task('library:scan');
     return true;
-  });
+  }
   function activityStatus() {
     return {
       version: app.getVersion(),

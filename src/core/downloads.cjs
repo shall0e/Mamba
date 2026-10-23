@@ -471,7 +471,9 @@ class Downloads extends EventEmitter {
     if (
       existing &&
       (!['completed', 'needs-setup'].includes(existing.status) ||
-        (existing.folder && (await fs.stat(existing.folder).catch(() => null))))
+        (existing.folder &&
+          (!installRoot || path.resolve(existing.root) === path.resolve(installRoot)) &&
+          (await fs.stat(existing.folder).catch(() => null))))
     )
       return existing.id;
     const indexed = this.catalog.searchIndex?.find((entry) =>
