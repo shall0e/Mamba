@@ -812,6 +812,12 @@
               'field-hint',
             ),
             reinstallIntegrations,
+            action(
+              'Open CreamInstaller',
+              () => window.mamba.openCreamInstaller(),
+              'play',
+              'secondary-button',
+            ),
           );
           manage.append(controls, launchEditor, integrations);
           card.append(manage);

@@ -97,6 +97,10 @@ Run `npm ci` then `npm start`. On Windows, `START.cmd` launches without a termin
 - `npm run release:win`: build an installer without publishing.
 - `npm run format` / `npm run format:check`: format source / check formatting.
 
+CreamInstaller is bundled as a separate executable from [FroggMaster/CreamInstaller](https://github.com/FroggMaster/CreamInstaller). Open it from Settings → App or a game's advanced installation controls. With Automatic updates enabled, Mamba checks its stable releases once daily and verifies downloads before switching versions. The bundled copy works offline; failed updates leave the current copy available.
+
+Local and GitHub builds use the version and SHA-256 recorded in `src/shared/cream-installer-release.json`. The build hook downloads that executable once into the ignored `vendor/creaminstaller` cache. Its GPL v3 license and corresponding-source link are included in the packaged `creaminstaller` resources. Release publication uses the manually dispatched GitHub release workflow.
+
 <details>
 <summary><strong>Project layout</strong></summary>
 

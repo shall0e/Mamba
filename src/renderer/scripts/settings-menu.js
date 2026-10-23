@@ -58,6 +58,61 @@
   const appearance = $('.appearance-card');
   appearance.open = true;
   panels.appearance.append(appearance);
+  const creamCard = node('section', undefined, 'settings-card');
+  creamCard.append(
+    node('h2', 'CreamInstaller'),
+    node(
+      'p',
+      'Bundled with Mamba. Updates automatically when Automatic updates is enabled.',
+      'field-hint',
+    ),
+  );
+  const creamStatus = node('p', 'Loading CreamInstaller version…', 'field-hint');
+  creamStatus.id = 'creaminstaller-status';
+  creamStatus.setAttribute('role', 'status');
+  const creamActions = node('div', undefined, 'settings-actions');
+  const openCream = button(
+    'Open CreamInstaller',
+    async () => {
+      openCream.disabled = true;
+      try {
+        await window.mamba.openCreamInstaller();
+      } finally {
+        openCream.disabled = false;
+      }
+    },
+    'play',
+    'secondary-button',
+  );
+  openCream.id = 'open-creaminstaller';
+  const checkCream = button(
+    'Check for updates',
+    async () => {
+      checkCream.disabled = true;
+      try {
+        renderCream(await window.mamba.checkCreamInstaller());
+      } finally {
+        checkCream.disabled = false;
+      }
+    },
+    'refresh-cw',
+    'secondary-button',
+  );
+  checkCream.id = 'check-creaminstaller';
+  function renderCream(state) {
+    creamStatus.textContent = [state.version, state.message].filter(Boolean).join(' · ');
+    checkCream.disabled = ['checking', 'downloading'].includes(state.status);
+  }
+  creamActions.append(openCream, checkCream);
+  creamCard.append(creamStatus, creamActions);
+  panels.app.append(creamCard);
+  window.mamba.onCreamInstaller(renderCream);
+  window.mamba
+    .creamInstallerState()
+    .then(renderCream)
+    .catch(() => {
+      creamStatus.textContent = 'CreamInstaller is unavailable.';
+    });
   const testing = node('section', undefined, 'settings-card');
   testing.append(
     node('h2', 'Testing'),
