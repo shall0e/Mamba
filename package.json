@@ -13,6 +13,7 @@
     "format:check": "prettier --check src tools test config package.json README.md docs"
   },
   "build": {
+    "beforePack": "./tools/prepare-creaminstaller.cjs",
     "files": [
       "src/**/*",
       "assets/mamba.png",
@@ -35,6 +36,16 @@
       }
     ],
     "extraResources": [
+      {
+        "from": "vendor/creaminstaller",
+        "to": "creaminstaller",
+        "filter": [
+          "CreamInstaller.exe",
+          "LICENSE",
+          "SOURCE.txt",
+          "release.json"
+        ]
+      },
       {
         "from": "vendor/7zip",
         "to": "7zip",

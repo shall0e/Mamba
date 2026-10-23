@@ -54,7 +54,7 @@ if (!app.requestSingleInstanceLock()) {
   const { spawn } = require('node:child_process');
   const { runSetupAsAdministrator } = require('./setup.cjs');
   const { localDataDirectory } = require('./data-directory.cjs');
-  let updates, background, configWatcher, watchTimer, resolvedDataDirectory;
+  let updates, creamInstaller, background, configWatcher, watchTimer, resolvedDataDirectory;
   let installedGames = [],
     downloadJobs = [];
   let catalogState = {
@@ -331,6 +331,9 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('app:updates', () => ({ ...updates.state }));
   ipcMain.handle('app:check-updates', () => updates.check(true));
   ipcMain.handle('app:install-update', () => updates.install());
+  ipcMain.handle('creaminstaller:state', () => ({ ...creamInstaller.state }));
+  ipcMain.handle('creaminstaller:open', () => creamInstaller.open());
+  ipcMain.handle('creaminstaller:check', () => creamInstaller.check(true));
 
   function broadcast(channel, data) {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -896,6 +899,14 @@ if (!app.requestSingleInstanceLock()) {
           ),
       });
       updates.on('change', (state) => broadcast('app:updated', state));
+      creamInstaller = new (require('../core/cream-installer.cjs').CreamInstaller)({
+        directory: dataDirectory(),
+        resources: app.isPackaged
+          ? path.join(process.resourcesPath, 'creaminstaller')
+          : path.join(__dirname, '../../vendor/creaminstaller'),
+        getConfig: readConfig,
+      });
+      creamInstaller.on('change', (state) => broadcast('creaminstaller:updated', state));
       background = new BackgroundClient(
         () =>
           utilityProcess.fork(path.join(__dirname, 'worker.cjs'), [], {
@@ -1102,6 +1113,7 @@ if (!app.requestSingleInstanceLock()) {
       });
       configWatcher.on('error', () => {});
       updates.start();
+      creamInstaller.start();
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
         else restoreWindow();
@@ -1120,6 +1132,7 @@ if (!app.requestSingleInstanceLock()) {
     closing = true;
     event.preventDefault();
     updates?.stop();
+    creamInstaller?.stop();
     clearTimeout(watchTimer);
     configWatcher?.close();
     Promise.resolve(background?.close())
