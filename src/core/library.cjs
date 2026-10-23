@@ -459,9 +459,13 @@ class Library {
   }
   async performScan() {
     const config = await this.getConfig();
-    await fs.mkdir(config.downloadPath, { recursive: true });
     const items = [];
-    const entries = (await fs.readdir(config.downloadPath, { withFileTypes: true }))
+    const entries = (
+      await fs.readdir(config.downloadPath, { withFileTypes: true }).catch((error) => {
+        if (['ENOENT', 'ENODEV', 'EACCES', 'EPERM'].includes(error.code)) return [];
+        throw error;
+      })
+    )
       .filter(
         (entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.'),
       )
@@ -515,6 +519,7 @@ class Library {
           id,
           name: manifest.name || entry.name,
           folder,
+          folderExists: true,
           imported: entry.imported,
           releaseId: manifest.releaseId || null,
           version: manifest.version || null,
@@ -527,7 +532,9 @@ class Library {
           status:
             !manifest.setupInterrupted && manifest.status !== 'needs-setup' && executable
               ? 'installed'
-              : 'needs-setup',
+              : !executable && !found.installer
+                ? 'not-installed'
+                : 'needs-setup',
           executables: found.executables,
         });
       } catch {}

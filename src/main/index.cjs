@@ -293,9 +293,16 @@ if (!app.requestSingleInstanceLock()) {
       filters: [{ name: 'JSON settings', extensions: ['json'] }],
     });
     if (chosen.canceled || !chosen.filePath) return null;
-    await fs.writeFile(chosen.filePath, encodeConfig(await readConfig(), app.getVersion()), {
-      mode: 0o600,
-    });
+    await fs.writeFile(
+      chosen.filePath,
+      encodeConfig(
+        { ...(await readConfig()), libraryState: await task('library:state') },
+        app.getVersion(),
+      ),
+      {
+        mode: 0o600,
+      },
+    );
     return true;
   });
   ipcMain.handle('config:import', async (event) => {
@@ -304,9 +311,11 @@ if (!app.requestSingleInstanceLock()) {
       filters: [{ name: 'JSON settings', extensions: ['json'] }],
     });
     if (chosen.canceled || !chosen.filePaths.length) return null;
-    if ((await fs.stat(chosen.filePaths[0])).size > 2 * 1024 * 1024)
-      throw new Error('Config files must be smaller than 2 MB.');
+    if ((await fs.stat(chosen.filePaths[0])).size > 32 * 1024 * 1024)
+      throw new Error('Config files must be smaller than 32 MB.');
     const imported = decodeConfig(await fs.readFile(chosen.filePaths[0], 'utf8'));
+    const libraryState = imported.libraryState;
+    delete imported.libraryState;
     const result = await updateConfig(async (config) => {
       await fs.writeFile(
         configFile() + '.backup-' + Date.now(),
@@ -315,7 +324,8 @@ if (!app.requestSingleInstanceLock()) {
       );
       Object.assign(config, imported, { legacyUrlsMigrated: true });
     });
-    task('library:scan').catch(() => {});
+    if (libraryState) await task('library:restore-state', libraryState);
+    else task('library:scan').catch(() => {});
     return result;
   });
   ipcMain.handle('app:updates', () => ({ ...updates.state }));
@@ -340,9 +350,35 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('home:featured', () => task('home:featured'));
   ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
   ipcMain.handle('downloads:list', () => downloadJobs);
-  ipcMain.handle('downloads:start', (_event, id, option, game, service) =>
-    task('downloads:start', id, option, game, service),
-  );
+  ipcMain.handle('downloads:start', async (event, id, option, game, service, libraryId) => {
+    let installRoot;
+    if (libraryId) {
+      const entry = await task('library:get', String(libraryId));
+      if (!entry) throw Error('Game not found. Refresh the library.');
+      const config = await readConfig();
+      const chosen = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+        type: 'question',
+        title: 'Install ' + entry.name,
+        message: 'Install the selected release?',
+        detail: 'Installation folder: ' + config.downloadPath,
+        buttons: ['Cancel', 'Choose folder', 'Install'],
+        defaultId: 2,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (chosen.response === 0) return false;
+      if (chosen.response === 1) {
+        const folder = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+          title: 'Choose the Games folder for this installation',
+          defaultPath: config.downloadPath,
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        if (folder.canceled || !folder.filePaths[0]) return false;
+        installRoot = folder.filePaths[0];
+      }
+    }
+    return task('downloads:start', id, option, game, service, installRoot);
+  });
   ipcMain.handle('downloads:cancel', (_event, id) => task('downloads:cancel', id));
   ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
   ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
@@ -387,6 +423,11 @@ if (!app.requestSingleInstanceLock()) {
       }
       if (view.libraryFavoritesOnly !== undefined)
         config.libraryFavoritesOnly = !!view.libraryFavoritesOnly;
+      if (view.libraryAvailability !== undefined) {
+        if (!['all', 'installed', 'not-installed'].includes(view.libraryAvailability))
+          throw Error('Invalid library filter.');
+        config.libraryAvailability = view.libraryAvailability;
+      }
     }),
   );
   ipcMain.handle('storage:check', () => task('storage:check'));
@@ -413,6 +454,36 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('library:launch-options', (_event, id, options) =>
     task('library:launch-options', String(id), options),
   );
+  ipcMain.handle('library:add-entry', (_event, id) => task('library:add-entry', String(id)));
+  ipcMain.handle('library:remove-entry', async (event, id) => {
+    const game = await task('library:get', String(id));
+    if (!game) throw Error('Game not found.');
+    const chosen = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+      type: 'question',
+      title: 'Remove from library?',
+      message: 'Remove ' + game.name + ' from your library?',
+      detail:
+        'Installed files will be kept. Favorites and play history for this game will be removed.',
+      buttons: ['Keep game', 'Remove from library'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (chosen.response !== 1) return false;
+    await task('library:remove-entry', game.id);
+    return true;
+  });
+  ipcMain.handle('library:locate', async (event, id) => {
+    const game = await task('library:get', String(id));
+    if (!game) throw Error('Game not found.');
+    const chosen = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: 'Locate ' + game.name,
+      properties: ['openDirectory'],
+    });
+    if (chosen.canceled || !chosen.filePaths[0]) return false;
+    await task('library:locate', game.id, chosen.filePaths[0]);
+    return true;
+  });
   ipcMain.handle('library:remove', async (event, id) => {
     const game = await task('library:get', String(id));
     if (!game) throw Error('Game not found.');
@@ -435,7 +506,6 @@ if (!app.requestSingleInstanceLock()) {
       throw Error('Finish or cancel the active download before removing this installation.');
     const config = await readConfig();
     authorizeGame(config, game.imported ? [game.folder] : [], game);
-    if (game.imported) return task('library:forget', game.folder);
     const selected = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
       type: 'warning',
       title: 'Uninstall ' + game.name + '?',
@@ -451,10 +521,15 @@ if (!app.requestSingleInstanceLock()) {
     if (selected.response !== 1) return false;
     if ((await fs.lstat(game.folder)).isSymbolicLink())
       throw Error('The game folder changed. Refresh the library.');
-    const gamesRoot = await fs.realpath(config.downloadPath);
+    const gamesRoot = game.imported ? null : await fs.realpath(config.downloadPath);
     const targetFolder = await fs.realpath(game.folder);
-    within(gamesRoot, targetFolder);
-    if (path.resolve(gamesRoot).toLowerCase() === path.resolve(targetFolder).toLowerCase())
+    if (!game.imported) within(gamesRoot, targetFolder);
+    if (targetFolder === path.parse(targetFolder).root)
+      throw Error('An entire drive cannot be uninstalled.');
+    if (
+      gamesRoot &&
+      path.resolve(gamesRoot).toLowerCase() === path.resolve(targetFolder).toLowerCase()
+    )
       throw Error('The games root cannot be uninstalled.');
     await fs.rm(targetFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
     await task('library:scan');
