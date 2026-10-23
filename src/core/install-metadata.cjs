@@ -34,7 +34,27 @@ class InstallMetadata {
     const archive = await this.load();
     const destination = await safePath(folder, folder);
     await fs.mkdir(destination, { recursive: true });
-    await extractArchive(archive, destination);
+    const targets = new Set();
+    const visit = async (directory) => {
+      for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+        const file = path.join(directory, entry.name);
+        if (entry.isDirectory()) await visit(file);
+        else if (entry.isFile() && /^steam_api(?:64)?\.dll$/i.test(entry.name)) {
+          const backup = path.join(directory, entry.name.replace(/\.dll$/i, '_o.dll'));
+          try {
+            await fs.lstat(backup);
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+            await fs.rename(file, backup);
+          }
+          targets.add(directory);
+        }
+      }
+    };
+    await visit(destination);
+    // Retain root extraction for games that do not ship a Steam API DLL.
+    if (!targets.size) targets.add(destination);
+    for (const target of targets) await extractArchive(archive, target);
     return destination;
   }
 }
