@@ -13,6 +13,54 @@ function validateSettings(value) {
   };
   visit(value);
   const copy = JSON.parse(JSON.stringify(value));
+  if (copy.libraryState !== undefined) {
+    const state = copy.libraryState;
+    const object = (item) => item && typeof item === 'object' && !Array.isArray(item);
+    if (
+      !object(state) ||
+      !object(state.games) ||
+      !Array.isArray(state.imports) ||
+      state.imports.some((folder) => typeof folder !== 'string' || !path.isAbsolute(folder)) ||
+      (state.remembered !== undefined && !object(state.remembered)) ||
+      (state.hidden !== undefined && !object(state.hidden))
+    )
+      throw Error('Invalid library export.');
+    for (const preferences of Object.values(state.games)) {
+      if (
+        !object(preferences) ||
+        Object.keys(preferences).some((key) => !['favorite', 'lastPlayed'].includes(key)) ||
+        (preferences.favorite !== undefined && typeof preferences.favorite !== 'boolean') ||
+        (preferences.lastPlayed !== undefined &&
+          (typeof preferences.lastPlayed !== 'string' ||
+            !Number.isFinite(Date.parse(preferences.lastPlayed))))
+      )
+        throw Error('Invalid library preferences.');
+    }
+    if (Object.values(state.hidden || {}).some((value) => typeof value !== 'boolean'))
+      throw Error('Invalid hidden library entries.');
+    for (const game of Object.values(state.remembered || {})) {
+      if (
+        !object(game) ||
+        typeof game.id !== 'string' ||
+        typeof game.name !== 'string' ||
+        (game.folder != null &&
+          (typeof game.folder !== 'string' || !path.isAbsolute(game.folder))) ||
+        (game.installations !== undefined &&
+          (!Array.isArray(game.installations) ||
+            game.installations.some(
+              (item) =>
+                !object(item) || typeof item.folder !== 'string' || !path.isAbsolute(item.folder),
+            )))
+      )
+        throw Error('Invalid remembered game.');
+    }
+    copy.libraryState = {
+      games: state.games,
+      imports: state.imports,
+      remembered: state.remembered || {},
+      hidden: state.hidden || {},
+    };
+  }
   if (copy.appearance !== undefined)
     copy.appearance = require('../shared/theme-model.js').parse(copy.appearance);
   if (
@@ -70,6 +118,11 @@ function validateSettings(value) {
     throw Error('Invalid library sort.');
   if (copy.libraryFavoritesOnly !== undefined && typeof copy.libraryFavoritesOnly !== 'boolean')
     throw Error('Invalid favorites filter.');
+  if (
+    copy.libraryAvailability !== undefined &&
+    !['all', 'installed', 'not-installed'].includes(copy.libraryAvailability)
+  )
+    throw Error('Invalid library filter.');
   for (const key of ['torboxApiKey', 'realDebridApiKey', 'archivePassword'])
     if (copy[key] !== undefined && typeof copy[key] !== 'string')
       throw Error(key + ' must be text.');

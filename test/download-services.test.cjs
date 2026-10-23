@@ -173,6 +173,7 @@ test('the selected per-download service reaches the queue through the background
   const { BackgroundService } = require('../src/core/background-service.cjs');
   const service = new BackgroundService(() => {});
   let received;
+  service.libraryState = { restore: async () => {} };
   service.catalog = {
     getGame: () => ({ name: 'Fixture', options: [{ gameId: 'release', linkIndex: 2 }] }),
   };

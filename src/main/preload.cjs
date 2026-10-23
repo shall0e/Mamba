@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('mamba', {
   saveLaunchOptions: (id, options) => ipcRenderer.invoke('library:launch-options', id, options),
   chooseLauncher: (id) => ipcRenderer.invoke('library:choose-launcher', id),
   removeGame: (id) => ipcRenderer.invoke('library:remove', id),
+  removeLibraryEntry: (id) => ipcRenderer.invoke('library:remove-entry', id),
+  addLibraryEntry: (id) => ipcRenderer.invoke('library:add-entry', id),
+  locateGame: (id) => ipcRenderer.invoke('library:locate', id),
   scanCleanup: () => ipcRenderer.invoke('cleanup:scan'),
   removeCleanup: (scan, ids) => ipcRenderer.invoke('cleanup:remove', scan, ids),
   storage: () => ipcRenderer.invoke('storage:check'),
@@ -69,8 +72,8 @@ contextBridge.exposeInMainWorld('mamba', {
   featuredGames: () => ipcRenderer.invoke('home:featured'),
   downloadBest: (id) => ipcRenderer.invoke('downloads:best', id),
   jobs: () => ipcRenderer.invoke('downloads:list'),
-  download: (id, option, game, service) =>
-    ipcRenderer.invoke('downloads:start', id, option, game, service),
+  download: (id, option, game, service, libraryId) =>
+    ipcRenderer.invoke('downloads:start', id, option, game, service, libraryId),
   cancel: (id) => ipcRenderer.invoke('downloads:cancel', id),
   retry: (id) => ipcRenderer.invoke('downloads:retry', id),
   removeDownload: (id) => ipcRenderer.invoke('downloads:remove', id),

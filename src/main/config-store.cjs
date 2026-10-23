@@ -19,6 +19,7 @@ function createConfigStore({
     disabledSourceUrls: config.disabledSourceUrls || [],
     realDebridConfigured: !!config.realDebridApiKey,
     librarySort: config.librarySort || 'name',
+    libraryAvailability: config.libraryAvailability || 'all',
     libraryFavoritesOnly: !!config.libraryFavoritesOnly,
     notifications: config.notifications !== false,
     preferredLanguage: config.preferredLanguage || 'english',

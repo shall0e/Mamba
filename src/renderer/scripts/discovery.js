@@ -135,7 +135,13 @@
       if (owned) {
         const badge = node(
           'span',
-          owned.status === 'installed' ? 'Installed' : 'Setup required',
+          owned.status === 'installed'
+            ? 'Installed'
+            : owned.status === 'not-installed'
+              ? 'Not installed'
+              : owned.status === 'drive-unavailable'
+                ? 'Drive unavailable'
+                : 'Setup required',
           'owned-badge',
         );
         cover.append(badge);

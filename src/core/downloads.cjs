@@ -458,7 +458,7 @@ class Downloads extends EventEmitter {
     task.finally(() => this.bestPending.delete(id)).catch(() => {});
     return task;
   }
-  async start(gameId, option = 0, displayName, requestedService) {
+  async start(gameId, option = 0, displayName, requestedService, installRoot) {
     const game = this.catalog.byId.get(gameId);
     if (!game) throw new Error('This release is no longer in the catalog. Search again.');
     const link = game.links[Number(option)];
@@ -471,13 +471,17 @@ class Downloads extends EventEmitter {
     if (
       existing &&
       (!['completed', 'needs-setup'].includes(existing.status) ||
-        (existing.folder && (await fs.stat(existing.folder).catch(() => null))))
+        (existing.folder &&
+          (!installRoot || path.resolve(existing.root) === path.resolve(installRoot)) &&
+          (await fs.stat(existing.folder).catch(() => null))))
     )
       return existing.id;
     const indexed = this.catalog.searchIndex?.find((entry) =>
       entry.options.some((option) => option.gameId === game.id),
     );
-    await this.checkDisk(config.downloadPath, sizeBytes(game.fileSize), { probe: true });
+    const root = installRoot || config.downloadPath;
+    if (!path.isAbsolute(root)) throw Error('Choose an absolute installation folder.');
+    await this.checkDisk(root, sizeBytes(game.fileSize), { probe: true });
     const job = {
       version: optionTraits({ release: game.name }).version || null,
       release: game.name,
@@ -492,7 +496,7 @@ class Downloads extends EventEmitter {
       received: 0,
       total: 0,
       createdAt: new Date().toISOString(),
-      root: path.resolve(config.downloadPath),
+      root: path.resolve(root),
     };
     job.recovery = recovery.checkpoint(config.automaticRecovery === true);
     job.service = service;
@@ -1148,8 +1152,7 @@ class Downloads extends EventEmitter {
       await this.reviewSetup(destination);
     }
     signal.throwIfAborted();
-    if (status === 'installed')
-      await this.installMetadata(destination, { ...job, executable: found.executable });
+    await this.installMetadata(destination, { ...job, status, executable: found.executable });
     if (!config.keepArchives) {
       const stagingRoot = within(job.root, path.join(job.root, '.mamba-downloads'));
       within(stagingRoot, stage);

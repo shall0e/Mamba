@@ -6418,3 +6418,15 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
   width: 100%;
   min-width: 0;
 }
+
+.game-card[data-status='not-installed'] .library-cover,
+.game-card[data-status='drive-unavailable'] .library-cover {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+.game-card[data-status='not-installed']:hover .library-cover,
+.game-card[data-status='drive-unavailable']:hover .library-cover,
+.game-card[data-status='not-installed']:focus-within .library-cover,
+.game-card[data-status='drive-unavailable']:focus-within .library-cover {
+  opacity: 0.65;
+}

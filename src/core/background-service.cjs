@@ -97,8 +97,8 @@ class BackgroundService {
     this.library.scan = () => {
       if (this.scanPending) return this.scanPending;
       this.scanPending = scan()
-        .then((items) => {
-          this.library.items = this.libraryState.decorate(items);
+        .then(async (items) => {
+          this.library.items = await this.libraryState.reconcile(items);
           this.emit('library:changed', this.library.items);
           return this.library.items;
         })
@@ -149,6 +149,11 @@ class BackgroundService {
     return true;
   }
   async applyInstallMetadata(folder, game = {}) {
+    if (game.root && path.resolve(game.root) !== path.resolve(this.config.downloadPath))
+      await this.libraryState.change((data) => {
+        if (!data.imports.includes(folder)) data.imports.push(folder);
+      });
+    if (game.status && game.status !== 'installed') return;
     if (game.installSource !== 'hydra' || !game.id) return;
     const manifestFile = path.join(folder, '.mamba-game.json');
     const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
@@ -208,7 +213,12 @@ class BackgroundService {
       ? installed.installations || [installed]
       : this.library.installations.filter(sameInstallation);
     const base = installed || this.library.items.find(sameInstallation);
-    const source = (info?.steamId ? this.steamSearch.forApp(info) : null) || catalogGame;
+    const source =
+      (info?.steamId ? this.steamSearch.forApp(info) : null) ||
+      catalogGame ||
+      this.catalog.searchIndex?.find((game) =>
+        game.options.some((option) => option.gameId === base?.releaseId),
+      );
     await this.identity.save().catch(() => {});
     let space = null;
     try {
@@ -229,6 +239,9 @@ class BackgroundService {
       catalogId: source?.id || null,
       favorite: base?.favorite || false,
       lastPlayed: base?.lastPlayed || null,
+      status: base?.status || null,
+      imported: !!base?.imported,
+      preferredReleaseId: base?.releaseId || base?.installations?.[0]?.releaseId || null,
       installations: base?.installations || installations,
       dlcs: base?.dlcs || [],
       demos: base?.demos || [],
@@ -290,6 +303,7 @@ class BackgroundService {
     return { steam };
   }
   installationBusy(game) {
+    if (!game.folder) return false;
     return this.downloads.jobs.some(
       (job) =>
         this.downloads.controllers.has(job.id) &&
@@ -321,7 +335,7 @@ class BackgroundService {
     if (this.busy || this.stopping) return;
     this.busy = true;
     try {
-      if (this.library.items.some((game) => game.repairPending)) await this.library.scan();
+      await this.library.scan();
       await this.syncXboxLibrary();
       for (const game of this.library.items) {
         if (this.stopping) break;
@@ -385,9 +399,14 @@ class BackgroundService {
         return this.artwork.get(...args);
       case 'home:featured':
         return this.steamFeatured.get();
-      case 'downloads:best':
+      case 'downloads:best': {
+        const selected = this.catalog.getGame(args[0]);
+        if (selected) await this.libraryState.restore(selected);
         return this.downloads.startBest(...args);
+      }
       case 'downloads:start': {
+        const selected = this.catalog.getGame(args[2] || args[0]);
+        if (selected) await this.libraryState.restore(selected);
         if (args[2]) {
           const game = this.catalog.getGame(args[2]);
           if (
@@ -398,7 +417,9 @@ class BackgroundService {
             throw Error(
               'This download is no longer associated with the selected Steam game. Search again.',
             );
-          return this.downloads.start(args[0], args[1], game.name, args[3]);
+          return args[4]
+            ? this.downloads.start(args[0], args[1], game.name, args[3], args[4])
+            : this.downloads.start(args[0], args[1], game.name, args[3]);
         }
         return this.downloads.start(...args);
       }
@@ -414,6 +435,55 @@ class BackgroundService {
         return this.downloads.clearFinished();
       case 'library:scan':
         return this.library.scan();
+      case 'library:state':
+        return this.libraryState.data;
+      case 'library:add-entry': {
+        const game = this.catalog.getGame(args[0]);
+        if (!game) throw Error('Game is unavailable. Search again.');
+        const entry = {
+          id: game.id,
+          name: game.name,
+          steamId: game.steamId || null,
+          cover: game.cover || null,
+          verified: !!game.steamId,
+          folder: null,
+          executable: null,
+          status: 'not-installed',
+          installations: [],
+          releaseId: game.options?.[0]?.gameId || null,
+        };
+        await this.libraryState.change((data) => {
+          const key = this.libraryState.key(entry);
+          delete data.hidden[key];
+          data.remembered[key] = entry;
+        });
+        return this.library.scan();
+      }
+      case 'library:restore-state':
+        await fs
+          .copyFile(this.libraryState.file, this.libraryState.file + '.backup-' + Date.now())
+          .catch((error) => {
+            if (error.code !== 'ENOENT') throw error;
+          });
+        await this.libraryState.change((data) => Object.assign(data, args[0]));
+        return this.library.scan();
+      case 'library:remove-entry': {
+        const game = this.library.get(args[0]);
+        if (!game) throw Error('Game not found.');
+        if (this.installationBusy(game)) throw Error('Finish or cancel the active download first.');
+        await this.libraryState.remove(game);
+        return this.library.scan();
+      }
+      case 'library:locate': {
+        const game = this.library.get(args[0]);
+        if (!game) throw Error('Game not found.');
+        const folder = await this.libraryState.addImport(args[1]);
+        const file = path.join(folder, '.mamba-game.json');
+        const manifest = JSON.parse(await fs.readFile(file, 'utf8').catch(() => '{}'));
+        await atomicJson(file, { ...manifest, name: game.name });
+        await this.libraryState.restore(game);
+        return this.library.scan();
+      }
       case 'library:get':
         return this.library.get(...args);
       case 'library:busy': {
