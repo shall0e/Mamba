@@ -468,6 +468,9 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('library:launch-options', (_event, id, options) =>
     task('library:launch-options', String(id), options),
   );
+  ipcMain.handle('library:reinstall-integrations', (_event, id) =>
+    task('library:reinstall-integrations', String(id)),
+  );
   ipcMain.handle('library:add-entry', (_event, id) => task('library:add-entry', String(id)));
   ipcMain.handle('library:remove-entry', async (event, id) => {
     const game = await task('library:get', String(id));

@@ -39,7 +39,9 @@ class InstallMetadata {
       for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
         const file = path.join(directory, entry.name);
         if (entry.isDirectory()) await visit(file);
-        else if (entry.isFile() && /^steam_api(?:64)?\.dll$/i.test(entry.name)) {
+        else if (entry.isFile() && /^steam_api(?:64)?(?:_o)?\.dll$/i.test(entry.name)) {
+          targets.add(directory);
+          if (/_o\.dll$/i.test(entry.name)) continue;
           const backup = path.join(directory, entry.name.replace(/\.dll$/i, '_o.dll'));
           try {
             await fs.lstat(backup);
@@ -47,7 +49,6 @@ class InstallMetadata {
             if (error.code !== 'ENOENT') throw error;
             await fs.rename(file, backup);
           }
-          targets.add(directory);
         }
       }
     };

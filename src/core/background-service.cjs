@@ -21,6 +21,7 @@ class BackgroundService {
   constructor(emit) {
     this.emit = emit;
     this.stopping = false;
+    this.integrationRepairs = new Map();
   }
   async initialize({ directory, config, resourcesPath }) {
     this.directory = directory;
@@ -302,8 +303,33 @@ class BackgroundService {
     await this.library.scan();
     return { steam };
   }
+  async reinstallIntegrations(id) {
+    const game = this.library.get(id);
+    if (!game?.folder || ['not-installed', 'drive-unavailable'].includes(game.status))
+      throw Error('Locate or install this game before reinstalling integrations.');
+    const key = path.resolve(game.folder).toLowerCase();
+    if (this.integrationRepairs.has(key)) return this.integrationRepairs.get(key);
+    if (this.installationBusy(game))
+      throw Error(
+        'Wait for this download or installation to finish before reinstalling integrations.',
+      );
+    authorizeGame(this.config, this.libraryState.data.imports, game);
+    await require('./library.cjs').safePath(game.folder, game.folder);
+    if (!(await fs.lstat(game.folder)).isDirectory())
+      throw Error('The game folder is unavailable.');
+    if (this.integrationRepairs.has(key)) return this.integrationRepairs.get(key);
+    const pending = this.installMetadata
+      .apply(game.folder)
+      .then(() => true)
+      .finally(() => {
+        this.integrationRepairs.delete(key);
+      });
+    this.integrationRepairs.set(key, pending);
+    return pending;
+  }
   installationBusy(game) {
     if (!game.folder) return false;
+    if (this.integrationRepairs.has(path.resolve(game.folder).toLowerCase())) return true;
     return this.downloads.jobs.some(
       (job) =>
         this.downloads.controllers.has(job.id) &&
@@ -523,6 +549,8 @@ class BackgroundService {
         this.emit('library:changed', this.library.items);
         return true;
       }
+      case 'library:reinstall-integrations':
+        return this.reinstallIntegrations(args[0]);
       case 'library:launch-options': {
         const game = this.library.get(args[0]);
         if (!game) throw Error('Game not found. Refresh your library.');

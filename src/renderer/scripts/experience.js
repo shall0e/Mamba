@@ -787,7 +787,33 @@
             ),
             launchActions,
           );
-          manage.append(controls, launchEditor);
+          const integrations = node('div', undefined, 'launch-options-editor');
+          integrations.append(node('h3', 'Integrations'));
+          const reinstallIntegrations = action(
+            'Reinstall integrations',
+            async () => {
+              reinstallIntegrations.disabled = true;
+              reinstallIntegrations.setAttribute('aria-busy', 'true');
+              try {
+                await window.mamba.reinstallIntegrations(installation.id);
+                showToast('Integrations reinstalled');
+              } finally {
+                reinstallIntegrations.disabled = false;
+                reinstallIntegrations.removeAttribute('aria-busy');
+              }
+            },
+            'refresh-cw',
+            'secondary-button',
+          );
+          integrations.append(
+            node(
+              'p',
+              'Reinstall integration files for this installation. Original Steam API DLLs are saved with an _o suffix; existing backups are kept.',
+              'field-hint',
+            ),
+            reinstallIntegrations,
+          );
+          manage.append(controls, launchEditor, integrations);
           card.append(manage);
           section.append(card);
         }
