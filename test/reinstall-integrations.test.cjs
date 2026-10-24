@@ -12,7 +12,7 @@ async function fixture(t) {
   await fs.mkdir(folder);
   const game = { id: 'installed-game', folder, status: 'installed' };
   const service = new BackgroundService(() => {});
-  service.config = { downloadPath: root };
+  service.config = { automaticGameDetection: false, downloadPath: root };
   service.libraryState = { data: { imports: [] } };
   service.library = { get: (id) => (id === game.id ? game : null) };
   service.downloads = { jobs: [], controllers: new Map() };

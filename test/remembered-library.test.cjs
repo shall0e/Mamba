@@ -18,6 +18,7 @@ const game = (folder) => ({
   id: 'portal',
   name: 'Portal',
   steamId: 400,
+  verified: true,
   cover: 'cover',
   folder,
   executable: path.join(folder, 'game.exe'),
@@ -60,9 +61,12 @@ test('one remaining installation stays playable; removed entries stay hidden unt
   assert.equal(remaining.installations.length, 2);
   assert.equal(remaining.installations[1].status, 'not-installed');
   await state.favorite(remaining, true);
-  await state.remove(remaining);
+  await assert.rejects(state.remove(remaining), /Uninstall all copies/);
+  await fs.rm(first.folder, { recursive: true });
+  const [uninstalled] = await state.reconcile([]);
+  await state.remove(uninstalled);
   assert.deepEqual(await state.reconcile([first]), []);
-  assert.equal(await fs.readFile(first.executable, 'utf8'), 'kept');
+  assert.equal(await fs.stat(first.folder).catch(() => null), null);
   assert.equal(state.data.games['steam:400'], undefined);
   await state.restore(first);
   assert.equal((await state.reconcile([first])).length, 1);
@@ -110,7 +114,7 @@ test('configuration transfer round-trips the complete library and accepts older 
 test('scanning a missing games folder leaves it absent and returns no live installations', async (t) => {
   const { dir } = await fixture(t);
   const root = path.join(dir, 'absent');
-  const library = new Library(async () => ({ downloadPath: root }));
+  const library = new Library(async () => ({ downloadPath: root, automaticGameDetection: false }));
   assert.deepEqual(await library.scan(), []);
   await assert.rejects(fs.stat(root), { code: 'ENOENT' });
 });

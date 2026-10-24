@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles/app.css" />
     <script src="scripts/background.js" defer></script>
     <script src="scripts/app.js" defer></script>
+    <script src="scripts/dialogs.js" defer></script>
     <script src="../shared/activity-metrics.js" defer></script>
     <script src="../shared/game-presence.js" defer></script>
     <script src="scripts/discovery.js" defer></script>
@@ -440,8 +441,8 @@
           <h1 id="library-title" tabindex="-1">Library</h1>
           <div class="library-heading-actions">
             <button class="text-button" id="import-game" type="button">Add game</button
-            ><span id="game-count" class="game-count">0 games</span
-            ><button class="text-button" id="refresh-library" type="button">Refresh</button>
+            ><button class="text-button" id="add-library-folder" type="button">Add folder</button
+            ><span id="game-count" class="game-count">0 games</span>
           </div>
         </div>
         <section id="transfers" class="transfers" aria-labelledby="transfers-title" hidden>
@@ -472,14 +473,14 @@
               id="library-filter"
               type="search"
               placeholder="Filter your library"
-              aria-label="Filter installed games"
+              aria-label="Filter your library"
               autocomplete="off" /></label
           ><span class="library-caption">Installed on this device</span>
         </div>
         <div class="filter-empty" id="filter-empty" hidden>
           <h2>No matches found</h2>
           <p>Try a different game name.</p>
-          <button class="text-button" id="clear-filter" type="button">Clear filter</button>
+          <button class="text-button" id="clear-filter" type="button">Reset filters</button>
         </div>
         <div id="library-empty" class="library-empty">
           <svg
@@ -636,7 +637,7 @@
                   <p>Automatically extract games and remove wrapper folders.</p>
                 </div>
               </div>
-              <label class="field-label" for="download-path">Games folder</label>
+              <label class="field-label" for="download-path">Main games folder</label>
               <div class="path-field">
                 <input
                   id="download-path"
@@ -649,6 +650,20 @@
                 Downloads, extracted games, and installations stay inside this folder. On startup,
                 unfinished download files are cleared after 24 hours without changes, except files
                 protected for automatic recovery.
+              </p>
+              <label class="field-label" for="extra-game-folders">Extra game folders</label>
+              <textarea
+                id="extra-game-folders"
+                rows="4"
+                spellcheck="false"
+                autocomplete="off"
+                aria-describedby="extra-folders-hint"
+              ></textarea>
+              <button class="text-button" id="browse-extra-folder" type="button">Add folder</button>
+              <p class="field-hint" id="extra-folders-hint">
+                One folder per line. Track games here alongside your main folder. New installations
+                use the main folder. Existing Steam, Games, XboxGames, and Epic folders are detected
+                by default. Removing a folder keeps its files.
               </p>
               <label class="switch-row"
                 ><span

@@ -60,17 +60,17 @@ test('saved launch options survive library reload', async (t) => {
     path.join(folder, '.mamba-game.json'),
     JSON.stringify({ name: 'Example', executable: 'game.exe', status: 'installed' }),
   );
-  const library = new Library(async () => ({ downloadPath: dir }));
+  const library = new Library(async () => ({ automaticGameDetection: false, downloadPath: dir }));
   await library.scan();
   const { BackgroundService } = require('../src/core/background-service.cjs');
   const service = new BackgroundService(() => {});
-  service.config = { downloadPath: dir };
+  service.config = { automaticGameDetection: false, downloadPath: dir };
   service.libraryState = { data: { imports: [] } };
   service.downloads = { jobs: [], controllers: new Map() };
   service.library = library;
   const id = library.items[0].id;
   await service.call('library:launch-options', [id, launchOptions]);
-  const reloaded = new Library(async () => ({ downloadPath: dir }));
+  const reloaded = new Library(async () => ({ automaticGameDetection: false, downloadPath: dir }));
   await reloaded.scan();
   assert.deepEqual(reloaded.items[0].launchOptions, launchOptions);
   await assert.rejects(

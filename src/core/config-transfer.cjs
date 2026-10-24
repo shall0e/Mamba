@@ -101,6 +101,9 @@ function validateSettings(value) {
     'keepArchives',
     'automaticUpdates',
     'notifications',
+    'libraryShowUnknown',
+    'automaticGameDetection',
+    'steamLibraryIntegration',
   ])
     if (copy[key] !== undefined && typeof copy[key] !== 'boolean')
       throw Error(key + ' must be true or false.');
@@ -114,6 +117,8 @@ function validateSettings(value) {
     !['any', 'repack', 'portable', 'original'].includes(copy.preferredRelease)
   )
     throw Error('Choose a supported release type.');
+  if (copy.libraryView !== undefined && !['cards', 'list', 'banners'].includes(copy.libraryView))
+    throw Error('Invalid library view.');
   if (copy.librarySort !== undefined && !['name', 'recent', 'installed'].includes(copy.librarySort))
     throw Error('Invalid library sort.');
   if (copy.libraryFavoritesOnly !== undefined && typeof copy.libraryFavoritesOnly !== 'boolean')
@@ -126,6 +131,10 @@ function validateSettings(value) {
   for (const key of ['torboxApiKey', 'realDebridApiKey', 'archivePassword'])
     if (copy[key] !== undefined && typeof copy[key] !== 'string')
       throw Error(key + ' must be text.');
+  if (copy.extraGameFolders !== undefined)
+    copy.extraGameFolders = require('./library-folders.cjs').normalizeFolders(
+      copy.extraGameFolders,
+    );
   if (
     copy.downloadPath !== undefined &&
     (typeof copy.downloadPath !== 'string' ||

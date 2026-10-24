@@ -14,6 +14,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => restoreWindow());
+  const showAppDialog = require('./app-dialogs.cjs').createAppDialogs(ipcMain);
   const fs = require('node:fs/promises');
   const path = require('node:path');
   const defaultPalette = require('../shared/palette-defaults.json');
@@ -196,6 +197,10 @@ if (!app.requestSingleInstanceLock()) {
         ),
       );
       config.sourceUrls = [...new Set(urls)];
+      if (settings.extraGameFolders !== undefined)
+        config.extraGameFolders = require('../core/library-folders.cjs').normalizeFolders(
+          settings.extraGameFolders,
+        );
       if (settings.downloadPath !== undefined) {
         if (
           typeof settings.downloadPath !== 'string' ||
@@ -252,7 +257,7 @@ if (!app.requestSingleInstanceLock()) {
     const saved = (await getThemeStore().list()).find((row) => row.id === id);
     if (!saved)
       throw Error('Select a saved custom theme to delete. Default themes cannot be deleted.');
-    const choice = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    const choice = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
       type: 'question',
       title: 'Delete theme?',
       message: 'Delete ' + saved.theme.name + '?',
@@ -366,7 +371,7 @@ if (!app.requestSingleInstanceLock()) {
           (stat) => stat.isDirectory(),
           () => false,
         ));
-      const chosen = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+      const chosen = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
         type: 'question',
         title: 'Install ' + entry.name,
         message: 'Install the selected release?',
@@ -403,7 +408,7 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('cleanup:scan', () => task('cleanup:scan'));
   ipcMain.handle('cleanup:remove', async (event, scanId, ids) => {
     const selection = await task('cleanup:preview', scanId, ids);
-    const answer = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    const answer = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
       type: 'warning',
       title: 'Delete leftover files?',
       message:
@@ -424,6 +429,32 @@ if (!app.requestSingleInstanceLock()) {
     if (answer.response !== 1) return null;
     return task('cleanup:remove', scanId, ids);
   });
+  ipcMain.handle('steam:library-state', () => task('steam:library-state'));
+  ipcMain.handle('steam:install', async (_event, id) => {
+    const game = await task('library:get', String(id));
+    if (
+      !game?.steamLibrary ||
+      !Number.isSafeInteger(Number(game.steamId)) ||
+      Number(game.steamId) <= 0
+    )
+      throw Error('Steam game unavailable.');
+    await shell.openExternal('steam://install/' + Number(game.steamId));
+    return true;
+  });
+  ipcMain.handle('library:add-folder', async (event) => {
+    const chosen = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: 'Add a games folder',
+      properties: ['openDirectory'],
+    });
+    if (chosen.canceled || !chosen.filePaths[0]) return null;
+    await updateConfig((config) => {
+      config.extraGameFolders = require('../core/library-folders.cjs').normalizeFolders([
+        ...(config.extraGameFolders || []),
+        chosen.filePaths[0],
+      ]);
+    });
+    return task('library:scan');
+  });
   ipcMain.handle('library:scan', () => task('library:scan'));
   ipcMain.handle('game:details', (_event, id) => task('game:details', String(id)));
   ipcMain.handle('downloads:pause', (_event, id) => task('downloads:pause', String(id)));
@@ -433,6 +464,21 @@ if (!app.requestSingleInstanceLock()) {
   );
   ipcMain.handle('config:view', (_event, view) =>
     updateConfig((config) => {
+      if (view.libraryView !== undefined) {
+        if (!['cards', 'list', 'banners'].includes(view.libraryView))
+          throw Error('Invalid library view.');
+        config.libraryView = view.libraryView;
+      }
+      for (const key of [
+        'libraryShowUnknown',
+        'automaticGameDetection',
+        'steamLibraryIntegration',
+      ]) {
+        if (view[key] !== undefined) {
+          if (typeof view[key] !== 'boolean') throw Error('Invalid library preference.');
+          config[key] = view[key];
+        }
+      }
       if (view.librarySort !== undefined) {
         if (!['name', 'recent', 'installed'].includes(view.librarySort))
           throw Error('Invalid library sort.');
@@ -478,12 +524,17 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('library:remove-entry', async (event, id) => {
     const game = await task('library:get', String(id));
     if (!game) throw Error('Game not found.');
-    const chosen = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    if (
+      (game.installations || [game]).some(
+        (item) => item.status !== 'not-installed' || item.folderExists,
+      )
+    )
+      throw Error('Uninstall all copies of this game before removing it from your library.');
+    const chosen = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
       type: 'question',
       title: 'Remove from library?',
       message: 'Remove ' + game.name + ' from your library?',
-      detail:
-        'Installed files will be kept. Favorites and play history for this game will be removed.',
+      detail: 'Favorites and play history for this game will be removed.',
       buttons: ['Keep game', 'Remove from library'],
       defaultId: 0,
       cancelId: 0,
@@ -527,7 +578,25 @@ if (!app.requestSingleInstanceLock()) {
       throw Error('Finish or cancel the active download before removing this installation.');
     const config = await readConfig();
     authorizeGame(config, game.imported ? [game.folder] : [], game);
-    const selected = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    const { xboxManaged, removeUnmanagedInstallation } = require('../core/uninstall.cjs');
+    if (await xboxManaged(game.folder)) {
+      const managed = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
+        type: 'info',
+        title: 'Uninstall ' + game.name,
+        message: 'This installation is managed by Xbox or Windows.',
+        detail:
+          'Uninstall ' +
+          game.name +
+          ' in the Xbox app or Windows Installed apps. Mamba will update your library automatically after it is removed.',
+        buttons: ['Cancel', 'Open Installed apps'],
+        defaultId: 1,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (managed.response === 1) await shell.openExternal('ms-settings:appsfeatures');
+      return false;
+    }
+    const selected = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
       type: 'warning',
       title: 'Uninstall ' + game.name + '?',
       message: 'Permanently delete this installation?',
@@ -552,7 +621,30 @@ if (!app.requestSingleInstanceLock()) {
       path.resolve(gamesRoot).toLowerCase() === path.resolve(targetFolder).toLowerCase()
     )
       throw Error('The games root cannot be uninstalled.');
-    await fs.rm(targetFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
+    try {
+      await removeUnmanagedInstallation(targetFolder);
+    } catch (error) {
+      if (!['EPERM', 'EACCES'].includes(error.code)) throw error;
+      const retry = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
+        type: 'warning',
+        title: 'Administrator access needed',
+        message: 'Windows blocked removal of some game files.',
+        detail:
+          'Close the game and its launcher. Retry with administrator access to remove this installation. Some files may already have been removed. Windows will ask you to approve access.',
+        buttons: ['Cancel', 'Retry as administrator'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (retry.response !== 1) {
+        await task('library:scan');
+        return false;
+      }
+      const removed = await require('./uninstall-admin.cjs').uninstallAsAdministrator(targetFolder);
+      if (!removed) {
+        await task('library:scan');
+        return false;
+      }
+    }
     await task('library:scan');
     return true;
   }
@@ -595,7 +687,7 @@ if (!app.requestSingleInstanceLock()) {
         ['queued', 'preparing', 'downloading', 'verifying', 'waiting-retry'].includes(job.status),
       )
     ) {
-      const answer = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+      const answer = await showAppDialog(BrowserWindow.fromWebContents(event.sender), {
         type: 'question',
         message: 'Restart background tasks?',
         detail:

@@ -147,6 +147,7 @@ class SteamSearch {
     for (const { data } of this.identity.cache?.values() || [])
       if (
         data?.type === 'game' &&
+        !require('./game-identity.cjs').isNonGame(data) &&
         !data.isFree &&
         data.detailsVersion !== 5 &&
         data.steamId &&
@@ -358,7 +359,15 @@ class SteamSearch {
     };
   }
   forApp(app) {
-    if (!app || app.isFree || app.type !== 'game' || !app.steamId || !app.cover) return null;
+    if (
+      !app ||
+      app.isFree ||
+      app.type !== 'game' ||
+      require('./game-identity.cjs').isNonGame(app) ||
+      !app.steamId ||
+      !app.cover
+    )
+      return null;
     this.apps.set('steam:' + app.steamId, app);
     const releases = this.releasesFor(app).filter((source) => !this.ambiguous.has(source.id));
     return this.group(app, releases);
@@ -433,7 +442,8 @@ class SteamSearch {
     ];
     const sourceResults = [...new Map(sourceLists.flat().map((item) => [item.id, item])).values()];
     const record = (app) => {
-      if (app?.type !== 'game' || app.isFree) return;
+      if (app?.type !== 'game' || require('./game-identity.cjs').isNonGame(app) || app.isFree)
+        return;
       this.apps.set('steam:' + app.steamId, app);
       if (revision === this.searchRevision) publish();
     };

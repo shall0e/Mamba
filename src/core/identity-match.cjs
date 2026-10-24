@@ -1,5 +1,5 @@
 // Identity evidence is retained independently from display-title cleanup.
-const IDENTITY_VERSION = 2;
+const IDENTITY_VERSION = 3;
 function releaseHints(raw) {
   const text = String(raw || '');
   const year =
@@ -17,7 +17,12 @@ function assessIdentity(raw, app, sameTitle = true) {
   if (!sameTitle || !app) return { accepted: false, confidence: 0, reason: 'title-conflict' };
   const source = releaseHints(raw);
   const target = releaseHints(app.name);
-  if (source.mod !== target.mod) return { accepted: false, confidence: 0, reason: 'mod-conflict' };
+  const compact = (value) =>
+    String(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  if (source.mod !== target.mod && compact(raw) !== compact(app.name))
+    return { accepted: false, confidence: 0, reason: 'mod-conflict' };
   if (source.edition !== target.edition)
     return { accepted: false, confidence: 0, reason: 'edition-conflict' };
   const years = [

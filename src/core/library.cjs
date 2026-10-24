@@ -460,21 +460,30 @@ class Library {
   async performScan() {
     const config = await this.getConfig();
     const items = [];
-    const entries = (
-      await fs.readdir(config.downloadPath, { withFileTypes: true }).catch((error) => {
-        if (['ENOENT', 'ENODEV', 'EACCES', 'EPERM'].includes(error.code)) return [];
+    const discovered =
+      config.automaticGameDetection === false
+        ? { roots: [], games: [] }
+        : await require('./system-games.cjs').discoverSystemGames();
+    const entries = [];
+    for (const root of await require('./library-folders.cjs').scanRoots(config, discovered.roots)) {
+      const steamNames = await require('./installed-metadata.cjs').steamFolders(root);
+      const children = await fs.readdir(root, { withFileTypes: true }).catch((error) => {
+        if (['ENOENT', 'ENODEV', 'EACCES', 'EPERM', 'ENOTDIR'].includes(error.code)) return [];
         throw error;
-      })
-    )
-      .filter(
-        (entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.'),
-      )
-      .map((entry) => ({
-        name: entry.name,
-        folder: within(config.downloadPath, path.join(config.downloadPath, entry.name)),
-        imported: false,
-      }));
-    for (const folder of this.imports())
+      });
+      for (const entry of children) {
+        if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith('.')) continue;
+        const folder = within(root, path.join(root, entry.name));
+        if (entries.some((item) => item.folder.toLowerCase() === folder.toLowerCase())) continue;
+        entries.push({
+          name: steamNames.get(entry.name.toLowerCase()) || entry.name,
+          folder,
+          imported:
+            path.resolve(root).toLowerCase() !== path.resolve(config.downloadPath).toLowerCase(),
+        });
+      }
+    }
+    for (const folder of [...this.imports(), ...discovered.games])
       if (
         !entries.some(
           (entry) =>
@@ -489,7 +498,7 @@ class Library {
         try {
           manifest = JSON.parse(await fs.readFile(path.join(folder, '.mamba-game.json'), 'utf8'));
         } catch {}
-        if (manifest.name)
+        if (manifest.name && !entry.imported)
           await require('./game-helper.cjs')
             .installGameHelper(folder)
             .catch(() => {});
@@ -515,9 +524,11 @@ class Library {
           const candidate = within(folder, path.resolve(folder, manifest.executable));
           if ((await fs.lstat(candidate).catch(() => null))?.isFile()) executable = candidate;
         }
+        const localMetadata = await require('./installed-metadata.cjs').installedMetadata(folder);
         items.push({
           id,
-          name: manifest.name || entry.name,
+          cover: localMetadata.cover || null,
+          name: localMetadata.name || manifest.name || entry.name,
           folder,
           folderExists: true,
           imported: entry.imported,

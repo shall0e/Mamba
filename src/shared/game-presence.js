@@ -37,12 +37,16 @@
     const favorite = Number(!!b.favorite) - Number(!!a.favorite);
     const field = sort === 'recent' ? 'lastPlayed' : sort === 'installed' ? 'installedAt' : null;
     return (
+      Number(b.status === 'installed') - Number(a.status === 'installed') ||
       favorite ||
       (field ? (b[field] || '').localeCompare(a[field] || '') : 0) ||
       a.name.localeCompare(b.name)
     );
   }
-  const api = { nameKey, installed, download, compareLibrary };
+  function confirmedGame(game) {
+    return !!(game.verified && game.steamId);
+  }
+  const api = { confirmedGame, nameKey, installed, download, compareLibrary };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MambaPresence = api;
 })(typeof window === 'undefined' ? globalThis : window);

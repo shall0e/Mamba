@@ -446,6 +446,7 @@ document.querySelector('#library-search').addEventListener('click', () => showPa
 document.querySelector('#library-filter').addEventListener('input', () => renderLibrary());
 document.querySelector('#clear-filter').addEventListener('click', () => {
   document.querySelector('#library-filter').value = '';
+  window.MambaExperience?.resetLibraryFilters();
   renderLibrary();
   document.querySelector('#library-filter').focus();
 });
@@ -539,7 +540,7 @@ function updateSettingsState() {
     control.disabled = !configLoaded || settingsBusy;
   }
   for (const control of document.querySelectorAll(
-    '#download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config',
+    '#extra-game-folders, #browse-extra-folder, #download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #browse-folder, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications, [data-palette], #import-config, #export-config',
   ))
     control.disabled = !configLoaded || (control.type !== 'checkbox' && settingsBusy);
   document.querySelector('#remove-key').disabled = !configLoaded || settingsBusy || !keyConfigured;
@@ -622,12 +623,6 @@ document
 document
   .querySelector('#settings-sync')
   .addEventListener('click', () => window.mamba.sync().catch((error) => showToast(error.message)));
-document.querySelector('#refresh-library').addEventListener('click', () =>
-  window.mamba
-    .library()
-    .then(renderLibrary)
-    .catch((error) => showToast(error.message)),
-);
 document.querySelector('#search-clear').addEventListener('click', () => {
   document.querySelector('#main-search').value = '';
   updateSearchState();
@@ -740,6 +735,7 @@ function applyLoadedConfig(config) {
   keyInput.value = '';
   downloadPreferences = {
     downloadPath: config.downloadPath,
+    extraGameFolders: config.extraGameFolders || [],
     automaticRecovery: config.automaticRecovery === true,
     autoInstall: config.autoInstall,
     cachedOnly: config.cachedOnly,
@@ -801,6 +797,11 @@ function readDownloadPreferences() {
     preferredRelease: document.querySelector('#preferred-release').value,
     notifications: document.querySelector('#notifications').checked,
     downloadPath: document.querySelector('#download-path').value.trim(),
+    extraGameFolders: document
+      .querySelector('#extra-game-folders')
+      .value.split(/\r?\n/)
+      .map((folder) => folder.trim())
+      .filter(Boolean),
     automaticRecovery: document.querySelector('#automatic-recovery').checked,
     autoInstall: document.querySelector('#auto-install').checked,
     cachedOnly: document.querySelector('#cached-only').checked,
@@ -824,6 +825,9 @@ function populateDownloadPreferences() {
     downloadPreferences.preferredRelease || 'any';
   document.querySelector('#notifications').checked = downloadPreferences.notifications !== false;
   document.querySelector('#download-path').value = downloadPreferences.downloadPath || '';
+  document.querySelector('#extra-game-folders').value = (
+    downloadPreferences.extraGameFolders || []
+  ).join('\n');
   document.querySelector('#automatic-recovery').checked = downloadPreferences.automaticRecovery;
   document.querySelector('#auto-install').checked = downloadPreferences.autoInstall;
   document.querySelector('#cached-only').checked = downloadPreferences.cachedOnly;
@@ -836,12 +840,12 @@ function populateDownloadPreferences() {
   applyPalette(downloadPreferences.palette);
 }
 for (const control of document.querySelectorAll(
-  '#download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications',
+  '#extra-game-folders, #download-path, #automatic-recovery, #auto-install, #cached-only, #archive-password, #keep-archives, #transfer-timeout, #automatic-updates, #preferred-language, #preferred-release, #notifications',
 )) {
   const save = () => {
     saveStatus.textContent = '';
     scheduleSettingsSave(
-      control.matches('input[type="text"], input[type="password"], input[type="number"]')
+      control.matches('textarea, input[type="text"], input[type="password"], input[type="number"]')
         ? 800
         : 350,
     );
@@ -850,6 +854,18 @@ for (const control of document.querySelectorAll(
   control.addEventListener('change', save);
 }
 
+document.querySelector('#browse-extra-folder').addEventListener('click', async () => {
+  try {
+    const folder = await window.mamba.chooseFolder();
+    if (folder) {
+      const field = document.querySelector('#extra-game-folders');
+      field.value = [field.value.trim(), folder].filter(Boolean).join('\n');
+      scheduleSettingsSave(150);
+    }
+  } catch (error) {
+    window.MambaExperience?.handleError(error) || showToast(error.message);
+  }
+});
 document.querySelector('#browse-folder').addEventListener('click', async () => {
   try {
     const folder = await window.mamba.chooseFolder();

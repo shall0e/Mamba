@@ -35,6 +35,7 @@ class BackgroundService {
     this.metadata = new Metadata(directory, this.catalog);
     this.identity = new GameIdentity(directory);
     this.steamFeatured = new SteamFeatured(this.identity);
+    this.steamLibrary = new (require('./steam-library.cjs').SteamLibrary)(this.identity);
     this.library = new Library(getConfig, {
       imports: () => this.libraryState.data.imports,
       identify: (name, hints) => this.identity.identify(name, hints),
@@ -99,7 +100,20 @@ class BackgroundService {
       if (this.scanPending) return this.scanPending;
       this.scanPending = scan()
         .then(async (items) => {
-          this.library.items = await this.libraryState.reconcile(items);
+          if (this.config.steamLibraryIntegration !== false) {
+            await this.steamLibrary.read();
+            items = this.steamLibrary.merge(items);
+          }
+          this.library.items = await this.libraryState.reconcile(
+            items,
+            this.library.installations.filter((item) =>
+              require('./game-identity.cjs').isNonGame(item.identity),
+            ),
+          );
+          if (this.config.steamLibraryIntegration === false)
+            this.library.items = this.library.items.filter(
+              (game) => !game.steamLibrary || game.folder || game.installations?.length,
+            );
           this.emit('library:changed', this.library.items);
           return this.library.items;
         })
@@ -389,9 +403,24 @@ class BackgroundService {
     switch (method) {
       case 'initialize':
         return this.initialize(args);
-      case 'configure':
+      case 'configure': {
+        const foldersChanged =
+          JSON.stringify([
+            this.config.downloadPath,
+            this.config.extraGameFolders || [],
+            this.config.automaticGameDetection !== false,
+            this.config.steamLibraryIntegration !== false,
+          ]) !==
+          JSON.stringify([
+            args[0].downloadPath,
+            args[0].extraGameFolders || [],
+            args[0].automaticGameDetection !== false,
+            args[0].steamLibraryIntegration !== false,
+          ]);
         this.config = args[0];
+        if (foldersChanged) await this.library.scan();
         return true;
+      }
       case 'catalog:sync':
         this.catalog.sync(args[0]).catch(() => {});
         return this.catalog.state;
@@ -459,6 +488,8 @@ class BackgroundService {
         return this.downloads.remove(...args);
       case 'downloads:clear-finished':
         return this.downloads.clearFinished();
+      case 'steam:library-state':
+        return this.steamLibrary.state;
       case 'library:scan':
         return this.library.scan();
       case 'library:state':
