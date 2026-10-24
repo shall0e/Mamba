@@ -8,7 +8,7 @@ const folderId = (folder) =>
 class LibraryState {
   constructor(directory) {
     this.file = path.join(directory, 'library-state.json');
-    this.data = { games: {}, imports: [] };
+    this.data = { games: {}, imports: [], remembered: {}, hidden: {} };
     this.queue = Promise.resolve();
   }
   async load() {
@@ -21,11 +21,14 @@ class LibraryState {
         !Array.isArray(data.imports)
       )
         throw Error('Invalid library preferences.');
+      require('./config-transfer.cjs').validateSettings({ libraryState: data });
       this.data = {
         games: data.games || {},
         imports: data.imports.filter(
           (folder) => typeof folder === 'string' && path.isAbsolute(folder),
         ),
+        remembered: data.remembered || {},
+        hidden: data.hidden || {},
       };
     } catch (error) {
       if (error.code !== 'ENOENT') {
@@ -46,11 +49,123 @@ class LibraryState {
     await task;
   }
   key(game) {
+    if (game.platformId) return 'platform:' + game.platformId;
     const id = game.steamId || game.identity?.baseGame?.steamId || game.identity?.steamId;
     return id ? 'steam:' + id : 'name:' + game.name.toLocaleLowerCase();
   }
   decorate(items) {
     return items.map((game) => ({ ...game, ...this.data.games[this.key(game)] }));
+  }
+  async reconcile(items, excluded = []) {
+    const nonGame = require('./game-identity.cjs').isNonGame;
+    const excludedFolders = new Set(excluded.map((item) => item.folder));
+    const visible = items.filter(
+      (game) => !nonGame(game.identity || game) && !this.data.hidden[this.key(game)],
+    );
+    // Migrate folder-based entries when metadata resolves a canonical identity or DLC parent.
+    await this.change((data) => {
+      for (const game of visible) {
+        const key = this.key(game);
+        const folders = new Set(
+          [...(game.installations || [game]), ...(game.dlcs || []), ...(game.demos || [])]
+            .map((item) => item.folder)
+            .filter(Boolean),
+        );
+        for (const [oldKey, old] of Object.entries(data.remembered)) {
+          if (
+            oldKey === key ||
+            !(old.installations || [old]).some((item) => folders.has(item.folder))
+          )
+            continue;
+          data.games[key] = { ...data.games[oldKey], ...data.games[key] };
+          delete data.games[oldKey];
+          delete data.remembered[oldKey];
+        }
+      }
+    });
+    const current = new Map(visible.map((game) => [this.key(game), game]));
+    const missing = async (game) => {
+      const drive = game.folder ? path.parse(game.folder).root : null;
+      const available =
+        !drive ||
+        (await fs.access(drive).then(
+          () => true,
+          () => false,
+        ));
+      return {
+        ...game,
+        folderExists: false,
+        status: available ? 'not-installed' : 'drive-unavailable',
+        executable: null,
+        installer: null,
+        executables: [],
+        repairPending: false,
+      };
+    };
+    const result = [];
+    for (const [key, saved] of Object.entries(this.data.remembered)) {
+      if (
+        this.data.hidden[key] ||
+        nonGame(saved.identity || saved) ||
+        (saved.installations || [saved]).some((item) => excludedFolders.has(item.folder))
+      )
+        continue;
+      const live = current.get(key);
+      const liveInstalls = live ? live.installations || [live] : [];
+      const previous = saved.installations || [saved];
+      const absent = await Promise.all(
+        previous
+          .filter((old) => old.folder && !liveInstalls.some((item) => item.folder === old.folder))
+          .map(missing),
+      );
+      const installations = [...liveInstalls, ...absent];
+      result.push(
+        live
+          ? { ...live, installations }
+          : {
+              ...(await missing(saved)),
+              installations,
+              status: absent.some((item) => item.status === 'drive-unavailable')
+                ? 'drive-unavailable'
+                : 'not-installed',
+            },
+      );
+      current.delete(key);
+    }
+    result.push(...current.values());
+    await this.change((data) => {
+      for (const game of result)
+        if (!data.hidden[this.key(game)] && game.verified && game.steamId)
+          data.remembered[this.key(game)] = game;
+    });
+    return this.decorate(result.filter((game) => !this.data.hidden[this.key(game)]));
+  }
+  async remove(game) {
+    for (const installation of game.installations || [game]) {
+      if (installation.status !== 'not-installed' || installation.folderExists)
+        throw Error('Uninstall all copies of this game before removing it from your library.');
+      if (installation.folder) {
+        const exists = await fs.stat(installation.folder).catch((error) => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (exists)
+          throw Error('Uninstall all copies of this game before removing it from your library.');
+      }
+    }
+    await this.change((data) => {
+      const key = this.key(game);
+      data.hidden[key] = true;
+      delete data.remembered[key];
+      delete data.games[key];
+      const folders = new Set((game.installations || [game]).map((item) => item.folder));
+      data.imports = data.imports.filter((folder) => !folders.has(folder));
+    });
+  }
+  async restore(game) {
+    await this.change((data) => {
+      delete data.hidden[this.key(game)];
+    });
   }
   async favorite(game, value) {
     await this.change((data) => {

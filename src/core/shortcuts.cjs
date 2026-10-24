@@ -376,6 +376,7 @@ async function steamLaunchUrl(game, { profile = steamProfile, setup } = {}) {
   return 'steam://rungameid/' + gameId;
 }
 module.exports = {
+  steamProfile,
   launchTarget,
   desktopShortcut,
   parseVdf,

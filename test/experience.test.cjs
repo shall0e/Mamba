@@ -23,9 +23,12 @@ test('imports existing games without moving them, and remembers favorites and pl
   const state = new LibraryState(dir);
   await state.load();
   await state.addImport(external);
-  const library = new Library(async () => ({ downloadPath: games }), {
-    imports: () => state.data.imports,
-  });
+  const library = new Library(
+    async () => ({ downloadPath: games, automaticGameDetection: false }),
+    {
+      imports: () => state.data.imports,
+    },
+  );
   const items = await library.scan();
   assert.equal(items.length, 1);
   assert.equal(items[0].imported, true);

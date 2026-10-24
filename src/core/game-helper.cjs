@@ -48,7 +48,7 @@ async function openGameHelper(
   const command =
     "$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" +
     payload +
-    "'))|ConvertFrom-Json; $arguments='-NoProfile -NoExit -ExecutionPolicy Bypass -File '+[char]34+$p.script+[char]34+' -GameFolder '+[char]34+$p.folder+[char]34; Start-Process -FilePath powershell.exe -ArgumentList $arguments -WorkingDirectory $p.cwd -WindowStyle Normal";
+    "'))|ConvertFrom-Json; $arguments='-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File '+[char]34+$p.script+[char]34+' -GameFolder '+[char]34+$p.folder+[char]34; Start-Process -FilePath powershell.exe -ArgumentList $arguments -WorkingDirectory $p.cwd -WindowStyle Normal";
   await launch(
     'powershell.exe',
     [

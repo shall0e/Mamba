@@ -7,6 +7,7 @@ test('complete config round trip preserves credentials, advanced settings and un
   const settings = {
     torboxApiKey: 'fixture-key',
     archivePassword: 'fixture-password',
+    automaticGameDetection: false,
     downloadPath: 'C:\\Games',
     sourceUrls: ['https://example.test/feed.json'],
     autoInstall: true,

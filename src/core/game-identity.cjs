@@ -8,8 +8,14 @@ const {
   identityKey,
 } = require('./identity-match.cjs');
 function cleanTitle(raw) {
+  const minecraft = minecraftIdentity(raw);
+  if (minecraft) return minecraft.name;
+  if (/^fallout$/i.test(String(raw).trim())) return 'Fallout: A Post Nuclear Role Playing Game';
   return gameTitle(
     String(raw)
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+      .replace(/([A-Za-z])([0-9])/g, '$1 $2')
       .replace(/[._]+/g, ' ')
       .replace(/\bbuild\s*\d.*$/i, '')
       .replace(/\b(?:windows|win64|win32|x64|x86)\b/gi, '')
@@ -19,21 +25,28 @@ function cleanTitle(raw) {
     .replace(/\s*\+\s*(?:all\s+)?dlcs?\b.*$/i, '')
     .replace(/\s+(?:(?:digital\s+)?deluxe|ultimate|complete|gold|goty)(?:\s+edition)?\b/gi, '')
     .replace(/\(\s*\)/g, '')
-    .replace(/[+\s,:–—-]+$/, '')
+    .replace(/[+\s,:â€“â€”-]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 function identityWords(name) {
   return tokens(
     cleanTitle(name)
-      .replace(/[’']/g, '')
+      .replace(/[â€™']/g, '')
       .replace(/([a-z])(\d)/gi, '$1 $2'),
   ).map((w) => (w === 'v' ? '5' : w));
 }
 function matchesTitle(raw, candidate) {
   const wanted = identityWords(raw),
     actual = identityWords(candidate);
-  if (wanted.join(' ') === actual.join(' ')) return true;
+  if (wanted.join(' ') === actual.join(' ') || wanted.join('') === actual.join('')) return true;
+  const prefix = String(candidate).split(/\s+[-ï¿½ï¿½]\s+|:\s*/)[0];
+  if (
+    prefix !== candidate &&
+    /\s+[-ï¿½ï¿½]\s+.*\bsimulator$/i.test(candidate) &&
+    identityWords(prefix).join('') === wanted.join('')
+  )
+    return true;
   if (wanted.length > 1 && /^[a-z]{2,5}$/.test(wanted[0])) {
     for (let n = 2; n <= 5 && n <= actual.length; n++)
       if (
@@ -46,6 +59,46 @@ function matchesTitle(raw, candidate) {
         return true;
   }
   return false;
+}
+function minecraftIdentity(raw) {
+  const name = String(raw).replace(/[._]+/g, ' ').trim();
+  if (
+    /^minecraft(?: for(?: windows)?| windows| bedrock)(?: edition| \(bedrock edition\))?$/i.test(
+      name,
+    )
+  )
+    return {
+      name: 'Minecraft For Windows (Bedrock Edition)',
+      type: 'game',
+      platformId: 'minecraft-bedrock',
+      verified: false,
+    };
+  if (/^minecraft(?: launcher| java(?: edition)?)?$/i.test(name))
+    return { name: 'Minecraft', type: 'game', platformId: 'minecraft-java', verified: false };
+  return null;
+}
+function isNonGame(app) {
+  return (
+    !!app &&
+    ((app.type && !['game', 'dlc', 'demo', 'unknown'].includes(app.type)) ||
+      app.isHub ||
+      /^(?:SteamVR|Steamworks Shared|Steamworks Common Redistributables|Steam Client|Epic Games Launcher|DirectX|Microsoft Visual C\+\+)(?:$|\s)/i.test(
+        app.name || '',
+      ) ||
+      (app.genres || []).some((genre) =>
+        /^(?:Utilities|Software Training|Design & Illustration|Animation & Modeling|Audio Production|Video Production|Web Publishing)$/i.test(
+          genre,
+        ),
+      ))
+  );
+}
+function matchesDlcTitle(raw, candidate) {
+  const parts = String(candidate).split(/:\s*|\s+[-ï¿½ï¿½]\s+/);
+  return (
+    parts.length > 1 &&
+    identityWords(raw).length >= 2 &&
+    matchesTitle(raw, parts.slice(1).join(' '))
+  );
 }
 class GameIdentity {
   constructor(directory, transport = fetch) {
@@ -136,6 +189,8 @@ class GameIdentity {
     return data;
   }
   identify(raw, { aliases = [] } = {}) {
+    const local = minecraftIdentity(raw);
+    if (local) return Promise.resolve(local);
     const key =
       'title:' +
       identityKey(raw, identityWords(raw).join(' ')) +
@@ -148,7 +203,14 @@ class GameIdentity {
     return task;
   }
   async identifyNow(raw, key, aliases) {
-    const fallback = { name: cleanTitle(raw) || raw, verified: false, type: 'unknown' };
+    const fallback = {
+      name: cleanTitle(raw) || raw,
+      verified: false,
+      type: 'unknown',
+      identityVersion: IDENTITY_VERSION,
+      detailsVersion: 6,
+    };
+    if (isNonGame({ name: raw })) return { ...fallback, type: 'software' };
     const saved = this.cache.get(key);
     if (
       saved &&
@@ -166,6 +228,7 @@ class GameIdentity {
         cleanTitle(raw),
       ];
       if (/^[A-Z]{2,5}\s/.test(raw)) queries.push(cleanTitle(raw).split(' ').slice(1).join(' '));
+      queries.push(String(raw));
       queries.push(...aliases.map(cleanTitle).filter((name) => name.length >= 5));
       for (const query of [...new Set(queries)].slice(0, 4)) {
         const url = new URL('https://store.steampowered.com/api/storesearch/');
@@ -177,7 +240,8 @@ class GameIdentity {
         const items = (await response.json()).items || [];
         candidates = items.filter(
           (item) =>
-            Number.isSafeInteger(item.id) && names.some((name) => matchesTitle(name, item.name)),
+            Number.isSafeInteger(item.id) &&
+            names.some((name) => matchesTitle(name, item.name) || matchesDlcTitle(name, item.name)),
         );
         if (
           !candidates.length &&
@@ -211,18 +275,25 @@ class GameIdentity {
               raw,
               app,
               matchesTitle(raw, item.name) ||
+                (app?.type === 'dlc' && matchesDlcTitle(raw, item.name)) ||
                 aliases.some((alias) => matchesTitle(alias, item.name)),
             ),
           };
         }),
       );
       candidates = evaluated.filter(({ evidence }) => evidence.accepted).map(({ item }) => item);
+      const exact = candidates.filter(
+        (item) => identityWords(raw).join('') === identityWords(item.name).join(''),
+      );
+      if (exact.length === 1) candidates = exact;
       if (candidates.length !== 1) {
         this.cache.set(key, { at: Date.now(), data: fallback });
+        await this.save();
         return fallback;
       }
       const app = await this.details(candidates[0].id);
-      if (!app || !['game', 'dlc', 'demo'].includes(app.type)) return fallback;
+      if (!app) return fallback;
+      if (isNonGame(app)) return { ...app, type: 'software', verified: false };
       let baseGame = null;
       if (app.type !== 'game' && app.parentId) {
         baseGame = await this.details(app.parentId);
@@ -291,10 +362,12 @@ async function groupInstallations(items, identify) {
   );
   const groups = new Map();
   for (const item of enriched) {
+    if (isNonGame(item.identity)) continue;
     const base = item.identity.baseGame || item.identity;
     const key = base.steamId
       ? 'steam:' + base.steamId
-      : identityKey(item.sourceName || item.name, identityWords(item.name).join(' '));
+      : base.platformId ||
+        identityKey(item.sourceName || item.name, identityWords(item.name).join(' '));
     if (!groups.has(key)) groups.set(key, { base, items: [] });
     groups.get(key).items.push(item);
   }
@@ -315,8 +388,9 @@ async function groupInstallations(items, identify) {
       ...primary,
       name: base.name || primary.name,
       steamId: base.steamId || null,
+      platformId: base.platformId || null,
       verified: members.some((item) => item.identity.verified),
-      cover: base.cover || null,
+      cover: base.cover || primary.cover || null,
       installations: installs,
       dlcs: dlcs.map((item) => ({
         id: item.id,
@@ -330,4 +404,11 @@ async function groupInstallations(items, identify) {
   }
   return { items: result.sort((a, b) => a.name.localeCompare(b.name)), installations: enriched };
 }
-module.exports = { GameIdentity, cleanTitle, matchesTitle, groupInstallations };
+module.exports = {
+  GameIdentity,
+  cleanTitle,
+  matchesTitle,
+  groupInstallations,
+  isNonGame,
+  minecraftIdentity,
+};

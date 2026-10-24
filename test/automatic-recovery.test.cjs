@@ -21,6 +21,7 @@ async function fixture(t, options = {}) {
   let clock = 1000000;
   const config = {
     automaticRecovery: true,
+    automaticGameDetection: false,
     downloadPath: dir,
     torboxApiKey: 'secret-api-key',
     realDebridApiKey: 'other-secret',
@@ -86,6 +87,8 @@ test('a transfer interrupted halfway resumes preserved bytes with If-Range after
           new ReadableStream({
             start(c) {
               c.enqueue(Buffer.from('abc'));
+            },
+            pull(c) {
               setTimeout(
                 () => c.error(Object.assign(Error('terminated'), { code: 'UND_ERR_SOCKET' })),
                 20,

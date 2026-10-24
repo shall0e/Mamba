@@ -102,15 +102,19 @@ async function main() {
     return (await input.question(bridge ? '' : prompt)).trim().replace(/^"|"$/g, '');
   };
   try {
-    console.log(
-      'Mamba - choose a launcher, create a desktop shortcut and add it to Steam and Xbox PC.\n',
-    );
+    console.log('\nMamba  /  Game setup');
+    console.log('Choose how your game starts, then add shortcuts to your apps.\n');
+    console.log('Step 1 of 4  /  Find your game');
     const defaultFolder = process.env.MAMBA_GAME_FOLDER || '';
+    if (defaultFolder) console.log('Current folder: ' + defaultFolder);
+    console.log(
+      defaultFolder
+        ? 'Press Enter to use this folder, B to browse for a launcher, or paste a path.\n'
+        : 'Press B to browse for a launcher, or paste a game folder or launcher path.\n',
+    );
     let supplied, stat;
     while (true) {
-      const answer = await ask(
-        `Game folder OR full launcher path${defaultFolder ? ' [' + defaultFolder + ']' : ''} (B = Browse startup file): `,
-      );
+      const answer = await ask('Game location: ');
       const selection = /^b$/i.test(answer)
         ? await browse('file', defaultFolder || require('node:os').homedir())
         : answer || defaultFolder;
@@ -128,17 +132,23 @@ async function main() {
     let file = supplied,
       suggestedFolder = stat.isDirectory() ? supplied : path.dirname(supplied);
     const defaults = stat.isDirectory() ? await suggestedSettings(supplied) : null;
+    console.log('\nStep 2 of 4  /  Choose a launcher');
     if (stat.isDirectory()) {
       const found = await detect(supplied);
-      console.log('\nLaunchers found:');
-      found.executables.forEach((item, index) =>
-        console.log(`${index + 1}. ${path.relative(supplied, item)}`),
+      console.log(
+        found.executables.length
+          ? '\nAvailable launchers:'
+          : '\nNo launchers detected. Press B to browse.',
       );
-      console.log(`\nSuggested startup file: ${defaults.file || 'None detected'}`);
+      found.executables.forEach((item, index) =>
+        console.log(`  ${index + 1}. ${path.relative(supplied, item)}`),
+      );
+      console.log(
+        `\nSuggested: ${defaults.file ? path.relative(supplied, defaults.file) : 'None detected'}`,
+      );
+      console.log('Press Enter to accept, B to browse, or enter a number or path.\n');
       while (true) {
-        const choice = await ask(
-          'Enter = suggested file, B = Browse, or enter a launcher number / full path: ',
-        );
+        const choice = await ask('Launcher: ');
         file = !choice
           ? defaults.file
           : /^b$/i.test(choice)
@@ -171,9 +181,12 @@ async function main() {
     } catch {
       suggestedFolder = path.dirname(file);
     }
+    console.log('\nStep 3 of 4  /  Confirm game details');
+    console.log('Game folder: ' + suggestedFolder);
+    console.log('Press Enter to keep it, B to browse, or paste a different folder.\n');
     let folder;
     while (true) {
-      const choice = await ask(`Game root folder [${suggestedFolder}] (B = Browse): `);
+      const choice = await ask('Game folder: ');
       folder = path.resolve(
         (/^b$/i.test(choice) ? await browse('folder', suggestedFolder) : choice) || suggestedFolder,
       );
@@ -185,13 +198,20 @@ async function main() {
         console.log('The root must contain the selected startup file. ' + error.message);
       }
     }
+    console.log('\nSuggested name: ' + (manifest.name || path.basename(folder)));
     const name =
-      (await ask(`Game name [${manifest.name || path.basename(folder)}]: `)) ||
-      manifest.name ||
-      path.basename(folder);
-    console.log(`\nGame: ${name}\nRoot to clean up: ${folder}\nLauncher: ${file}`);
-    if ((await ask('Create shortcut and add to Steam and Xbox PC? [Y/n]: ')).toLowerCase() === 'n')
+      (await ask('Game name (Enter to keep): ')) || manifest.name || path.basename(folder);
+    console.log('\nStep 4 of 4  /  Review and add');
+    console.log(
+      `\nGame:     ${name}\nFolder:   ${folder}\nLauncher: ${path.relative(folder, file)}`,
+    );
+    console.log('\nMamba will tidy wrapper folders, name the game folder, and save this launcher.');
+    console.log('A desktop shortcut will be created, with Steam and Xbox PC entries.\n');
+    if (/^(n|no)$/i.test(await ask('Add game? [Y/n]: '))) {
+      console.log('\nCancelled. No changes were made.');
       return;
+    }
+    console.log('\nAdding game. Please wait...');
     const project = path.resolve(__dirname, '..', 'data');
     const localProject = path.resolve(path.dirname(process.execPath), '..', '..', 'data');
     const hasConfig = async (directory) =>
@@ -215,9 +235,9 @@ async function main() {
       resolveName: (value) => metadata.resolveName(value),
     });
     console.log(
-      `\nDesktop shortcut created.\nGame folder: ${result.folder}\n${result.steam.message}\n${result.xbox.message}`,
+      `\nGame setup complete\n\nFolder: ${result.folder}\nDesktop shortcut created.\nSteam: ${result.steam.message}\nXbox PC: ${result.xbox.message}`,
     );
-    console.log('Refresh Library in Mamba to see the selected launcher.');
+    console.log('The selected launcher will appear in Mamba automatically.');
   } finally {
     input.close();
   }

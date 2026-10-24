@@ -21,6 +21,8 @@
 
 - Do not publish releases, create/push release tags, or dispatch release workflows unless the user explicitly requests publishing. Version bumps and local builds do not authorize publishing.
 
+- Always keep the local build and GitHub build in sync: use the same source commit, version, dependencies, bundled assets, and build configuration. When changes are merged or a release is published, update and rebuild the local copy to match the GitHub build. Verify that both builds contain the same changes; do not leave a stale local build or local-only build changes. This requirement does not authorize publishing a release without an explicit request.
+
 - Use the app-owned rounded scrollbar with Foreground opacity and blur, using the Icons theme color with its hue and saturation preserved during adaptive lightness changes. The fading sidebar divider follows the same adaptive Icons color. Style range sliders with the theme rather than browser-default visuals. Do not expose browser-native scrollbars.
 
 - Background blur spans 0–100 and sets glow opacity to Foreground opacity multiplied by (1 minus Background blur/100), so either zero Foreground opacity or maximum Background blur fully hides the glow.

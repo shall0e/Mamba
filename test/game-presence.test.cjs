@@ -23,3 +23,20 @@ test('existing downloads are recognized by release or exact game name', () => {
   assert.equal(download(jobs, { name: 'Example Game 2' }), null);
   assert.equal(download([{ ...jobs[0], status: 'cancelled' }], { name: 'Example Game' }), null);
 });
+
+test('installed games precede uninstalled games for every sort, with favorites within each group', () => {
+  const { compareLibrary } = require('../src/shared/game-presence.js');
+  const games = [
+    { name: 'Installed favorite', status: 'installed', favorite: true },
+    { name: 'Uninstalled', status: 'not-installed' },
+    { name: 'Uninstalled favorite', status: 'not-installed', favorite: true },
+    { name: 'Installed', status: 'installed' },
+  ];
+  for (const sort of ['name', 'recent', 'installed']) {
+    const result = [...games].sort((a, b) => compareLibrary(a, b, sort));
+    assert.deepEqual(
+      result.map((game) => game.name),
+      ['Installed favorite', 'Installed', 'Uninstalled favorite', 'Uninstalled'],
+    );
+  }
+});

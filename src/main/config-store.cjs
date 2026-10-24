@@ -19,6 +19,11 @@ function createConfigStore({
     disabledSourceUrls: config.disabledSourceUrls || [],
     realDebridConfigured: !!config.realDebridApiKey,
     librarySort: config.librarySort || 'name',
+    libraryView: config.libraryView || 'cards',
+    libraryShowUnknown: config.libraryShowUnknown === true,
+    automaticGameDetection: config.automaticGameDetection !== false,
+    steamLibraryIntegration: config.steamLibraryIntegration !== false,
+    libraryAvailability: config.libraryAvailability || 'all',
     libraryFavoritesOnly: !!config.libraryFavoritesOnly,
     notifications: config.notifications !== false,
     preferredLanguage: config.preferredLanguage || 'english',
@@ -27,6 +32,7 @@ function createConfigStore({
     sourceUrls: config.sourceUrls,
     palette: config.palette,
     downloadPath: config.downloadPath,
+    extraGameFolders: config.extraGameFolders || [],
     automaticRecovery: config.automaticRecovery === true,
     autoInstall: config.autoInstall,
     cachedOnly: config.cachedOnly,
@@ -59,6 +65,10 @@ function createConfigStore({
         throw new Error('Invalid config.json. Expected an object.');
       return {
         ...config,
+        extraGameFolders:
+          config.extraGameFolders === undefined
+            ? await require('../core/library-folders.cjs').defaultFolders()
+            : require('../core/library-folders.cjs').normalizeFolders(config.extraGameFolders),
         onboardingCompleted: config.onboardingCompleted !== false,
         palette: readPalette(config.palette),
         downloadPath:
@@ -141,6 +151,7 @@ function createConfigStore({
       }
       return {
         onboardingCompleted: false,
+        extraGameFolders: await require('../core/library-folders.cjs').defaultFolders(),
         notifications: true,
         preferredLanguage: 'english',
         preferredRelease: 'portable',

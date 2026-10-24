@@ -1,8 +1,5 @@
 name: Publish Windows release
 on:
-  push:
-    branches: [main]
-    paths: [package.json]
   workflow_dispatch:
 permissions:
   contents: write

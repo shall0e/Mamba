@@ -2,14 +2,19 @@
   const $ = (selector) => document.querySelector(selector);
   let currentDetail = null,
     generation = 0,
-    favoritesOnly = false,
+    availability = 'all',
     sort = 'name',
+    libraryView = 'cards',
+    showUnknown = false,
+    favoritesOnly = false,
     activity = null;
   let recentJobs = [],
     openIssues = 0,
     currentPage = 'search';
   let speedHistory = [];
   let discoveryJobsSignature = '';
+  let libraryRenderSignature = '';
+  let steamEnabled = true;
   const node = (tag, text, className) => {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
@@ -22,7 +27,7 @@
       '',
     );
     if (/background service (?:stopped|is unavailable)/i.test(text)) return true;
-    showToast(text + ' · See Activity for help');
+    showToast(text + ' Â· See Activity for help');
     window.mamba.reportIssue(text).catch(() => {});
     return true;
   }
@@ -69,10 +74,17 @@
     installedGames = Array.isArray(games)
       ? games.filter((game) => game && typeof game.name === 'string')
       : [];
+    const eligible = installedGames.filter(
+      (game) => showUnknown || window.MambaPresence.confirmedGame(game),
+    );
     const query = $('#library-filter').value.trim().toLowerCase();
-    const matches = installedGames.filter(
+    const matches = eligible.filter(
       (game) =>
         (!favoritesOnly || game.favorite) &&
+        (availability === 'all' ||
+          (availability === 'installed'
+            ? !['not-installed', 'drive-unavailable'].includes(game.status)
+            : ['not-installed', 'drive-unavailable'].includes(game.status))) &&
         [
           game.name,
           ...(game.installations || []).map((item) => item.sourceName || item.name),
@@ -82,24 +94,54 @@
           .toLowerCase()
           .includes(query),
     );
-    matches.sort((a, b) =>
-      sort === 'recent'
-        ? (b.lastPlayed || '').localeCompare(a.lastPlayed || '') || a.name.localeCompare(b.name)
-        : sort === 'installed'
-          ? (b.installedAt || '').localeCompare(a.installedAt || '') || a.name.localeCompare(b.name)
-          : a.name.localeCompare(b.name),
-    );
-    $('#library-empty').hidden = installedGames.length > 0;
-    $('#library-toolbar').hidden = !installedGames.length;
+    matches.sort((a, b) => window.MambaPresence.compareLibrary(a, b, sort));
+    $('#library-empty').hidden = eligible.length > 0 || installedGames.length > 0;
+    $('#library-toolbar').hidden = false;
     $('#filter-empty').hidden = matches.length > 0 || !installedGames.length;
-    $('#game-count').textContent =
-      installedGames.length + ' ' + (installedGames.length === 1 ? 'game' : 'games');
+    $('#filter-empty p').textContent =
+      !eligible.length && installedGames.length
+        ? 'No confirmed Steam games found. Turn on Show unknown to review detected candidates.'
+        : 'Try a different name or reset your library filters.';
+    $('#game-count').textContent = matches.length + (matches.length === 1 ? ' game' : ' games');
+    const unknownCount = installedGames.filter(
+      (game) => !window.MambaPresence.confirmedGame(game),
+    ).length;
+    if ($('#library-unknown-toggle'))
+      $('#library-unknown-toggle').lastChild.textContent = 'Show unknown (' + unknownCount + ')';
+    const signature = JSON.stringify([
+      libraryView,
+      matches.map((game) => [
+        game.id,
+        game.name,
+        game.status,
+        game.executable,
+        game.favorite,
+        game.repairPending,
+        game.verified,
+        game.steamId,
+        game.steamLibrary,
+        game.cover,
+      ]),
+    ]);
+    if (signature === libraryRenderSignature) return;
+    libraryRenderSignature = signature;
     const list = $('#game-list');
+    const scrollTop = $('#library-page')?.scrollTop;
     list.replaceChildren();
+    list.dataset.view = libraryView;
     for (const game of matches) {
       const card = node('li', undefined, 'game-card');
       card.dataset.status = game.status;
-      const image = action('', () => openGame(game, 'library'), null, 'game-art library-cover');
+      const image = action(
+        '',
+        async () => {
+          if (game.imported && ['not-installed', 'drive-unavailable'].includes(game.status)) {
+            if (await window.mamba.locateGame(game.id)) await refreshLibrary();
+          } else await openGame(game, 'library');
+        },
+        null,
+        'game-art library-cover',
+      );
       image.setAttribute('aria-label', 'View ' + game.name);
       cover(image, game.id, game.name);
       const favorite = action(
@@ -121,34 +163,68 @@
       const controls = node('div', undefined, 'game-actions');
       if (game.status === 'installed' && game.executable)
         controls.append(action('Play', () => playGame(game), 'play', 'primary-button'));
-      else
+      else if (game.steamLibrary && game.status === 'not-installed')
         controls.append(
-          action('Review', () => openGame(game, 'library'), 'settings-2', 'primary-button'),
-        );
-      const info = node('div', undefined, 'library-card-info');
-      info.append(heading, controls);
-      card.append(image, favorite, info);
-      if (game.status !== 'installed' || game.repairPending)
-        card.append(
-          node(
-            'p',
-            game.repairPending
-              ? 'Folder cleanup pending'
-              : game.status === 'base-missing'
-                ? 'Base game required'
-                : 'Setup required',
-            'game-secondary',
+          action(
+            'Install',
+            () => window.mamba.installSteamGame(game.id),
+            'download',
+            'primary-button',
           ),
         );
+      else
+        controls.append(
+          action(
+            ['not-installed', 'drive-unavailable'].includes(game.status)
+              ? game.imported && !game.releaseId
+                ? 'Locate files'
+                : 'Install'
+              : 'Review',
+            async () => {
+              if (
+                game.imported &&
+                !game.releaseId &&
+                ['not-installed', 'drive-unavailable'].includes(game.status)
+              ) {
+                if (await window.mamba.locateGame(game.id)) await refreshLibrary();
+              } else await openGame(game, 'library');
+            },
+            ['not-installed', 'drive-unavailable'].includes(game.status)
+              ? 'download'
+              : 'settings-2',
+            'primary-button',
+          ),
+        );
+      if (game.steamLibrary && game.status === 'not-installed') {
+        controls.firstChild.title = 'Install with Steam';
+        controls.firstChild.setAttribute('aria-label', 'Install ' + game.name + ' with Steam');
+      }
+      const info = node('div', undefined, 'library-card-info');
+      const subtitle = node(
+        'p',
+        !window.MambaPresence.confirmedGame(game)
+          ? 'Unknown ï¿½ no confirmed Steam information'
+          : game.status === 'installed'
+            ? 'Installed'
+            : game.status === 'drive-unavailable'
+              ? 'Drive unavailable'
+              : 'Not installed',
+        'library-game-meta',
+      );
+      info.append(heading, subtitle, controls);
+      card.append(image, favorite, info);
       list.append(card);
     }
+    if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
     renderRecentGames();
     window.MambaDiscovery?.render();
   }
   function renderRecentGames() {
     const list = $('#recently-played');
     list.replaceChildren();
-    const games = window.MambaActivity.recent(installedGames);
+    const games = window.MambaActivity.recent(
+      installedGames.filter((game) => showUnknown || window.MambaPresence.confirmedGame(game)),
+    );
     for (const game of games) {
       const row = node('article', undefined, 'recent-game');
       const image = action('', () => openGame(game, 'library'), null, 'game-art recent-art');
@@ -193,7 +269,7 @@
       chart.append(
         node(
           'p',
-          summary.count ? 'Collecting download speed…' : 'No active downloads',
+          summary.count ? 'Collecting download speedâ€¦' : 'No active downloads',
           'chart-empty',
         ),
       );
@@ -266,12 +342,18 @@
     let limit = 6;
     const draw = () => {
       list.replaceChildren();
-      const options = resolved.options.filter(
-        (option) =>
-          (service.value === 'all' || (option.services || ['torbox']).includes(service.value)) &&
-          (source.value === 'all' || option.sources.includes(source.value)) &&
-          option.release.toLowerCase().includes(query.value.trim().toLowerCase()),
-      );
+      const options = [...resolved.options]
+        .sort(
+          (a, b) =>
+            Number(b.gameId === data.preferredReleaseId) -
+            Number(a.gameId === data.preferredReleaseId),
+        )
+        .filter(
+          (option) =>
+            (service.value === 'all' || (option.services || ['torbox']).includes(service.value)) &&
+            (source.value === 'all' || option.sources.includes(source.value)) &&
+            option.release.toLowerCase().includes(query.value.trim().toLowerCase()),
+        );
       for (const option of options.slice(0, limit)) {
         const best =
           resolved.best?.gameId === option.gameId && resolved.best?.linkIndex === option.linkIndex;
@@ -283,12 +365,14 @@
           'p',
           [option.fileSize, option.host || 'Torrent', ...option.sources]
             .filter(Boolean)
-            .join(' · '),
+            .join(' Â· '),
           'choice-meta',
         );
         info.append(meta);
         const tags = node('div', undefined, 'version-tags');
-        if (best) tags.append(node('span', 'Recommended'));
+        if (option.gameId === data.preferredReleaseId)
+          tags.append(node('span', 'Previously installed'));
+        else if (best) tags.append(node('span', 'Recommended'));
         if (option.traits.portable) tags.append(node('span', 'Portable'));
         if (option.traits.version) tags.append(node('span', 'v' + option.traits.version));
         if (option.traits.english) tags.append(node('span', 'English / multilingual'));
@@ -316,7 +400,9 @@
         if (services.length > 1) controls.append(method);
         else controls.append(node('span', names[services[0]] || 'No service', 'version-service'));
         const existing = recentJobs.find(
-          (job) => job.gameId === option.gameId && job.status !== 'cancelled',
+          (job) =>
+            job.gameId === option.gameId &&
+            !['completed', 'cancelled', 'needs-setup'].includes(job.status),
         );
         const download = action(
           existing && ['paused', 'failed'].includes(existing.status)
@@ -333,12 +419,14 @@
               showPage('activity');
               return;
             }
-            await window.mamba.download(
+            const started = await window.mamba.download(
               option.gameId,
               option.linkIndex,
               data.catalogId,
               method.value,
+              data.libraryId,
             );
+            if (started === false) return;
             showToast('Added to downloads');
             showPage('activity');
           },
@@ -402,7 +490,7 @@
     title.id = 'game-title';
     title.tabIndex = -1;
     content.append(title);
-    const loading = node('p', 'Loading game details…', 'field-hint');
+    const loading = node('p', 'Loading game detailsâ€¦', 'field-hint');
     loading.setAttribute('role', 'status');
     content.append(loading);
     showPage('game');
@@ -433,7 +521,7 @@
           'p',
           [data.developers.join(', '), data.releaseDate, ...data.genres]
             .filter(Boolean)
-            .join(' · '),
+            .join(' Â· '),
           'page-description',
         ),
       );
@@ -447,11 +535,21 @@
         if (!result) return;
         await refreshLibrary();
         showPage('library');
-        showToast(installation.imported ? 'Removed from library; files kept' : 'Game uninstalled');
+        showToast('Game uninstalled; kept in library');
       };
-      if (local)
+      if (data.libraryId)
         intro.append(
-          node('span', playable ? 'Installed on this PC' : 'Setup required', 'detail-owned'),
+          node(
+            'span',
+            playable
+              ? 'Installed on this PC'
+              : data.status === 'not-installed'
+                ? 'Not installed'
+                : data.status === 'drive-unavailable'
+                  ? 'Drive unavailable'
+                  : 'Setup required',
+            'detail-owned',
+          ),
         );
       if (playable)
         primary.append(
@@ -461,6 +559,10 @@
             'play',
             'primary-button',
           ),
+        );
+      if (playable)
+        primary.append(
+          action('Uninstall', () => removeInstallation(playable), 'trash-2', 'secondary-button'),
         );
       const existingDownload = window.MambaPresence.download(recentJobs, { ...game, ...data });
       if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status))
@@ -478,10 +580,10 @@
             'secondary-button',
           ),
         );
-      else if (data.catalogId)
+      else if (data.catalogId && !playable)
         primary.append(
           action(
-            playable ? 'Other versions' : 'View downloads',
+            'Install',
             () => {
               const options = $('#game-downloads');
               if (options?.tagName === 'DETAILS') options.open = true;
@@ -491,7 +593,7 @@
               });
             },
             'download',
-            playable ? 'secondary-button' : 'primary-button',
+            'primary-button',
           ),
         );
       if (data.libraryId) {
@@ -508,26 +610,82 @@
         favorite.setAttribute('aria-pressed', String(data.favorite));
         primary.append(favorite);
       }
-      const installationToRemove = playable || local || data.installations[0];
-      if (installationToRemove)
+      if (!data.libraryId && data.catalogId)
         primary.append(
           action(
-            installationToRemove.imported ? 'Remove from library' : 'Uninstall',
-            () => removeInstallation(installationToRemove),
-            'trash-2',
-            'text-button danger-action',
+            'Add to library',
+            async () => {
+              await window.mamba.addLibraryEntry(data.catalogId);
+              await refreshLibrary();
+              await openGame(
+                { id: data.catalogId, name: data.name },
+                window.MambaExperience.origin,
+              );
+              showToast('Added to library');
+            },
+            'plus',
           ),
         );
+      if (data.libraryId && !data.catalogId && !playable)
+        intro.append(
+          node(
+            'p',
+            'No matching download is currently available. Locate your existing files or refresh your sources.',
+            'field-hint',
+          ),
+        );
+      if (data.libraryId) {
+        if (!playable)
+          primary.append(
+            action(
+              'Locate files',
+              async () => {
+                if (await window.mamba.locateGame(data.libraryId)) {
+                  await refreshLibrary();
+                  showPage('library');
+                  showToast('Installation located');
+                }
+              },
+              'folder-open',
+            ),
+          );
+        if (
+          data.installations.every(
+            (item) => item.status === 'not-installed' && !item.folderExists,
+          ) &&
+          data.status === 'not-installed'
+        )
+          primary.append(
+            action(
+              'Remove from library',
+              async () => {
+                if (await window.mamba.removeLibraryEntry(data.libraryId)) {
+                  await refreshLibrary();
+                  showPage('library');
+                  showToast('Removed from library');
+                }
+              },
+              'trash-2',
+              'text-button danger-action',
+            ),
+          );
+      }
       intro.append(primary);
       if (data.lastPlayed)
         intro.append(node('p', 'Last played ' + date(data.lastPlayed), 'field-hint'));
       hero.append(image, intro);
       content.append(hero);
       if (data.description) content.append(node('p', data.description, 'game-description'));
-      if (data.installations.length) {
+      const presentInstallations = data.installations.filter(
+        (item) =>
+          item.folderExists || !['not-installed', 'drive-unavailable'].includes(item.status),
+      );
+      if (presentInstallations.length) {
         const section = node('section', undefined, 'detail-section');
-        section.append(node('h2', 'Installed versions'));
-        for (const installation of data.installations) {
+        section.append(
+          node('h2', presentInstallations.length === 1 ? 'Installation' : 'Installations'),
+        );
+        for (const installation of presentInstallations) {
           const card = node('article', undefined, 'installation-card');
           card.append(
             node(
@@ -550,7 +708,7 @@
           for (const [label, value] of [
             ['Game folder', installation.folder],
             ['Startup file', installation.executable || 'No launcher selected'],
-            ['Installed version', installation.version || 'Not reported by this release'],
+            ...(installation.version ? [['Version', installation.version]] : []),
             [
               'Added',
               installation.installedAt ? date(installation.installedAt) : 'Existing installation',
@@ -558,9 +716,13 @@
           ])
             details.append(node('dt', label), node('dd', value));
           const manage = node('details', undefined, 'manage-installation');
-          manage.append(node('summary', 'Manage installation'), details);
+          manage.append(node('summary', 'Advanced options'), details);
           const controls = node('div', undefined, 'game-actions');
-          if (installation.status === 'installed' && installation.executable)
+          if (
+            presentInstallations.length > 1 &&
+            installation.status === 'installed' &&
+            installation.executable
+          )
             controls.append(
               action(
                 'Play',
@@ -581,7 +743,8 @@
                 'play',
               ),
             );
-          controls.append(
+          const advancedControls = node('div', undefined, 'game-actions');
+          advancedControls.append(
             action(
               'Change launcher',
               async () => {
@@ -602,16 +765,16 @@
               'folder-open',
             ),
           );
-          controls.append(
+          advancedControls.append(
             action(
               'Setup helper',
               () => window.mamba.gameAction(installation.id, 'launcher'),
               'settings-2',
             ),
           );
-          card.append(
+          controls.append(
             action(
-              installation.imported ? 'Remove from library' : 'Uninstall',
+              'Uninstall',
               () => removeInstallation(installation),
               'trash-2',
               'text-button danger-action',
@@ -668,12 +831,49 @@
             directoryLabel,
             node(
               'p',
-              'Use quotes around arguments containing spaces. Working directories are relative to the game folder. Leave blank for defaults. Saved options are applied when you next launch from Mamba.',
+              'Leave blank for defaults. Quote arguments with spaces; folder paths are relative to the game folder.',
               'field-hint',
             ),
             launchActions,
           );
-          manage.append(controls, launchEditor);
+          const integrations = node('div', undefined, 'installation-integrations');
+          integrations.append(node('h3', 'Integrations'));
+          const reinstallIntegrations = action(
+            'Reinstall integrations',
+            async () => {
+              reinstallIntegrations.disabled = true;
+              reinstallIntegrations.setAttribute('aria-busy', 'true');
+              try {
+                await window.mamba.reinstallIntegrations(installation.id);
+                showToast('Integrations reinstalled');
+              } finally {
+                reinstallIntegrations.disabled = false;
+                reinstallIntegrations.removeAttribute('aria-busy');
+              }
+            },
+            'refresh-cw',
+            'secondary-button',
+          );
+          const integrationActions = node('div', undefined, 'game-actions');
+          integrations.append(
+            node(
+              'p',
+              'Repair this gameï¿½s integrations. Original Steam API files and existing backups are kept.',
+              'field-hint',
+            ),
+          );
+          integrationActions.append(
+            reinstallIntegrations,
+            action(
+              'Open CreamInstaller',
+              () => window.mamba.openCreamInstaller(),
+              'play',
+              'secondary-button',
+            ),
+          );
+          integrations.append(integrationActions);
+          manage.append(advancedControls, launchEditor, integrations);
+          card.append(controls);
           card.append(manage);
           section.append(card);
         }
@@ -696,7 +896,7 @@
             data.dlcs.length +
               ' installed DLC folders detected' +
               (data.availableDlcCount
-                ? ' · ' + data.availableDlcCount + ' DLC listed by Steam'
+                ? ' Â· ' + data.availableDlcCount + ' DLC listed by Steam'
                 : ''),
             'field-hint',
           ),
@@ -713,7 +913,7 @@
         section.append(
           node(playable ? 'summary' : 'h2', playable ? 'Other downloads' : 'Downloads'),
         );
-        const hint = node('p', 'Checking your enabled download services…', 'field-hint');
+        const hint = node('p', 'Checking your enabled download servicesâ€¦', 'field-hint');
         section.append(hint);
         content.append(section);
         if (data.space) {
@@ -727,7 +927,7 @@
                 data.space.required
                   ? formatBytes(data.space.required) + ' estimated for download and setup'
                   : 'Size will be checked when TorBox prepares the files',
-              ].join(' · '),
+              ].join(' Â· '),
             'storage-note',
           );
           section.append(info);
@@ -787,7 +987,7 @@
         node('p', issue.message),
         node(
           'p',
-          date(issue.at) + (issue.count > 1 ? ' · Seen ' + issue.count + ' times' : ''),
+          date(issue.at) + (issue.count > 1 ? ' Â· Seen ' + issue.count + ' times' : ''),
           'field-hint',
         ),
       );
@@ -832,7 +1032,7 @@
           'Sources',
           activity.catalog.phase,
           activity.catalog.count.toLocaleString() +
-            ' checked releases · ' +
+            ' checked releases Â· ' +
             activity.catalog.unavailableSources +
             ' sources unavailable',
         ],
@@ -867,7 +1067,7 @@
     const count = active + openIssues;
     $('#activity-count').hidden = !count;
     $('#activity-count').textContent = count;
-    $('#activity-count').title = active + ' active downloads · ' + openIssues + ' issues';
+    $('#activity-count').title = active + ' active downloads Â· ' + openIssues + ' issues';
     $('#activity-count').setAttribute('aria-label', count + ' tasks or issues');
   }
   function jobsChanged(jobs) {
@@ -904,11 +1104,32 @@
     get jobs() {
       return recentJobs;
     },
+    resetLibraryFilters() {
+      availability = 'all';
+      favoritesOnly = false;
+      $('#library-availability').value = 'all';
+      $('#library-favorites-toggle').setAttribute('aria-pressed', 'false');
+      window.mamba
+        .saveView({ libraryAvailability: 'all', libraryFavoritesOnly: false })
+        .catch(handleError);
+    },
     configure(config) {
+      steamEnabled = config.steamLibraryIntegration !== false;
+      $('#library-steam-toggle').setAttribute('aria-pressed', String(steamEnabled));
       sort = config.librarySort || 'name';
-      favoritesOnly = !!config.libraryFavoritesOnly;
+      libraryView = config.libraryView || 'cards';
+      showUnknown = config.libraryShowUnknown === true;
+      favoritesOnly = config.libraryFavoritesOnly === true;
+      $('#library-view').value = libraryView;
+      $('#library-unknown-toggle').setAttribute('aria-pressed', String(showUnknown));
+      $('#library-favorites-toggle').setAttribute('aria-pressed', String(favoritesOnly));
+      $('#library-detection-toggle').setAttribute(
+        'aria-pressed',
+        String(config.automaticGameDetection !== false),
+      );
+      availability = config.libraryAvailability || 'all';
+      $('#library-availability').value = availability;
       $('#library-sort').value = sort;
-      $('#favorites-only').setAttribute('aria-pressed', String(favoritesOnly));
       renderLibrary(installedGames);
     },
   };
@@ -925,23 +1146,28 @@
   $('#activity-page').append(activityTools);
   const toolbar = $('#library-toolbar');
   const filters = node('div', undefined, 'library-view-controls');
-  const favoriteFilter = action(
-    'Favorites',
-    () => {
-      favoritesOnly = !favoritesOnly;
-      favoriteFilter.setAttribute('aria-pressed', String(favoritesOnly));
-      renderLibrary(installedGames);
-      window.mamba.saveView({ libraryFavoritesOnly: favoritesOnly }).catch(handleError);
-    },
-    'star',
-  );
-  favoriteFilter.id = 'favorites-only';
-  favoriteFilter.setAttribute('aria-pressed', 'false');
+  const availabilitySelect = node('select', undefined, 'settings-input library-sort');
+  availabilitySelect.id = 'library-availability';
+  availabilitySelect.setAttribute('aria-label', 'Filter library by installation');
+  for (const [value, label] of [
+    ['all', 'All games'],
+    ['installed', 'Installed'],
+    ['not-installed', 'Not installed'],
+  ]) {
+    const option = node('option', label);
+    option.value = value;
+    availabilitySelect.append(option);
+  }
+  availabilitySelect.onchange = () => {
+    availability = availabilitySelect.value;
+    renderLibrary(installedGames);
+    window.mamba.saveView({ libraryAvailability: availability }).catch(handleError);
+  };
   const sortSelect = node('select', undefined, 'settings-input library-sort');
   sortSelect.id = 'library-sort';
   sortSelect.setAttribute('aria-label', 'Sort library');
   for (const [value, label] of [
-    ['name', 'Name A–Z'],
+    ['name', 'Name Aâ€“Z'],
     ['recent', 'Recently played'],
     ['installed', 'Recently installed'],
   ]) {
@@ -954,8 +1180,110 @@
     renderLibrary(installedGames);
     window.mamba.saveView({ librarySort: sort }).catch(handleError);
   };
-  filters.append(favoriteFilter, sortSelect);
-  toolbar.append(filters);
+  const viewSelect = node('select', undefined, 'settings-input library-sort');
+  viewSelect.id = 'library-view';
+  viewSelect.setAttribute('aria-label', 'Library layout');
+  for (const [value, label] of [
+    ['cards', 'Cards'],
+    ['list', 'Small list'],
+    ['banners', 'Banners'],
+  ]) {
+    const option = node('option', label);
+    option.value = value;
+    viewSelect.append(option);
+  }
+  viewSelect.onchange = () => {
+    libraryView = viewSelect.value;
+    renderLibrary(installedGames);
+    window.mamba.saveView({ libraryView }).catch(handleError);
+  };
+  const unknownToggle = action(
+    'Show unknown',
+    () => {
+      showUnknown = !showUnknown;
+      unknownToggle.setAttribute('aria-pressed', String(showUnknown));
+      renderLibrary(installedGames);
+      window.mamba.saveView({ libraryShowUnknown: showUnknown }).catch(handleError);
+    },
+    'circle-alert',
+    'text-button',
+  );
+  unknownToggle.id = 'library-unknown-toggle';
+  unknownToggle.setAttribute('aria-pressed', 'false');
+  const favoritesToggle = action(
+    'Favorites',
+    () => {
+      favoritesOnly = !favoritesOnly;
+      favoritesToggle.setAttribute('aria-pressed', String(favoritesOnly));
+      renderLibrary(installedGames);
+      window.mamba.saveView({ libraryFavoritesOnly: favoritesOnly }).catch(handleError);
+    },
+    'star',
+    'text-button',
+  );
+  favoritesToggle.id = 'library-favorites-toggle';
+  favoritesToggle.setAttribute('aria-pressed', 'false');
+  const detectionToggle = action(
+    'Auto-detect games',
+    async () => {
+      const enabled = detectionToggle.getAttribute('aria-pressed') !== 'true';
+      detectionToggle.disabled = true;
+      try {
+        await window.mamba.saveView({ automaticGameDetection: enabled });
+        detectionToggle.setAttribute('aria-pressed', String(enabled));
+        await refreshLibrary();
+      } finally {
+        detectionToggle.disabled = false;
+      }
+    },
+    'refresh-cw',
+    'text-button',
+  );
+  detectionToggle.id = 'library-detection-toggle';
+  detectionToggle.setAttribute('aria-pressed', 'true');
+  const steamToggle = action(
+    'Steam library',
+    async () => {
+      steamEnabled = !steamEnabled;
+      await window.mamba.saveView({ steamLibraryIntegration: steamEnabled });
+      steamToggle.setAttribute('aria-pressed', String(steamEnabled));
+      await refreshLibrary();
+      await updateSteamStatus();
+    },
+    'download',
+    'text-button',
+  );
+  steamToggle.id = 'library-steam-toggle';
+  steamToggle.setAttribute('aria-pressed', 'true');
+  const steamStatus = node('p', '', 'field-hint library-steam-status');
+  async function updateSteamStatus() {
+    try {
+      const state = await window.mamba.steamLibraryState();
+      steamStatus.textContent = !steamEnabled
+        ? 'Steam library is off.'
+        : state.connected
+          ? state.accountName + ' / ' + state.count + ' Steam games'
+          : state.message;
+      steamStatus.title = state.message || '';
+    } catch {}
+  }
+  const options = node('details', undefined, 'library-options');
+  const optionsTitle = node('summary', 'Library options');
+  optionsTitle.prepend(icon('settings-2'));
+  const optionControls = node('div', undefined, 'library-option-controls');
+  const layoutField = node('label', undefined, 'library-layout-field');
+  layoutField.append(node('span', 'Library style'), viewSelect);
+  const discoveryControls = node('div', undefined, 'library-discovery-controls');
+  discoveryControls.append(unknownToggle, detectionToggle);
+  const steamSection = node('div', undefined, 'library-steam-section');
+  steamSection.append(steamToggle, steamStatus);
+  optionControls.append(layoutField, discoveryControls, steamSection);
+  options.append(optionsTitle, optionControls);
+  options.addEventListener('toggle', () => {
+    if (options.open) updateSteamStatus();
+  });
+  filters.append(availabilitySelect, sortSelect, favoritesToggle);
+  toolbar.append(filters, options);
   const bind = (id, callback, iconName) => {
     const element = $(id);
     if (iconName) element.prepend(icon(iconName));
@@ -970,6 +1298,19 @@
       }
     });
   };
+  bind(
+    '#add-library-folder',
+    async () => {
+      const games = await window.mamba.addLibraryFolder();
+      if (games) {
+        renderLibrary(games);
+        const config = await window.torboxSettings.loadConfig();
+        applyLoadedConfig(config);
+        showToast('Games folder added');
+      }
+    },
+    'folder-plus',
+  );
   bind('#activity-open', () => showPage('activity'));
   bind('#open-troubleshooting', () => showPage('activity'), 'circle-alert');
   bind(
@@ -1037,7 +1378,7 @@
           ? ' is ready to play'
           : notice.status === 'needs-setup'
             ? ' needs installation review'
-            : ' needs attention — open Activity'),
+            : ' needs attention â€” open Activity'),
     );
     if (currentPage === 'activity') loadActivity();
   });

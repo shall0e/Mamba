@@ -31,6 +31,7 @@ test('theme sharing whitelists appearance and never includes account or source s
     apiKey: 'secret',
     torboxApiKey: 'secret',
     sourceUrls: ['private'],
+    automaticGameDetection: false,
     downloadPath: 'D:/private',
   });
   assert.deepEqual(Object.keys(shared), [

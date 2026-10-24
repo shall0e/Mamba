@@ -231,7 +231,7 @@ test('saved manual startup file overrides detection and follows a moved game fol
   const defaults = await require('../tools/add-game.cjs').suggestedSettings(moved);
   assert.equal(defaults.file, path.join(moved, 'my-custom-start.cmd'));
   const { Library } = require('../src/core/library.cjs');
-  const library = new Library(async () => ({ downloadPath: dir }));
+  const library = new Library(async () => ({ automaticGameDetection: false, downloadPath: dir }));
   await library.scan();
   assert.equal(library.items[0].executable, defaults.file);
 });

@@ -5,8 +5,7 @@ const { tokens, displayTitle } = require('./search.cjs');
 const { assessIdentity, releaseHints } = require('./identity-match.cjs');
 
 function exactGameName(left, right) {
-  const normalize = (name) => tokens(displayTitle(name)).join(' ');
-  return normalize(left) === normalize(right);
+  return require('./game-identity.cjs').matchesTitle(left, right);
 }
 class Artwork {
   constructor(directory, catalog, transport = fetch) {
@@ -38,7 +37,7 @@ class Artwork {
     const cache = path.join(
       this.directory,
       createHash('sha256')
-        .update('identity-v2|' + (game.identityTitle || game.name) + (game.cover || ''))
+        .update('identity-v3|' + (game.identityTitle || game.name) + (game.cover || ''))
         .digest('hex') + '.json',
     );
     try {
@@ -46,6 +45,8 @@ class Artwork {
       if (saved.image || Date.now() - saved.at < (game.verified ? 60000 : 86400000))
         return saved.image;
     } catch {}
+    if (/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(game.cover || ''))
+      return game.cover;
     let url = game.cover;
     try {
       if (!url) {

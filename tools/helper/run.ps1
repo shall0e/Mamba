@@ -1,6 +1,8 @@
 param([string]$GameFolder, [string]$RuntimeExe, [string]$HelperScript)
 $ErrorActionPreference = 'Stop'
 try {
+  $Host.UI.RawUI.WindowTitle = 'Mamba - Game setup'
+  Clear-Host
   if (!$RuntimeExe -or !$HelperScript) {
     $runtimePath = Join-Path $PSScriptRoot 'helper-runtime.json'
     $runtime = Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
@@ -29,7 +31,7 @@ try {
   while ($null -ne ($line = $child.StandardOutput.ReadLine())) {
     if ($line.StartsWith('__MAMBA_PROMPT__')) {
       $prompt = $line.Substring(16) | ConvertFrom-Json
-      $answer = Read-Host $prompt
+      $answer = Read-Host $prompt.TrimEnd(' ', ':')
       $child.StandardInput.WriteLine($answer)
       $child.StandardInput.Flush()
     } else { Write-Host $line }

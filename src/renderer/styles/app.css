@@ -6418,3 +6418,493 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
   width: 100%;
   min-width: 0;
 }
+
+.game-card[data-status='not-installed'] .library-cover,
+.game-card[data-status='drive-unavailable'] .library-cover {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+.game-card[data-status='not-installed']:hover .library-cover,
+.game-card[data-status='drive-unavailable']:hover .library-cover,
+.game-card[data-status='not-installed']:focus-within .library-cover,
+.game-card[data-status='drive-unavailable']:focus-within .library-cover {
+  opacity: 0.65;
+}
+
+/* Keep game details focused on play and everyday installation actions. */
+.installation-card > .game-actions {
+  margin-top: 16px;
+  gap: 10px;
+}
+.manage-installation > summary:hover,
+.manage-installation > summary:focus-visible {
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+  color: var(--color-text);
+}
+#extra-game-folders {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+}
+
+.manage-installation[open] {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 1fr);
+  column-gap: 32px;
+  row-gap: 20px;
+}
+.manage-installation > summary,
+.manage-installation > .installation-fields,
+.manage-installation > .game-actions {
+  grid-column: 1 / -1;
+}
+.manage-installation .installation-fields {
+  margin: 0;
+  gap: 8px 20px;
+  font-size: 12px;
+}
+.manage-installation > .game-actions {
+  margin: 0;
+}
+.manage-installation .launch-options-editor,
+.installation-integrations {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+}
+.manage-installation h3,
+.manage-installation .field-hint {
+  margin: 0;
+}
+.manage-installation .field-hint {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.launch-options-editor label {
+  font-size: 12px;
+  gap: 7px;
+}
+.launch-options-editor input {
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 11px 13px;
+  border: none;
+  outline: none;
+  border-radius: 9px;
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+  font: inherit;
+}
+.launch-options-editor input:focus-visible {
+  background: var(--color-input);
+  color: var(--button-ink, var(--color-text));
+}
+.manage-installation .game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.manage-installation .game-actions > button {
+  width: auto;
+  min-height: 38px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .manage-installation[open] {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 24px;
+  }
+}
+
+.library-toolbar,
+.library-view-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.library-toolbar {
+  max-width: none;
+}
+.library-view-controls .library-sort {
+  min-width: 120px;
+}
+.library-view-controls button[aria-pressed='true'] {
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+  color: var(--button-ink, var(--color-text));
+}
+.library-game-meta {
+  display: none;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+#game-list[data-view='list'],
+#game-list[data-view='banners'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+#game-list[data-view='list'] .game-card,
+#game-list[data-view='banners'] .game-card {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px;
+  min-height: 0;
+}
+#game-list[data-view='list'] .library-cover,
+#game-list[data-view='banners'] .library-cover {
+  width: 100%;
+  height: 48px;
+  aspect-ratio: auto;
+  border-radius: 8px;
+}
+#game-list[data-view='list'] .library-cover > svg {
+  width: 22px;
+  height: 22px;
+}
+#game-list[data-view='list'] .favorite-button,
+#game-list[data-view='banners'] .favorite-button {
+  position: static;
+  grid-column: 3;
+  grid-row: 1;
+  opacity: 1;
+  transform: none;
+}
+#game-list[data-view='list'] .library-card-info,
+#game-list[data-view='banners'] .library-card-info {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 16px;
+  padding: 0;
+}
+#game-list[data-view='list'] .library-card-info h2,
+#game-list[data-view='banners'] .library-card-info h2 {
+  grid-column: 1;
+  margin: 0;
+}
+#game-list[data-view='list'] .library-game-meta,
+#game-list[data-view='banners'] .library-game-meta {
+  display: block;
+  grid-column: 1;
+}
+#game-list[data-view='list'] .game-actions,
+#game-list[data-view='banners'] .game-actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+#game-list[data-view='list'] .game-secondary,
+#game-list[data-view='banners'] .game-secondary {
+  display: none;
+}
+#game-list[data-view='banners'] .game-card {
+  grid-template-columns: 220px minmax(0, 1fr) 40px;
+  padding: 0 16px 0 0;
+  overflow: hidden;
+  gap: 22px;
+}
+#game-list[data-view='banners'] .library-cover {
+  height: 110px;
+  border-radius: 0;
+}
+@media (max-width: 700px) {
+  #game-list[data-view='banners'] .game-card {
+    grid-template-columns: 100px minmax(0, 1fr) 32px;
+    gap: 10px;
+  }
+  #game-list[data-view='list'] .library-game-meta,
+  #game-list[data-view='banners'] .library-game-meta {
+    display: none;
+  }
+  #game-list[data-view='list'] .library-card-info,
+  #game-list[data-view='banners'] .library-card-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #game-list[data-view='list'] .game-actions,
+  #game-list[data-view='banners'] .game-actions {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+}
+
+/* Unified library controls and folder editing. */
+.library-toolbar {
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  gap: 12px;
+}
+.library-filter {
+  flex: 1 1 240px;
+  max-width: 360px;
+  overflow: hidden;
+  padding: 0 12px;
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+}
+.library-filter input,
+.library-filter input:focus {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+  background: transparent;
+  box-shadow: none;
+}
+.library-view-controls {
+  flex-wrap: wrap;
+}
+.library-options {
+  margin-left: auto;
+}
+.library-options > summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+}
+.library-options > summary::-webkit-details-marker {
+  display: none;
+}
+.library-options > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.library-options[open] {
+  flex-basis: 100%;
+  margin: 0;
+}
+.library-option-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--foreground-fill, var(--glass-panel));
+}
+.library-option-controls [aria-pressed='true'],
+.library-options > summary:hover,
+.library-options > summary:focus-visible {
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+}
+.library-steam-status {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+}
+#extra-game-folders {
+  box-sizing: border-box;
+  display: block;
+  min-height: 144px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: none;
+  outline: none;
+  border-radius: 10px;
+  background: var(--input-fill);
+  backdrop-filter: blur(var(--input-blur));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.8;
+}
+#extra-game-folders:focus-visible {
+  background: var(--color-input);
+}
+#browse-extra-folder {
+  margin-top: 8px;
+}
+#game-list .game-card {
+  animation: none;
+}
+#game-list[data-view='list'] .library-card-info .game-actions,
+#game-list[data-view='banners'] .library-card-info .game-actions {
+  width: auto;
+  min-width: 88px;
+}
+
+.library-option-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
+  gap: 20px 28px;
+  align-items: start;
+  padding: 20px;
+  background: var(--glass-panel);
+  backdrop-filter: blur(var(--foreground-blur));
+}
+.library-layout-field {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.library-layout-field select {
+  width: 100%;
+}
+.library-discovery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: end;
+}
+.library-steam-section {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.library-steam-section .library-steam-status {
+  flex-basis: auto;
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+#game-list .game-actions button {
+  gap: 7px;
+}
+#game-list .game-actions button > svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+#game-list .game-actions .button-label {
+  min-width: 0;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .library-option-controls {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+    gap: 16px;
+  }
+}
+
+/* Full-width cards, with up to five generous columns. */
+#game-list[data-view='cards'] {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(280px, calc((100% - 48px) / 5))), 1fr)
+  );
+  gap: 12px;
+  align-items: start;
+}
+#game-list[data-view='cards'] .game-card {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+#game-list[data-view='cards'] .library-cover {
+  flex: none;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 460 / 215;
+}
+#game-list[data-view='cards'] .library-cover img {
+  object-fit: contain;
+  transform: none;
+}
+#game-list[data-view='cards'] .library-card-info {
+  flex: none;
+  padding: 12px 14px;
+  gap: 10px;
+  min-height: 58px;
+  box-sizing: border-box;
+}
+#game-list[data-view='cards'] .game-secondary {
+  margin: 0;
+  padding: 0 14px 12px;
+}
+
+/* Align library controls with the centered heading. */
+#library-page > .page-heading,
+#library-page > .library-toolbar {
+  box-sizing: border-box;
+  width: min(1200px, 100%);
+  max-width: 1200px;
+  margin-inline: auto;
+}
+#library-page > .library-toolbar {
+  justify-content: flex-start;
+}
+
+.mamba-dialog {
+  box-sizing: border-box;
+  width: min(500px, calc(100vw - 40px));
+  max-height: calc(100vh - 64px);
+  padding: 26px;
+  border: none;
+  outline: none;
+  border-radius: 18px;
+  background: var(--glass-panel);
+  backdrop-filter: blur(var(--foreground-blur));
+  color: var(--body-ink, var(--color-text));
+  box-shadow: 0 20px 80px color-mix(in srgb, var(--color-primary) 60%, transparent);
+  scrollbar-width: none;
+}
+.mamba-dialog::-webkit-scrollbar {
+  display: none;
+}
+.mamba-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-primary) 70%, transparent);
+  backdrop-filter: blur(var(--background-blur));
+}
+.mamba-dialog-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mamba-dialog-heading > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--icon-ink, var(--color-icons));
+}
+.mamba-dialog h2 {
+  font-size: 19px;
+  margin: 0;
+}
+.mamba-dialog-message {
+  margin: 20px 0 10px;
+  font-weight: 550;
+  line-height: 1.6;
+}
+.mamba-dialog-detail {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 0;
+}
+.mamba-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.mamba-dialog-actions button {
+  min-height: 40px;
+  padding: 10px 16px;
+}
