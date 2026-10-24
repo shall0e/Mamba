@@ -29,7 +29,7 @@ test('app dialogs accept only a valid response from their own window and cancel 
   assert.deepEqual(await cancelled, { response: 0 });
 });
 test('administrator retry can be cancelled and only reports success after removal', async (t) => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-admin-test-'));
+  const folder = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-admin-test-')));
   t.after(() => fs.rm(folder, { recursive: true, force: true }));
   const cancelled = await uninstallAsAdministrator(folder, {
     run: async () => ({ stdout: '1223' }),
