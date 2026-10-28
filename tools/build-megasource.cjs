@@ -35,8 +35,7 @@ async function combine(urls, { allowUnavailable = false } = {}) {
     downloads: [...accumulator.games.values()]
       .map((game) => ({
         title: game.name,
-        fileSize: game.fileSize,
-        uploadDate: game.uploadDate,
+        ...(game.fileSize ? { fileSize: game.fileSize } : {}),
         uris: game.links.map((link) => link.uri),
       }))
       .filter((game) => game.uris.length)
@@ -50,7 +49,10 @@ if (require.main === module)
     );
     const result = await combine(urls, { allowUnavailable: true });
     await fs.mkdir('dist', { recursive: true });
-    await fs.writeFile('dist/megasource.json', JSON.stringify(result));
+    const output = JSON.stringify(result);
+    if (Buffer.byteLength(output) > 250 * 1024 * 1024)
+      throw Error('Combined source exceeds the app limit; previous publication kept.');
+    await fs.writeFile('dist/megasource.json', output);
     console.log(
       result.downloads.length +
         ' combined releases from ' +
