@@ -34,3 +34,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { gh release create "v$version" --target "$env:GITHUB_SHA" --title "Mamba $version" --generate-notes }
           gh release upload "v$version" dist/Mamba-Setup-*.exe dist/*.blockmap dist/latest.yml --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
+  linux:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:linux
+      - name: Publish Linux packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release upload "v$version" dist/*.AppImage dist/*.deb dist/latest-linux.yml --clobber

@@ -319,6 +319,7 @@ function run(file, args, { signal, maxOutput = 32 * 1024 * 1024, acceptedCodes =
   });
 }
 function sevenZipPath() {
+  if (process.platform !== 'win32') return process.env.MAMBA_7ZIP_PATH || '7z';
   if (process.env.MAMBA_7ZIP_PATH) return process.env.MAMBA_7ZIP_PATH;
   const local = path.join(__dirname, '../..', 'vendor', '7zip', '7z.exe');
   if (require('node:fs').existsSync(local)) return local;
@@ -465,6 +466,7 @@ class Library {
         ? { roots: [], games: [] }
         : await require('./system-games.cjs').discoverSystemGames();
     const entries = [];
+    const seen = new Set();
     for (const root of await require('./library-folders.cjs').scanRoots(config, discovered.roots)) {
       const steamNames = await require('./installed-metadata.cjs').steamFolders(root);
       const children = await fs.readdir(root, { withFileTypes: true }).catch((error) => {
@@ -474,7 +476,8 @@ class Library {
       for (const entry of children) {
         if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith('.')) continue;
         const folder = within(root, path.join(root, entry.name));
-        if (entries.some((item) => item.folder.toLowerCase() === folder.toLowerCase())) continue;
+        if (seen.has(folder.toLowerCase())) continue;
+        seen.add(folder.toLowerCase());
         entries.push({
           name: steamNames.get(entry.name.toLowerCase()) || entry.name,
           folder,
@@ -483,14 +486,12 @@ class Library {
         });
       }
     }
-    for (const folder of [...this.imports(), ...discovered.games])
-      if (
-        !entries.some(
-          (entry) =>
-            path.resolve(entry.folder).toLowerCase() === path.resolve(folder).toLowerCase(),
-        )
-      )
-        entries.push({ name: path.basename(folder), folder: path.resolve(folder), imported: true });
+    for (const folder of [...this.imports(), ...discovered.games]) {
+      const resolved = path.resolve(folder);
+      if (seen.has(resolved.toLowerCase())) continue;
+      seen.add(resolved.toLowerCase());
+      entries.push({ name: path.basename(resolved), folder: resolved, imported: true });
+    }
     for (const entry of entries) {
       let folder = entry.folder;
       try {
@@ -498,10 +499,6 @@ class Library {
         try {
           manifest = JSON.parse(await fs.readFile(path.join(folder, '.mamba-game.json'), 'utf8'));
         } catch {}
-        if (manifest.name && !entry.imported)
-          await require('./game-helper.cjs')
-            .installGameHelper(folder)
-            .catch(() => {});
         let found = await detect(folder);
         if (manifest.repairPending && this.repair && !entry.imported) {
           try {

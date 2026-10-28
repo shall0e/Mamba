@@ -1,0 +1,23 @@
+name: Publish MegaSource
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: write
+concurrency: megasource
+jobs:
+  combine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/build-megasource.cjs
+      - name: Publish combined source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view megasource || gh release create megasource --title "Mamba MegaSource" --notes "Automatically combined public sources. Updated every six hours." --latest=false
+          gh release upload megasource dist/megasource.json --clobber

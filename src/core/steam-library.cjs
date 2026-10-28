@@ -30,11 +30,20 @@ class SteamLibrary {
     this.games = [];
     this.at = 0;
   }
-  async read() {
-    if (Date.now() - this.at < 5 * 60000) return this.games;
-    this.at = Date.now();
+  read() {
+    if (this.pending) return this.pending;
+    this.pending = this.readNow().finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+  async readNow() {
     try {
       const shortcutFile = await this.profile();
+      if (this.profileFile === shortcutFile && Date.now() - this.at < 5 * 60000) return this.games;
+      if (this.profileFile !== shortcutFile) this.games = [];
+      this.profileFile = shortcutFile;
+      this.at = Date.now();
       const config = path.dirname(shortcutFile);
       const accountId = path.basename(path.dirname(config));
       if (!/^\d+$/.test(accountId)) throw Error('Steam account unavailable.');
@@ -53,17 +62,29 @@ class SteamLibrary {
         local.UserLocalConfigStore?.Software?.Valve?.Steam?.apps ||
         local.UserLocalConfigStore?.Software?.Valve?.Steam?.Apps ||
         {};
-      const ids = Object.keys(apps).filter((id) => /^\d+$/.test(id) && Number(id) > 0);
-      const games = [];
+      const ids = Object.keys(apps).filter(
+        (id) => /^\d+$/.test(id) && Number.isSafeInteger(Number(id)) && Number(id) > 0,
+      );
+      const knownIds = new Set(ids);
+      const played = (id) => {
+        const milliseconds = Number(apps[String(id)]?.LastPlayed) * 1000;
+        return milliseconds > 0 && milliseconds <= Date.now()
+          ? new Date(milliseconds).toISOString()
+          : null;
+      };
+      const games = this.games
+        .filter((game) => knownIds.has(String(game.steamId)))
+        .map((game) => ({ ...game, lastPlayed: played(game.steamId) }));
+      const resolved = new Set(games.map((game) => game.steamId));
       const deadline = Date.now() + 8000;
       let next = 0;
       await Promise.all(
         Array.from({ length: Math.min(4, ids.length) }, async () => {
           while (next < ids.length && Date.now() < deadline) {
             const id = Number(ids[next++]);
+            if (resolved.has(id)) continue;
             const info = await this.identity.details(id).catch(() => null);
             if (!info || info.type !== 'game' || isNonGame(info)) continue;
-            const timestamp = Number(apps[String(id)]?.LastPlayed);
             games.push({
               id: 'steam-library:' + id,
               name: info.name,
@@ -79,7 +100,7 @@ class SteamLibrary {
               installations: [],
               dlcs: [],
               demos: [],
-              lastPlayed: timestamp > 0 ? new Date(timestamp * 1000).toISOString() : null,
+              lastPlayed: played(id),
             });
           }
         }),
@@ -104,11 +125,10 @@ class SteamLibrary {
   }
   merge(installed) {
     const ids = new Set(installed.map((game) => Number(game.steamId)).filter(Boolean));
+    const steamIds = new Set(this.games.map((game) => Number(game.steamId)));
     return [
       ...installed.map((game) =>
-        this.games.some((item) => item.steamId === game.steamId)
-          ? { ...game, steamLibrary: true }
-          : game,
+        steamIds.has(Number(game.steamId)) ? { ...game, steamLibrary: true } : game,
       ),
       ...this.games.filter((game) => !ids.has(game.steamId)),
     ];

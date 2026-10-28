@@ -77,8 +77,12 @@
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
     renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
     const list = $('#results-list');
+    const animateLayout =
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches && !$('#search-page').hidden;
     const positions = new Map(
-      [...cardCache].map(([id, cached]) => [id, cached.row.getBoundingClientRect()]),
+      animateLayout
+        ? [...cardCache].map(([id, cached]) => [id, cached.row.getBoundingClientRect()])
+        : [],
     );
     const rows = [];
     const arrivals = new Set();
@@ -95,8 +99,8 @@
       const job = window.MambaPresence.download(window.MambaExperience?.jobs || [], game);
       const signature = JSON.stringify([
         game,
-        owned,
-        job,
+        owned ? [owned.id, owned.status, owned.executable] : null,
+        job ? [job.id, job.status] : null,
         queueing.has(game.id),
         cardJobs.get(game.id),
       ]);
@@ -240,7 +244,7 @@
     rows.forEach((row, index) => {
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
     });
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (animateLayout) {
       rows.forEach((row, index) => {
         row.getAnimations().forEach((animation) => animation.cancel());
         if (arrivals.has(row) || revealResults) {
@@ -299,19 +303,17 @@
       setSearching(true);
     },
     fail(message) {
+      pending = false;
       setSearching(false);
       $('#results-status').textContent = message;
     },
     update(result, more) {
-      if (result.pending) {
-        setSearching(true);
-        return;
-      }
       revealResults = loading;
-      setSearching(false);
+      const items = Array.isArray(result.items) ? result.items : [];
+      setSearching(!!result.pending && !items.length);
       games = more
-        ? [...games, ...result.items.filter((item) => !games.some((game) => game.id === item.id))]
-        : result.items;
+        ? [...new Map([...games, ...items].map((game) => [game.id, game])).values()]
+        : items;
       total = result.total;
       pending = !!result.pending;
       bestMatch = result.bestMatch || null;

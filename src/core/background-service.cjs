@@ -23,7 +23,7 @@ class BackgroundService {
     this.stopping = false;
     this.integrationRepairs = new Map();
   }
-  async initialize({ directory, config, resourcesPath }) {
+  async initialize({ directory, config, resourcesPath, headless = false }) {
     this.directory = directory;
     this.config = config;
     this.installMetadata = new (require('./install-metadata.cjs').InstallMetadata)(directory);
@@ -146,11 +146,9 @@ class BackgroundService {
       });
     this.emit('downloads:changed', this.downloads.snapshot());
     this.emit('catalog:changed', this.catalog.state);
+    if (headless) return true;
     this.library
       .scan()
-      .then(async () => {
-        await this.syncXboxLibrary();
-      })
       .catch((error) =>
         this.emit('service:issue', { context: 'library:scan', message: error.message }),
       );
@@ -356,30 +354,15 @@ class BackgroundService {
     const image = await this.artwork.get(group?.id || game.id).catch(() => null);
     return registerXbox({ ...game, image });
   }
-  async syncXboxLibrary() {
-    for (const game of this.library.items) {
-      if (this.stopping || !game.executable || game.status !== 'installed') continue;
-      const file = path.join(game.folder, '.mamba-game.json');
-      try {
-        const manifest = JSON.parse(await fs.readFile(file, 'utf8'));
-        if (!manifest.name || manifest.xbox?.status === 'added') continue;
-        const xbox = await this.addXboxGame(game).catch((error) => ({
-          status: 'pending',
-          message: error.message,
-        }));
-        await atomicJson(file, { ...manifest, xbox });
-      } catch {}
-    }
-  }
   async maintenance() {
     if (this.busy || this.stopping) return;
     this.busy = true;
     try {
       await this.library.scan();
-      await this.syncXboxLibrary();
       for (const game of this.library.items) {
         if (this.stopping) break;
         try {
+          if (!game.folder || !game.executable) continue;
           const file = path.join(game.folder, '.mamba-game.json');
           const manifest = JSON.parse(await fs.readFile(file, 'utf8'));
           if (manifest.steam?.status !== 'pending' || !game.executable) continue;

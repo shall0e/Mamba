@@ -15,10 +15,12 @@ class BackgroundClient extends EventEmitter {
   start() {
     if (this.closed) return Promise.reject(new Error('Mamba is closing.'));
     if (this.ready) return this.ready;
-    this.ready = this.boot();
-
-    this.ready.catch(() => {});
-    return this.ready;
+    const ready = this.boot();
+    this.ready = ready;
+    ready.catch(() => {
+      if (this.ready === ready && !this.child) this.ready = null;
+    });
+    return ready;
   }
   async boot() {
     let child;
@@ -62,6 +64,7 @@ class BackgroundClient extends EventEmitter {
     this.monitor.unref?.();
     try {
       await this.send('initialize', this.options.initialize, child);
+      if (this.closed || this.child !== child) throw Error('Mamba is closing.');
       this.emit('ready');
     } catch (error) {
       child.kill();

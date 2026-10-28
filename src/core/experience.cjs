@@ -42,8 +42,13 @@ class LibraryState {
     const task = this.queue
       .catch(() => {})
       .then(async () => {
-        update(this.data);
-        await atomicJson(this.file, this.data);
+        const previous = JSON.stringify(this.data);
+        const next = JSON.parse(previous);
+        update(next);
+        if (JSON.stringify(next) !== previous) {
+          await atomicJson(this.file, next);
+          this.data = next;
+        }
       });
     this.queue = task;
     await task;

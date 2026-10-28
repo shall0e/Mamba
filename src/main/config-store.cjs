@@ -181,9 +181,12 @@ function createConfigStore({
   function updateConfig(update) {
     const pending = configQueue.then(async () => {
       const config = await readConfig();
+      const previous = JSON.stringify(config);
       await update(config);
-      await writeConfig(config);
-      await onChange();
+      if (JSON.stringify(config) !== previous) {
+        await writeConfig(config);
+        await onChange();
+      }
       return { ...publicConfig(config), installedGames: getInstalledGames() };
     });
     configQueue = pending.catch(() => {});

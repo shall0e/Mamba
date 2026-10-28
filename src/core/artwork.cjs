@@ -1,7 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { tokens, displayTitle } = require('./search.cjs');
 const { assessIdentity, releaseHints } = require('./identity-match.cjs');
 
 function exactGameName(left, right) {
@@ -13,15 +12,30 @@ class Artwork {
     this.catalog = catalog;
     this.fetch = transport;
     this.pending = new Map();
-    this.queue = Promise.resolve();
+    this.active = 0;
+    this.waiting = [];
   }
   get(id) {
     if (this.pending.has(id)) return this.pending.get(id);
-    const task = this.queue.catch(() => {}).then(() => this.load(id));
-    this.queue = task;
+    const task = new Promise((resolve, reject) => {
+      this.waiting.push({ id, resolve, reject });
+    });
     this.pending.set(id, task);
-    task.finally(() => this.pending.delete(id)).catch(() => {});
+    this.drain();
     return task;
+  }
+  drain() {
+    while (this.active < 4 && this.waiting.length) {
+      const { id, resolve, reject } = this.waiting.shift();
+      this.active++;
+      this.load(id)
+        .then(resolve, reject)
+        .finally(() => {
+          this.pending.delete(id);
+          this.active--;
+          this.drain();
+        });
+    }
   }
   async load(id) {
     const game =
@@ -34,6 +48,8 @@ class Artwork {
       (!game.verified && releaseHints(game.identityTitle || game.name).year)
     )
       return null;
+    if (/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(game.cover || ''))
+      return game.cover;
     const cache = path.join(
       this.directory,
       createHash('sha256')
@@ -42,11 +58,10 @@ class Artwork {
     );
     try {
       const saved = JSON.parse(await fs.readFile(cache, 'utf8'));
-      if (saved.image || Date.now() - saved.at < (game.verified ? 60000 : 86400000))
+      const ttl = saved.image ? 30 * 86400000 : game.verified ? 60000 : 86400000;
+      if (Number.isFinite(saved.at) && Date.now() - saved.at >= 0 && Date.now() - saved.at < ttl)
         return saved.image;
     } catch {}
-    if (/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(game.cover || ''))
-      return game.cover;
     let url = game.cover;
     try {
       if (!url) {
@@ -55,7 +70,10 @@ class Artwork {
         search.searchParams.set('l', 'english');
         search.searchParams.set('cc', 'CA');
         const response = await this.fetch(search, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) return null;
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw Error('Artwork search unavailable');
+        }
         const data = await response.json();
         const matches = (data.items || []).filter(
           (item) =>
@@ -79,23 +97,33 @@ class Artwork {
           const reader = response.body.getReader();
           const chunks = [];
           let length = 0;
-          while (true) {
-            const part = await reader.read();
-            if (part.done) break;
-            length += part.value.length;
-            if (length > 2 * 1024 * 1024) {
-              await reader.cancel();
-              throw new Error('Artwork too large');
+          try {
+            while (true) {
+              const part = await reader.read();
+              if (part.done) break;
+              length += part.value.length;
+              if (length > 2 * 1024 * 1024) {
+                await reader.cancel();
+                throw new Error('Artwork too large');
+              }
+              chunks.push(Buffer.from(part.value));
             }
-            chunks.push(Buffer.from(part.value));
+            image = `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
+          } finally {
+            reader.releaseLock();
           }
-          image = `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
+        } else {
+          await response.body?.cancel();
         }
       }
       await fs.mkdir(this.directory, { recursive: true });
       await fs.writeFile(cache, JSON.stringify({ image, at: Date.now() }));
       return image;
     } catch {
+      await fs
+        .mkdir(this.directory, { recursive: true })
+        .then(() => fs.writeFile(cache, JSON.stringify({ image: null, at: Date.now() })))
+        .catch(() => {});
       return null;
     }
   }

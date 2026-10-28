@@ -120,3 +120,39 @@ Local and GitHub builds use the version and SHA-256 recorded in `src/shared/crea
 Development data previously stored in the project root is moved to `data/` automatically. Installed apps continue using their existing user data directory.
 
 </details>
+
+## MambaCLI
+
+Requires Node.js 22 or newer. From the checkout, run `node tools/mamba-cli.cjs -help`.
+Add the checkout's `tools` directory to your user PATH to run `mamba -help`
+from Windows Command Prompt or PowerShell. On Linux, make `tools/mamba` executable
+with `chmod +x tools/mamba`, then add that directory to PATH.
+
+Commands: `mamba search <words>`, `mamba download <release-id>`, and `mamba jobs`.
+Configure sources, account keys and the Games folder in Mamba first. Set
+`MAMBA_DATA_DIR` to the directory containing config.json if using an installed copy.
+The CLI stores its queue under that directory's `cli` subdirectory. Downloads run
+in the foreground; keep the terminal open until completion. Linux can download
+Windows game releases; Windows installers and integrations require Windows.
+
+## MegaSource
+
+The combined source is generated from `config/mega-sources.json` on GitHub every
+six hours. Add or remove public source URLs in that file to change its contents.
+The job fails without replacing the previous publication if an upstream source
+cannot be downloaded or parsed.
+
+Add this URL in Mamba Settings → Sources:
+
+https://github.com/shall0e/Mamba/releases/download/megasource/megasource.json
+
+Use the combined URL instead of its individual component sources to avoid
+redundant downloads. Run `node tools/build-megasource.cjs` to generate it locally.
+Only public URLs belong in the tracked source list; never add account keys.
+
+## Linux builds
+
+GitHub's build workflow produces x64 AppImage and Debian packages alongside the
+Windows build. Download them from the workflow's Mamba-Linux artifact. Locally,
+run `npm ci` then `npm run build:linux` on Linux. Install system `7z` for archive
+extraction. Windows-only helper and integration features are unavailable on Linux.

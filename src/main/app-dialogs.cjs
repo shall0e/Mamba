@@ -22,15 +22,20 @@ function createAppDialogs(ipcMain) {
       const id = randomUUID();
       const buttons = options.buttons?.length ? options.buttons : ['OK'];
       const cancel = () => finish(options.cancelId ?? 0);
+      const navigation = (_event, _url, inPlace, mainFrame) => {
+        if (!inPlace && mainFrame !== false) cancel();
+      };
       const finish = (response) => {
         pending.delete(id);
         sender.removeListener('destroyed', cancel);
-        sender.removeListener('did-start-navigation', cancel);
+        sender.removeListener('did-start-navigation', navigation);
+        sender.removeListener('render-process-gone', cancel);
         resolve({ response });
       };
       pending.set(id, { sender, count: buttons.length, finish });
       sender.once('destroyed', cancel);
-      sender.once('did-start-navigation', cancel);
+      sender.on('did-start-navigation', navigation);
+      sender.once('render-process-gone', cancel);
       sender.send('app:dialog', {
         id,
         title: options.title || 'Mamba',

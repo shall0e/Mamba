@@ -71,3 +71,46 @@ test('missing Steam session leaves the existing library untouched', async () => 
   assert.equal(service.state.connected, false);
   assert.deepEqual(service.merge([{ id: 'existing' }]), [{ id: 'existing' }]);
 });
+
+test('Steam reads share work, refresh history, and invalidate the cache on account switches', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-steam-switch-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const configs = [
+    path.join(root, 'userdata', '1', 'config'),
+    path.join(root, 'userdata', '2', 'config'),
+  ];
+  for (let i = 0; i < configs.length; i++) {
+    await fs.mkdir(configs[i], { recursive: true });
+    await fs.writeFile(
+      path.join(configs[i], 'localconfig.vdf'),
+      `"UserLocalConfigStore" {"Software" {"Valve" {"Steam" {"apps" {"${i + 10}" {"LastPlayed" "100"}}}}}}`,
+    );
+  }
+  let account = 0,
+    calls = 0;
+  const service = new SteamLibrary(
+    {
+      details: async (id) => {
+        calls++;
+        return { steamId: id, name: 'Game ' + id, type: 'game' };
+      },
+      save: async () => {},
+    },
+    { profile: async () => path.join(configs[account], 'shortcuts.vdf') },
+  );
+  const [first, duplicate] = await Promise.all([service.read(), service.read()]);
+  assert.equal(calls, 1);
+  assert.equal(first, duplicate);
+  await fs.writeFile(
+    path.join(configs[0], 'localconfig.vdf'),
+    '"UserLocalConfigStore" {"Software" {"Valve" {"Steam" {"apps" {"10" {"LastPlayed" "200"}}}}}}',
+  );
+  service.at = 0;
+  assert.equal((await service.read())[0].lastPlayed, new Date(200000).toISOString());
+  assert.equal(calls, 1);
+  account = 1;
+  assert.deepEqual(
+    (await service.read()).map((game) => game.steamId),
+    [11],
+  );
+});

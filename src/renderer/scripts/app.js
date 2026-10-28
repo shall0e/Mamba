@@ -25,14 +25,16 @@ const cardJobs = new Map();
 
 function renderFeaturedGame(game) {
   const banner = document.querySelector('#featured-game');
-  if (game && !banner.hidden && banner.dataset.gameId === String(game.id)) return;
+  const owned = game ? window.MambaPresence?.installed(installedGames, game) : null;
+  const signature = JSON.stringify([game, owned?.id, owned?.status, owned?.executable]);
+  if (banner.dataset.signature === signature) return;
+  banner.dataset.signature = signature;
   banner.replaceChildren();
   banner.hidden = !game;
   if (!game) {
     delete banner.dataset.gameId;
     return;
   }
-  const owned = window.MambaPresence?.installed(installedGames, game);
   banner.dataset.gameId = String(game.id);
   const cover = document.createElement('img');
   cover.className = 'featured-art';
@@ -170,7 +172,7 @@ function urlsForSourceErrors() {
     .filter(Boolean);
 }
 async function runSearch(more = false) {
-  const query = document.querySelector('#main-search').value.trim();
+  const query = document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ');
   const generation = ++searchGeneration;
   detailGeneration++;
   document.querySelector('#game-detail').hidden = true;
@@ -213,7 +215,11 @@ async function openGame(game) {
   return window.MambaExperience.openGame(game);
 }
 window.mamba?.onSearchResults(({ query, result }) => {
-  if (query !== document.querySelector('#main-search').value.trim() || searchOffset > 40) return;
+  if (
+    query !== document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ') ||
+    searchOffset > 40
+  )
+    return;
   window.MambaDiscovery.update(result, false);
   searchOffset = result.items.length;
   document.querySelector('#results-more').hidden = searchOffset >= result.total;
@@ -607,6 +613,7 @@ document.querySelector('#settings-open').addEventListener('click', openSettings)
 document.querySelector('#search-setup').addEventListener('click', openSettings);
 document.querySelector('#main-search').addEventListener('input', updateSearchState);
 document.querySelector('#main-search').addEventListener('input', () => {
+  searchGeneration++;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => runSearch(), 180);
 });

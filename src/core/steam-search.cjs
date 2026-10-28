@@ -273,7 +273,8 @@ class SteamSearch {
     await this.writes;
   }
   async steamResults(query) {
-    const key = query.trim().toLowerCase(),
+    query = String(query).trim().replace(/\s+/g, ' ');
+    const key = query.toLowerCase(),
       saved = this.queries.get(key);
     if (saved && Date.now() - saved.at < 15 * 60000) return saved.items;
     if (this.pending.has(key)) return this.pending.get(key);
@@ -383,8 +384,10 @@ class SteamSearch {
     return group;
   }
   async search(query, offset = 0) {
+    offset = Number.isSafeInteger(offset) && offset > 0 ? offset : 0;
     query = String(query || '')
       .trim()
+      .replace(/\s+/g, ' ')
       .slice(0, 300);
     if (!query) return { total: 0, items: [], pending: false };
     const key = query.toLowerCase(),
@@ -430,6 +433,7 @@ class SteamSearch {
     const revision = ++this.searchRevision;
     query = String(query || '')
       .trim()
+      .replace(/\s+/g, ' ')
       .slice(0, 300);
     if (!query) return { total: 0, items: [] };
     const queries = topicQueries(query);

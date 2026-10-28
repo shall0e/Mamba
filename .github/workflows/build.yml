@@ -25,3 +25,20 @@ jobs:
           name: Mamba-Windows
           path: dist/win-unpacked/
           retention-days: 14
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mamba-Linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 14

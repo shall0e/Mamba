@@ -25,8 +25,13 @@ test('app dialogs accept only a valid response from their own window and cancel 
   assert.equal(reply({ sender }, payload.id, 1), true);
   assert.deepEqual(await pending, { response: 1 });
   const cancelled = show({ webContents: sender }, { buttons: ['Keep', 'Remove'], cancelId: 0 });
+  sender.emit('did-start-navigation', {}, 'https://example.com', true, true);
+  assert.equal(reply({ sender: {} }, payload.id, 0), false);
   sender.emit('did-start-navigation');
   assert.deepEqual(await cancelled, { response: 0 });
+  const crashed = show({ webContents: sender }, { buttons: ['Keep', 'Remove'], cancelId: 0 });
+  sender.emit('render-process-gone');
+  assert.deepEqual(await crashed, { response: 0 });
 });
 test('administrator retry can be cancelled and only reports success after removal', async (t) => {
   const folder = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-admin-test-')));

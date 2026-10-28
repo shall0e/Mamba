@@ -63,6 +63,8 @@ function linkIdentity(uri) {
 function mergeDownloads(sources, accumulator) {
   const games = accumulator?.games || new Map();
   let records = accumulator?.records || 0;
+  const identities = accumulator?.identities || new Map();
+  if (accumulator) accumulator.identities = identities;
   for (const source of sources) {
     for (const row of source.downloads) {
       if (typeof row?.title !== 'string' || !Array.isArray(row.uris)) continue;
@@ -101,13 +103,20 @@ function mergeDownloads(sources, accumulator) {
 
         if (!hash && url.protocol !== 'https:') continue;
         const identity = linkIdentity(value);
-        if (!game.links.some((link) => link.identity === identity))
+        let seenLinks = identities.get(key);
+        if (!seenLinks) {
+          seenLinks = new Set(game.links.map((link) => link.identity));
+          identities.set(key, seenLinks);
+        }
+        if (!seenLinks.has(identity)) {
+          seenLinks.add(identity);
           game.links.push({
             identity,
             uri: value,
             kind: hash ? 'torrents' : 'webdl',
             hash: hash || webHash(value),
           });
+        }
       }
     }
   }
@@ -292,7 +301,10 @@ class Catalog extends EventEmitter {
       signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
     });
     if (response.status === 304 && cached) return cached.source;
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`HTTP ${response.status}`);
+    }
     const raw = await sourceText(response);
     const data = JSON.parse(raw.replace(/^\uFEFF/, ''));
     const downloads = Array.isArray(data) ? data : data.downloads;
@@ -318,9 +330,8 @@ class Catalog extends EventEmitter {
   async performSync(force = false) {
     const config = await this.getConfig();
     const preserveCatalog = this.games.length > 0;
-    const sourceUrls = config.sourceUrls.filter(
-      (uri) => !(config.disabledSourceUrls || []).includes(uri),
-    );
+    const disabledSources = new Set(config.disabledSourceUrls || []);
+    const sourceUrls = [...new Set(config.sourceUrls)].filter((uri) => !disabledSources.has(uri));
     const signature = digest(
       JSON.stringify([
         'candidate-index-v2',
@@ -522,4 +533,4 @@ class Catalog extends EventEmitter {
     }
   }
 }
-module.exports = { Catalog, mergeDownloads, atomicJson, titleKey };
+module.exports = { sourceText, Catalog, mergeDownloads, atomicJson, titleKey };

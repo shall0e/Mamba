@@ -3,7 +3,12 @@ const path = require('node:path');
 const { download } = require('../src/core/cream-installer.cjs');
 const release = require('../src/shared/cream-installer-release.json');
 
-async function prepare() {
+async function prepare(context) {
+  if (context?.electronPlatformName && context.electronPlatformName !== 'win32') {
+    context.packager.config.extraResources = [];
+    context.packager.config.extraFiles = [];
+    return;
+  }
   const root = path.resolve(__dirname, '..');
   const directory = path.join(root, 'vendor', 'creaminstaller');
   console.log('Preparing CreamInstaller ' + release.version + ' (verified upstream release).');

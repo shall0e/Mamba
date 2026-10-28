@@ -61,3 +61,16 @@ test('repeated crashes stop automatic restarts', async () => {
   assert.equal(client.child, null);
   await client.close();
 });
+
+test('a synchronous worker launch failure does not poison later startup attempts', async () => {
+  let attempts = 0;
+  const client = new BackgroundClient(() => {
+    if (++attempts === 1) throw Error('temporary launch failure');
+    return new Child();
+  });
+  await assert.rejects(client.start(), /Could not start/);
+  await client.start();
+  assert.equal(attempts, 2);
+  assert.deepEqual(await client.request('echo', 42), [42]);
+  await client.close();
+});
