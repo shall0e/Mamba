@@ -139,8 +139,8 @@ Windows game releases; Windows installers and integrations require Windows.
 
 The combined source is generated from `config/mega-sources.json` on GitHub every
 six hours. Add or remove public source URLs in that file to change its contents.
-The job fails without replacing the previous publication if an upstream source
-cannot be downloaded or parsed.
+Unavailable sources are listed under `unavailableSources` in the JSON. Reachable
+sources are published; if every source fails, the previous publication is kept.
 
 Add this URL in Mamba Settings → Sources:
 

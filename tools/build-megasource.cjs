@@ -1,21 +1,37 @@
 const fs = require('node:fs/promises');
 const { sourceText, mergeDownloads } = require('../src/core/catalog.cjs');
-async function combine(urls) {
+async function combine(urls, { allowUnavailable = false } = {}) {
+  const unavailableSources = [];
+  let availableSources = 0;
   const accumulator = { games: new Map(), records: 0 };
   if (!Array.isArray(urls)) throw Error('Sources must be a list of URLs.');
   for (const url of new Set(urls)) {
     const u = new URL(url);
     if (u.protocol !== 'https:' || u.username || u.password || u.search)
       throw Error('Use public HTTPS source URLs without credentials or query parameters.');
-    const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
-    if (!response.ok) throw Error('Source unavailable: ' + u.hostname);
-    const text = await sourceText(response);
-    const source = JSON.parse(text);
-    if (!Array.isArray(source.downloads)) throw Error('Invalid source: ' + u.hostname);
-    mergeDownloads([{ name: source.name || u.hostname, downloads: source.downloads }], accumulator);
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+      if (!response.ok) throw Error('Source unavailable: ' + u.hostname);
+      const text = await sourceText(response);
+      const parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
+      const source = Array.isArray(parsed) ? { downloads: parsed } : parsed;
+      if (!Array.isArray(source.downloads)) throw Error('Invalid source: ' + u.hostname);
+      mergeDownloads(
+        [{ name: source.name || u.hostname, downloads: source.downloads }],
+        accumulator,
+      );
+      availableSources++;
+    } catch (error) {
+      if (!allowUnavailable) throw error;
+      unavailableSources.push({ url, error: error.message });
+      console.warn(`::warning::Source unavailable: ${u.hostname}`);
+    }
   }
+  if (allowUnavailable && !availableSources)
+    throw Error('No sources available; previous publication kept.');
   return {
     name: 'Mamba MegaSource',
+    ...(allowUnavailable ? { availableSources, unavailableSources } : {}),
     downloads: [...accumulator.games.values()]
       .map((game) => ({
         title: game.name,
@@ -32,10 +48,17 @@ if (require.main === module)
     const urls = JSON.parse(
       await fs.readFile(process.argv[2] || 'config/mega-sources.json', 'utf8'),
     );
-    const result = await combine(urls);
+    const result = await combine(urls, { allowUnavailable: true });
     await fs.mkdir('dist', { recursive: true });
     await fs.writeFile('dist/megasource.json', JSON.stringify(result));
-    console.log(result.downloads.length + ' combined releases');
+    console.log(
+      result.downloads.length +
+        ' combined releases from ' +
+        result.availableSources +
+        ' sources; ' +
+        result.unavailableSources.length +
+        ' unavailable.',
+    );
   })().catch((e) => {
     console.error(e.message);
     process.exitCode = 1;
