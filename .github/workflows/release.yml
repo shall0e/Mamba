@@ -44,7 +44,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build:linux
+      - run: npm run build:linux -- --config.linux.maintainer="Mamba contributors" --config.extraMetadata.homepage="https://github.com/shall0e/Mamba"
       - name: Publish Linux packages
         env:
           GH_TOKEN: ${{ github.token }}

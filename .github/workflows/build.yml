@@ -34,7 +34,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build:linux
+      - run: npm run build:linux -- --config.linux.maintainer="Mamba contributors" --config.extraMetadata.homepage="https://github.com/shall0e/Mamba"
       - uses: actions/upload-artifact@v4
         with:
           name: Mamba-Linux

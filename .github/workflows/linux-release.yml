@@ -1,0 +1,21 @@
+name: Publish Linux release packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v1.4.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:linux -- --config.linux.maintainer="Mamba contributors" --config.extraMetadata.homepage="https://github.com/shall0e/Mamba"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v1.4.4 dist/*.AppImage dist/*.deb dist/latest-linux.yml --clobber
