@@ -173,7 +173,51 @@ class SteamSearch {
         data.cover
       )
         this.apps.set('steam:' + data.steamId, data);
-    this.indexSources();
+    const indexFile = path.join(path.dirname(this.file), 'steam-source-index.json');
+    const stat = this.catalog.file ? await fs.stat(this.catalog.file).catch(() => null) : null;
+    const stamp = stat ? `${stat.size}:${stat.mtimeMs}` : null;
+    let cached;
+    try {
+      if (stamp) cached = JSON.parse(await fs.readFile(indexFile, 'utf8'));
+    } catch {}
+    const validEntries = (entries) =>
+      Array.isArray(entries) &&
+      entries.every(
+        (entry) =>
+          Array.isArray(entry) &&
+          typeof entry[0] === 'string' &&
+          Array.isArray(entry[1]) &&
+          entry[1].every((id) => this.catalog.byId.has(id)),
+      );
+    if (
+      cached?.version === 1 &&
+      cached.stamp === stamp &&
+      validEntries(cached.sources) &&
+      validEntries(cached.subtitles)
+    ) {
+      const restore = (entries) =>
+        new Map(
+          entries.map(([key, ids]) => [
+            key,
+            ids.map((id) => this.catalog.byId.get(id)).filter(Boolean),
+          ]),
+        );
+      this.sourceIndex = restore(cached.sources);
+      this.subtitleIndex = restore(cached.subtitles);
+      this.indexedGames = this.catalog.games;
+    } else {
+      this.indexSources();
+      if (stamp) {
+        const encode = (index) =>
+          [...index].map(([key, games]) => [key, games.map((game) => game.id)]);
+        await atomicJson(indexFile, {
+          version: 1,
+          stamp,
+          sources: encode(this.sourceIndex),
+          subtitles: encode(this.subtitleIndex),
+        }).catch(() => {});
+      }
+    }
   }
   indexSources() {
     if (this.indexedGames === this.catalog.games) return;
@@ -397,6 +441,19 @@ class SteamSearch {
       .replace(/\s+/g, ' ')
       .slice(0, 300);
     if (!query) return { total: 0, items: [], pending: false };
+    const appId =
+      /^(?:steam:|appid:)?([1-9]\d*)$/i.exec(query)?.[1] ||
+      /^https?:\/\/store\.steampowered\.com\/app\/([1-9]\d*)(?:\/|$)/i.exec(query)?.[1];
+    if (appId) {
+      const app = await this.identity.details(Number(appId)).catch(() => null);
+      const game = this.forApp(app);
+      return {
+        total: game ? 1 : 0,
+        items: game && !offset ? [game] : [],
+        bestMatch: game || null,
+        pending: false,
+      };
+    }
     const key = query.toLowerCase(),
       changed = this.activeQuery !== key;
     this.activeQuery = key;

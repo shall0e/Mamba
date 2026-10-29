@@ -99,11 +99,16 @@ test('identity upgrades replace old remembered entries and preserve favorites', 
     data.remembered[state.key(old)] = old;
   });
   await state.favorite(old, true);
+  await state.change((data) => {
+    data.games[state.key(old)].lastPlayed = '2026-10-28T12:00:00Z';
+    data.games['steam:1206560'] = { lastPlayed: '2026-01-01T00:00:00Z' };
+  });
   const games = await state.reconcile([
     { ...old, name: 'WorldBox - God Simulator', steamId: 1206560, verified: true },
   ]);
   assert.equal(games.length, 1);
   assert.equal(games[0].favorite, true);
+  assert.equal(games[0].lastPlayed, '2026-10-28T12:00:00Z');
 });
 
 test('Xbox display names and artwork are read locally and Steam manifest titles override folder spelling', async (t) => {

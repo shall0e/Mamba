@@ -35,11 +35,19 @@
   }
   function compareLibrary(a, b, sort = 'name') {
     const favorite = Number(!!b.favorite) - Number(!!a.favorite);
-    const field = sort === 'recent' ? 'lastPlayed' : sort === 'installed' ? 'installedAt' : null;
+    const installedTime = (game) =>
+      Math.max(
+        0,
+        ...[game, ...(game.installations || [])]
+          .filter((item) => !['not-installed', 'drive-unavailable'].includes(item.status))
+          .map((item) => Date.parse(item.installedAt || '') || 0),
+      );
+    const playedTime = (game) => Date.parse(game.lastPlayed || '') || 0;
     return (
       Number(b.status === 'installed') - Number(a.status === 'installed') ||
+      (sort === 'installed' ? installedTime(b) - installedTime(a) : 0) ||
+      (sort === 'recent' ? playedTime(b) - playedTime(a) : 0) ||
       favorite ||
-      (field ? (b[field] || '').localeCompare(a[field] || '') : 0) ||
       a.name.localeCompare(b.name)
     );
   }

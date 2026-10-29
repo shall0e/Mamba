@@ -20,7 +20,7 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match package.json version' }
       - run: npm ci
       - run: npm run format:check
-      - run: node --test
+      - run: node --test --test-concurrency=1
       - run: npm run release:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

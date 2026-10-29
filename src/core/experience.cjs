@@ -54,12 +54,23 @@ class LibraryState {
     await task;
   }
   key(game) {
-    if (game.platformId) return 'platform:' + game.platformId;
+    const platformId =
+      game.platformId || game.identity?.baseGame?.platformId || game.identity?.platformId;
+    if (platformId) return 'platform:' + platformId;
     const id = game.steamId || game.identity?.baseGame?.steamId || game.identity?.steamId;
     return id ? 'steam:' + id : 'name:' + game.name.toLocaleLowerCase();
   }
   decorate(items) {
-    return items.map((game) => ({ ...game, ...this.data.games[this.key(game)] }));
+    return items.map((game) => {
+      const saved = this.data.games[this.key(game)] || {};
+      const latest = (a, b) => ((Date.parse(a || '') || 0) >= (Date.parse(b || '') || 0) ? a : b);
+      return {
+        ...game,
+        ...saved,
+        lastPlayed: latest(game.lastPlayed, saved.lastPlayed) || null,
+        installedAt: latest(game.installedAt, saved.installedAt) || null,
+      };
+    });
   }
   cached() {
     const { isNonGame } = require('./game-identity.cjs');
@@ -90,7 +101,15 @@ class LibraryState {
             !(old.installations || [old]).some((item) => folders.has(item.folder))
           )
             continue;
-          data.games[key] = { ...data.games[oldKey], ...data.games[key] };
+          const oldPreferences = data.games[oldKey] || {},
+            current = data.games[key] || {};
+          data.games[key] = { ...oldPreferences, ...current };
+          for (const field of ['lastPlayed', 'installedAt'])
+            if (
+              (Date.parse(oldPreferences[field] || '') || 0) >
+              (Date.parse(current[field] || '') || 0)
+            )
+              data.games[key][field] = oldPreferences[field];
           delete data.games[oldKey];
           delete data.remembered[oldKey];
         }
@@ -147,9 +166,22 @@ class LibraryState {
     }
     result.push(...current.values());
     await this.change((data) => {
-      for (const game of result)
-        if (!data.hidden[this.key(game)] && game.verified && game.steamId)
-          data.remembered[this.key(game)] = game;
+      for (const game of result) {
+        const key = this.key(game);
+        if (data.hidden[key]) continue;
+        const history = { ...data.games[key] };
+        for (const field of ['lastPlayed', 'installedAt']) {
+          const candidates =
+            field === 'installedAt' ? [game, ...(game.installations || [])] : [game];
+          for (const item of candidates)
+            if ((Date.parse(item[field] || '') || 0) > (Date.parse(history[field] || '') || 0))
+              history[field] = item[field];
+        }
+        if (game.status === 'installed' && data.remembered[key]?.status === 'not-installed')
+          history.installedAt = new Date().toISOString();
+        if (Object.keys(history).length) data.games[key] = history;
+        if (game.verified && game.steamId) data.remembered[key] = game;
+      }
     });
     return this.decorate(result.filter((game) => !this.data.hidden[this.key(game)]));
   }

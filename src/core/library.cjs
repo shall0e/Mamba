@@ -581,6 +581,7 @@ class Library {
           if ((await fs.lstat(candidate).catch(() => null))?.isFile()) executable = candidate;
         }
         const localMetadata = await require('./installed-metadata.cjs').installedMetadata(folder);
+        const created = (await fs.stat(folder)).birthtimeMs;
         items.push({
           id,
           cover: localMetadata.cover || null,
@@ -590,7 +591,8 @@ class Library {
           imported: entry.imported,
           releaseId: manifest.releaseId || null,
           version: manifest.version || null,
-          installedAt: manifest.installedAt || null,
+          installedAt:
+            manifest.installedAt || (created > 0 ? new Date(created).toISOString() : null),
           launcherSelected: !!manifest.launcherSelected,
           launchOptions: manifest.launchOptions || {},
           executable,

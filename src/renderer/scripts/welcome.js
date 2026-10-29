@@ -209,6 +209,7 @@
           ['any', 'Any release'],
           ['repack', 'Prefer repacks'],
           ['original', 'Prefer original releases'],
+          ['onlinefix', 'Prefer OnlineFix releases (multiplayer unverified)'],
         ]) {
           const option = make('option', label);
           option.value = value;

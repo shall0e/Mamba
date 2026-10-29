@@ -269,7 +269,7 @@
       chart.append(
         node(
           'p',
-          summary.count ? 'Collecting download speedâ€¦' : 'No active downloads',
+          summary.count ? 'Collecting download speed\u2026' : 'No active downloads',
           'chart-empty',
         ),
       );
@@ -490,7 +490,7 @@
     title.id = 'game-title';
     title.tabIndex = -1;
     content.append(title);
-    const loading = node('p', 'Loading game detailsâ€¦', 'field-hint');
+    const loading = node('p', 'Loading game details\u2026', 'field-hint');
     loading.setAttribute('role', 'status');
     content.append(loading);
     showPage('game');
@@ -913,7 +913,7 @@
         section.append(
           node(playable ? 'summary' : 'h2', playable ? 'Other downloads' : 'Downloads'),
         );
-        const hint = node('p', 'Checking your enabled download servicesâ€¦', 'field-hint');
+        const hint = node('p', 'Checking your enabled download services\u2026', 'field-hint');
         section.append(hint);
         content.append(section);
         if (data.space) {
@@ -1167,7 +1167,7 @@
   sortSelect.id = 'library-sort';
   sortSelect.setAttribute('aria-label', 'Sort library');
   for (const [value, label] of [
-    ['name', 'Name Aâ€“Z'],
+    ['name', 'Name A\u2013Z'],
     ['recent', 'Recently played'],
     ['installed', 'Recently installed'],
   ]) {
@@ -1378,7 +1378,7 @@
           ? ' is ready to play'
           : notice.status === 'needs-setup'
             ? ' needs installation review'
-            : ' needs attention â€” open Activity'),
+            : ' needs attention \u2014 open Activity'),
     );
     if (currentPage === 'activity') loadActivity();
   });

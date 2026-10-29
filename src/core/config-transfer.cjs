@@ -28,11 +28,16 @@ function validateSettings(value) {
     for (const preferences of Object.values(state.games)) {
       if (
         !object(preferences) ||
-        Object.keys(preferences).some((key) => !['favorite', 'lastPlayed'].includes(key)) ||
+        Object.keys(preferences).some(
+          (key) => !['favorite', 'lastPlayed', 'installedAt'].includes(key),
+        ) ||
         (preferences.favorite !== undefined && typeof preferences.favorite !== 'boolean') ||
         (preferences.lastPlayed !== undefined &&
           (typeof preferences.lastPlayed !== 'string' ||
-            !Number.isFinite(Date.parse(preferences.lastPlayed))))
+            !Number.isFinite(Date.parse(preferences.lastPlayed)))) ||
+        (preferences.installedAt !== undefined &&
+          (typeof preferences.installedAt !== 'string' ||
+            !Number.isFinite(Date.parse(preferences.installedAt))))
       )
         throw Error('Invalid library preferences.');
     }
@@ -114,7 +119,7 @@ function validateSettings(value) {
     throw Error('Choose a supported preferred language.');
   if (
     copy.preferredRelease !== undefined &&
-    !['any', 'repack', 'portable', 'original'].includes(copy.preferredRelease)
+    !['any', 'repack', 'portable', 'original', 'onlinefix'].includes(copy.preferredRelease)
   )
     throw Error('Choose a supported release type.');
   if (copy.libraryView !== undefined && !['cards', 'list', 'banners'].includes(copy.libraryView))
@@ -181,4 +186,29 @@ const encodeConfig = (settings, version) =>
     null,
     2,
   ) + '\n';
-module.exports = { validateSettings, decodeConfig, encodeConfig };
+// Explicit allowlist keeps device data and future personal settings out of shared setups.
+function encodeSetupConfig(config, version) {
+  const keys = [
+    'torboxApiKey',
+    'realDebridApiKey',
+    'archivePassword',
+    'sourceUrls',
+    'disabledSourceUrls',
+    'enabledDownloadServices',
+    'preferredDownloadService',
+    'disabledDownloadHosts',
+    'autoInstall',
+    'automaticRecovery',
+    'cachedOnly',
+    'keepArchives',
+    'transferTimeoutMinutes',
+    'preferredLanguage',
+    'preferredRelease',
+    'automaticUpdates',
+  ];
+  const settings = Object.fromEntries(
+    keys.filter((key) => config[key] !== undefined).map((key) => [key, config[key]]),
+  );
+  return encodeConfig(validateSettings(settings), version);
+}
+module.exports = { validateSettings, decodeConfig, encodeConfig, encodeSetupConfig };

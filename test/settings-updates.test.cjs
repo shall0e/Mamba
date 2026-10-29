@@ -3,6 +3,42 @@ const test = require('node:test'),
 const { validateSettings, encodeConfig, decodeConfig } = require('../src/core/config-transfer.cjs');
 const { Updates } = require('../src/core/updates.cjs');
 const { EventEmitter } = require('node:events');
+
+test('shared setup exports only connection and advanced settings', () => {
+  const { encodeSetupConfig } = require('../src/core/config-transfer.cjs');
+  const shared = {
+    torboxApiKey: 'shared-key',
+    realDebridApiKey: 'other-key',
+    archivePassword: 'archive',
+    sourceUrls: ['https://example.test/feed.json'],
+    disabledSourceUrls: ['https://example.test/disabled.json'],
+    enabledDownloadServices: ['direct'],
+    preferredDownloadService: 'direct',
+    disabledDownloadHosts: ['example.test'],
+    autoInstall: false,
+    automaticRecovery: true,
+    cachedOnly: false,
+    keepArchives: true,
+    transferTimeoutMinutes: 45,
+    preferredLanguage: 'english',
+    preferredRelease: 'portable',
+    automaticUpdates: true,
+  };
+  const personal = {
+    appearance: { customFont: 'private' },
+    palette: { primary: '#123456' },
+    downloadPath: 'C:\\Private',
+    extraGameFolders: ['D:\\Games'],
+    libraryState: { games: { private: { favorite: true } } },
+    librarySort: 'recent',
+    libraryView: 'list',
+    steamAccount: 'private-user',
+    onboardingCompleted: true,
+    unknownFuturePersonalSetting: 'private',
+  };
+  assert.deepEqual(decodeConfig(encodeSetupConfig({ ...shared, ...personal }, '1.5.0')), shared);
+  assert.deepEqual(decodeConfig(encodeSetupConfig({}, '1.5.0')), {});
+});
 test('complete config round trip preserves credentials, advanced settings and unknown future settings', () => {
   const settings = {
     torboxApiKey: 'fixture-key',

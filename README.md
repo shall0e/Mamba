@@ -123,14 +123,20 @@ Development data previously stored in the project root is moved to `data/` autom
 
 ## MambaCLI
 
-Requires Node.js 22 or newer. From the checkout, run `node tools/mamba-cli.cjs -help`.
-Add the checkout's `tools` directory to your user PATH to run `mamba -help`
-from Windows Command Prompt or PowerShell. On Linux, make `tools/mamba` executable
-with `chmod +x tools/mamba`, then add that directory to PATH.
+The Windows installer includes MambaCLI and adds it to your user PATH. Open a new
+terminal and run `mamba -help`; a separate Node installation is not required.
+Debian packages install the CLI as `/usr/local/bin/mamba` when that name is available.
+AppImage users can extract the AppImage and run its `mamba-cli` wrapper.
+From a source checkout, use Node.js 22 or newer and run `node tools/mamba-cli.cjs -help`.
 
-Commands: `mamba search <words>`, `mamba download <release-id>`, and `mamba jobs`.
-Configure sources, account keys and the Games folder in Mamba first. Set
-`MAMBA_DATA_DIR` to the directory containing config.json if using an installed copy.
+Search uses the launcher's Steam-backed grouping, including `mamba search 550`,
+`mamba search "left 4 dead 2"`, and Steam store URLs. Use `mamba info 550` to inspect
+releases and `mamba download steam:550` to download the best compatible option.
+Searches reuse the launcher's cache; `mamba sync` explicitly refreshes sources.
+Use `mamba config list`, `mamba config set downloadPath "D:\Games"`, and
+`mamba sources add <URL>` to configure it. Secrets are hidden when listing settings.
+Other commands include `mamba jobs`, `mamba resume <job-id>`, and `--json` output.
+Settings are located automatically; `MAMBA_DATA_DIR` can override that location.
 The CLI stores its queue under that directory's `cli` subdirectory. Downloads run
 in the foreground; keep the terminal open until completion. Linux can download
 Windows game releases; Windows installers and integrations require Windows.

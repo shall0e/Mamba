@@ -105,7 +105,6 @@ test('Steam reads share work, refresh history, and invalidate the cache on accou
     path.join(configs[0], 'localconfig.vdf'),
     '"UserLocalConfigStore" {"Software" {"Valve" {"Steam" {"apps" {"10" {"LastPlayed" "200"}}}}}}',
   );
-  service.at = 0;
   assert.equal((await service.read())[0].lastPlayed, new Date(200000).toISOString());
   assert.equal(calls, 1);
   account = 1;

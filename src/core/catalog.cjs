@@ -158,13 +158,14 @@ class Catalog extends EventEmitter {
     this.emit('status', this.state);
     return this.state;
   }
-  async load() {
+  async load({ lazyIndex = false } = {}) {
+    this.lazyIndex = lazyIndex;
     try {
       this.availability = JSON.parse(await fs.readFile(this.availabilityFile, 'utf8'));
     } catch {}
     try {
       const saved = JSON.parse(await fs.readFile(this.file, 'utf8'));
-      this.replace(saved.games || []);
+      this.replace(saved.games || [], !lazyIndex);
       this.signature = saved.signature;
       this.pending = saved.pending;
       this.sourceHosts = saved.sourceHosts || {};
@@ -184,17 +185,21 @@ class Catalog extends EventEmitter {
         this.status({ phase: 'error', message: 'The saved catalog could not be read.' });
     }
   }
-  replace(games) {
+  replace(games, buildIndex = !this.lazyIndex) {
     this.state.linkCount = games.reduce((total, game) => total + (game.links?.length || 0), 0);
     this.games = games;
     this.byId = new Map(games.map((game) => [game.id, game]));
-    this.searchIndex = createSearchIndex(games, this.metadata);
+    this.searchIndex = buildIndex ? createSearchIndex(games, this.metadata) : null;
   }
   search(query, offset = 0) {
+    this.searchIndex ||= createSearchIndex(this.games, this.metadata);
     return rankedSearch(this.searchIndex || [], query, offset);
   }
   getGame(id) {
-    return this.steamSearch?.get(id) || this.searchIndex?.find((entry) => entry.id === id);
+    const steam = this.steamSearch?.get(id);
+    if (steam) return steam;
+    this.searchIndex ||= createSearchIndex(this.games, this.metadata);
+    return this.searchIndex.find((entry) => entry.id === id);
   }
   async recoveryCandidates(job, config) {
     const hash = torrentHash(job.uri);

@@ -119,7 +119,7 @@ test('scanning a missing games folder leaves it absent and returns no live insta
   await assert.rejects(fs.stat(root), { code: 'ENOENT' });
 });
 
-test('favorites precede other games under every library sort without hiding nonfavorites', () => {
+test('favorites lead normal sorts while recently installed orders by installation date', () => {
   const { compareLibrary } = require('../src/shared/game-presence.js');
   const games = [
     { name: 'Alpha', lastPlayed: '2026-10-23', installedAt: '2026-10-23' },
@@ -136,9 +136,22 @@ test('favorites precede other games under every library sort without hiding nonf
     const sorted = [...games].sort((a, b) => compareLibrary(a, b, sort));
     assert.deepEqual(
       sorted.map((item) => item.name),
-      ['Bravo', 'Zulu', 'Alpha'],
+      sort !== 'name' ? ['Alpha', 'Bravo', 'Zulu'] : ['Bravo', 'Zulu', 'Alpha'],
     );
   }
+});
+
+test('external play history survives restart and older personal history cannot overwrite it', async (t) => {
+  const { dir, state } = await fixture(t);
+  const entry = { ...game(path.join(dir, 'Portal')), lastPlayed: '2026-10-28T12:00:00Z' };
+  state.data.games[state.key(entry)] = { lastPlayed: '2026-01-01T00:00:00Z', favorite: true };
+  assert.equal((await state.reconcile([entry]))[0].lastPlayed, entry.lastPlayed);
+  const restored = new LibraryState(dir);
+  await restored.load();
+  assert.equal(restored.decorate([{ ...entry, lastPlayed: null }])[0].lastPlayed, entry.lastPlayed);
+  await restored.reconcile([]);
+  const reinstalled = (await restored.reconcile([entry]))[0];
+  assert.ok(Date.parse(reinstalled.installedAt) > Date.parse(entry.installedAt));
 });
 
 test('per-installation folder choice reaches the queue without changing the global Games folder', async () => {

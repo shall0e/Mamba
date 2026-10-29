@@ -85,7 +85,7 @@ function createConfigStore({
         )
           ? config.preferredLanguage
           : 'english',
-        preferredRelease: ['any', 'repack', 'portable', 'original'].includes(
+        preferredRelease: ['any', 'repack', 'portable', 'original', 'onlinefix'].includes(
           config.preferredRelease,
         )
           ? config.preferredRelease

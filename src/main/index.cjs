@@ -49,7 +49,11 @@ if (!app.requestSingleInstanceLock()) {
     return issue;
   }
   const { registerHelperRuntime, openGameHelper } = require('../core/game-helper.cjs');
-  const { validateSettings, decodeConfig, encodeConfig } = require('../core/config-transfer.cjs');
+  const {
+    validateSettings,
+    decodeConfig,
+    encodeSetupConfig,
+  } = require('../core/config-transfer.cjs');
   const { Updates } = require('../core/updates.cjs');
   const { BackgroundClient } = require('../core/background-client.cjs');
   const { spawn } = require('node:child_process');
@@ -298,16 +302,9 @@ if (!app.requestSingleInstanceLock()) {
       filters: [{ name: 'JSON settings', extensions: ['json'] }],
     });
     if (chosen.canceled || !chosen.filePath) return null;
-    await fs.writeFile(
-      chosen.filePath,
-      encodeConfig(
-        { ...(await readConfig()), libraryState: await task('library:state') },
-        app.getVersion(),
-      ),
-      {
-        mode: 0o600,
-      },
-    );
+    await fs.writeFile(chosen.filePath, encodeSetupConfig(await readConfig(), app.getVersion()), {
+      mode: 0o600,
+    });
     return true;
   });
   ipcMain.handle('config:import', async (event) => {

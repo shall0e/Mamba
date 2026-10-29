@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+script_path=$(readlink -f "$0")
+install_dir=$(dirname "$script_path")
+export ELECTRON_RUN_AS_NODE=1
+exec "$install_dir/@MAMBA_EXECUTABLE@" "$install_dir/resources/app.asar/tools/mamba-cli.cjs" "$@"

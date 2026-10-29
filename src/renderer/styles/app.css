@@ -6808,6 +6808,37 @@ html:is([data-navigation='top'], [data-navigation='bottom']) .nav-button:focus-v
 }
 
 /* Align library controls with the centered heading. */
+#library-toolbar .library-filter,
+#library-toolbar .library-filter input,
+#library-toolbar .library-view-controls > select,
+#library-toolbar .library-view-controls > button,
+#library-toolbar .library-options > summary,
+#library-page .library-heading-actions > button,
+#library-page .library-heading-actions .game-count {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  margin-block: 0;
+  font-size: 12px;
+}
+#library-page .library-heading-actions .game-count {
+  display: inline-flex;
+  align-items: center;
+}
+#library-toolbar .library-filter,
+#library-toolbar .library-view-controls > select,
+#library-toolbar .library-view-controls > button,
+#library-toolbar .library-options > summary {
+  border-radius: 9px;
+}
+#library-toolbar .library-view-controls {
+  gap: 8px;
+}
+#library-toolbar .library-view-controls > select {
+  min-width: 148px;
+  padding-block: 0;
+}
 #library-page > .page-heading,
 #library-page > .library-toolbar {
   box-sizing: border-box;

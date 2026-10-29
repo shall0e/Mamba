@@ -216,6 +216,7 @@ function optionTraits(option) {
     release.match(/\bv[ .]?(\d+(?:\.\d+){0,5})/i) || release.match(/\((\d+\.\d+(?:\.\d+)*)\)/);
   const version = match?.[1] || release.match(/\bbuild[ ._-]*(\d+(?:\.\d+)*)/i)?.[1] || '';
   const portable = /\b(portable|pre[ -]?installed|steam[ -]?rip)\b/i.test(release);
+  const onlineFix = /\bonline[ ._-]*fix\b/i.test(release);
   const score =
     (incompatible ? -10000 : 0) +
     (partial ? -5000 : 0) +
@@ -223,7 +224,7 @@ function optionTraits(option) {
     (portable ? 1200 : 0) +
     (english ? 100 : 0) -
     (russianOnly ? 100 : 0);
-  return { incompatible, partial, english, russianOnly, portable, version, score };
+  return { incompatible, partial, english, russianOnly, portable, onlineFix, version, score };
 }
 function rankOptions(options, preferences = {}) {
   return options
@@ -252,7 +253,9 @@ function rankOptions(options, preferences = {}) {
             : releaseType === 'original'
               ? !/\b(repack|portable|pre[ -]?installed)\b/i.test(option.release)
               : false;
+      const preferredOnlineFix = releaseType === 'onlinefix' && traits.onlineFix;
       if (preferredRelease) traits.score += 80;
+      if (preferredOnlineFix) traits.score += 2500;
       const names = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct download' };
       const reasons = [
         option.cached
@@ -262,6 +265,7 @@ function rankOptions(options, preferences = {}) {
       ];
       if (traits.english) reasons.push('English / multilingual');
       if (traits.portable) reasons.push('Portable or pre-installed');
+      if (traits.onlineFix) reasons.push('OnlineFix label from source; multiplayer unverified');
       if (traits.version) reasons.push(`Version ${traits.version}`);
       if (traits.partial) reasons.push('Update or add-on');
       if (traits.incompatible) reasons.push('Not a Windows release');

@@ -40,10 +40,10 @@ class SteamLibrary {
   async readNow() {
     try {
       const shortcutFile = await this.profile();
-      if (this.profileFile === shortcutFile && Date.now() - this.at < 5 * 60000) return this.games;
+      const cached = this.profileFile === shortcutFile && Date.now() - this.at < 5 * 60000;
       if (this.profileFile !== shortcutFile) this.games = [];
       this.profileFile = shortcutFile;
-      this.at = Date.now();
+      if (!cached) this.at = Date.now();
       const config = path.dirname(shortcutFile);
       const accountId = path.basename(path.dirname(config));
       if (!/^\d+$/.test(accountId)) throw Error('Steam account unavailable.');
@@ -75,6 +75,10 @@ class SteamLibrary {
       const games = this.games
         .filter((game) => knownIds.has(String(game.steamId)))
         .map((game) => ({ ...game, lastPlayed: played(game.steamId) }));
+      if (cached) {
+        this.games = games;
+        return this.games;
+      }
       const resolved = new Set(games.map((game) => game.steamId));
       const deadline = Date.now() + 8000;
       let next = 0;
@@ -125,10 +129,20 @@ class SteamLibrary {
   }
   merge(installed) {
     const ids = new Set(installed.map((game) => Number(game.steamId)).filter(Boolean));
-    const steamIds = new Set(this.games.map((game) => Number(game.steamId)));
+    const steamGames = new Map(this.games.map((game) => [Number(game.steamId), game]));
     return [
       ...installed.map((game) =>
-        steamIds.has(Number(game.steamId)) ? { ...game, steamLibrary: true } : game,
+        steamGames.has(Number(game.steamId))
+          ? {
+              ...game,
+              steamLibrary: true,
+              lastPlayed:
+                (Date.parse(game.lastPlayed || '') || 0) >
+                (Date.parse(steamGames.get(Number(game.steamId)).lastPlayed || '') || 0)
+                  ? game.lastPlayed
+                  : steamGames.get(Number(game.steamId)).lastPlayed,
+            }
+          : game,
       ),
       ...this.games.filter((game) => !ids.has(game.steamId)),
     ];

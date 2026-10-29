@@ -20,7 +20,13 @@ test('main and extra Steam libraries scan together, deduplicate, and leave exter
     const folder = path.join(base, name);
     await fs.mkdir(folder, { recursive: true });
     await fs.writeFile(path.join(folder, 'game.exe'), 'fixture');
-    await fs.writeFile(path.join(folder, '.mamba-game.json'), JSON.stringify({ name }));
+    await fs.writeFile(
+      path.join(folder, '.mamba-game.json'),
+      JSON.stringify({
+        name,
+        ...(name === 'Main Game' ? { installedAt: '2020-01-01T00:00:00.000Z' } : {}),
+      }),
+    );
   }
   const config = {
     automaticGameDetection: false,
@@ -32,6 +38,17 @@ test('main and extra Steam libraries scan together, deduplicate, and leave exter
   assert.equal(games.length, 2);
   assert.equal(games.find((item) => item.name === 'Main Game').imported, false);
   assert.equal(games.find((item) => item.name === 'External Game').imported, true);
+  assert.equal(
+    games.find((item) => item.name === 'Main Game').installedAt,
+    '2020-01-01T00:00:00.000Z',
+  );
+  const external = games.find((item) => item.name === 'External Game');
+  const created = (await fs.stat(external.folder)).birthtimeMs;
+  assert.equal(external.installedAt, created > 0 ? new Date(created).toISOString() : null);
+  assert.equal(
+    (await library.scan()).find((item) => item.name === 'External Game').installedAt,
+    external.installedAt,
+  );
   assert.deepEqual((await fs.readdir(path.join(common, 'External Game'))).sort(), [
     '.mamba-game.json',
     'game.exe',

@@ -23,7 +23,13 @@ class BackgroundService {
     this.stopping = false;
     this.integrationRepairs = new Map();
   }
-  async initialize({ directory, config, resourcesPath, headless = false }) {
+  async initialize({
+    directory,
+    config,
+    resourcesPath,
+    headless = false,
+    catalogDirectory = directory,
+  }) {
     this.directory = directory;
     this.config = config;
     this.installMetadata = new (require('./install-metadata.cjs').InstallMetadata)(directory);
@@ -31,9 +37,9 @@ class BackgroundService {
     const getConfig = async () => this.config;
     this.libraryState = new LibraryState(directory);
     await this.libraryState.load();
-    this.catalog = new Catalog(directory, getConfig);
-    this.metadata = new Metadata(directory, this.catalog);
-    this.identity = new GameIdentity(directory);
+    this.catalog = new Catalog(catalogDirectory, getConfig);
+    this.metadata = new Metadata(catalogDirectory, this.catalog);
+    this.identity = new GameIdentity(catalogDirectory);
     this.steamFeatured = new SteamFeatured(this.identity);
     this.steamLibrary = new (require('./steam-library.cjs').SteamLibrary)(this.identity);
     this.library = new Library(getConfig, {
@@ -135,10 +141,10 @@ class BackgroundService {
     this.downloads.on('failure', (error) =>
       this.emit('service:issue', { context: 'downloads', message: error.message }),
     );
-    await this.catalog.load();
+    await this.catalog.load({ lazyIndex: headless });
     await this.metadata.load();
     await this.identity.load();
-    this.steamSearch = new SteamSearch(directory, this.catalog, this.identity);
+    this.steamSearch = new SteamSearch(catalogDirectory, this.catalog, this.identity);
     await this.steamSearch.load();
     this.catalog.steamSearch = this.steamSearch;
     this.steamSearch.onResults = (query, result) => this.emit('catalog:results', { query, result });

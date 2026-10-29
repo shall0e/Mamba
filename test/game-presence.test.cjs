@@ -40,3 +40,36 @@ test('installed games precede uninstalled games for every sort, with favorites w
     );
   }
 });
+
+test('recently installed uses valid dates and all active installations before favorite priority', () => {
+  const { compareLibrary } = require('../src/shared/game-presence.js');
+  const games = [
+    { name: 'Favorite', status: 'installed', favorite: true, installedAt: '2026-01-01' },
+    {
+      name: 'Newest',
+      status: 'installed',
+      installedAt: '2026-01-02',
+      installations: [{ status: 'installed', installedAt: '2026-10-28' }],
+    },
+    { name: 'Middle', status: 'installed', installedAt: '2026-05-01' },
+    { name: 'Unknown', status: 'installed', installedAt: 'invalid' },
+    { name: 'Removed', status: 'not-installed', installedAt: '2026-12-01' },
+  ];
+  assert.deepEqual(
+    games.sort((a, b) => compareLibrary(a, b, 'installed')).map((game) => game.name),
+    ['Newest', 'Middle', 'Favorite', 'Unknown', 'Removed'],
+  );
+});
+
+test('recently played sorts actual times before favorites and invalid dates', () => {
+  const { compareLibrary } = require('../src/shared/game-presence.js');
+  const games = [
+    { name: 'Favorite', favorite: true, status: 'installed', lastPlayed: '2026-01-01' },
+    { name: 'Latest', status: 'installed', lastPlayed: '2026-10-28T12:00:00Z' },
+    { name: 'Never played', status: 'installed', lastPlayed: 'invalid' },
+  ];
+  assert.deepEqual(
+    games.sort((a, b) => compareLibrary(a, b, 'recent')).map((game) => game.name),
+    ['Latest', 'Favorite', 'Never played'],
+  );
+});

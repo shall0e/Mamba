@@ -101,6 +101,25 @@ test('language and release preferences guide ranking without hiding alternatives
   );
   assert.equal(rankOptions(options).length, 2);
 });
+test('OnlineFix preference ranks labeled full games without claiming compatibility', () => {
+  const options = [
+    { release: 'Example [ENG] Portable', cached: true, sources: ['a'] },
+    { release: 'Example [ENG] Online-Fix', sources: ['b'] },
+    { release: 'Example [ENG] OnlineFix Update only', sources: ['c'] },
+    { release: 'Example [Linux ENG] OnlineFix', sources: ['d'] },
+  ];
+  assert.equal(rankOptions(options)[0].release, options[0].release);
+  const ranked = rankOptions(options, { preferredRelease: 'onlinefix' });
+  assert.equal(ranked[0].release, options[1].release);
+  assert.equal(ranked.length, options.length);
+  assert.ok(ranked[0].reasons.some((reason) => reason.includes('multiplayer unverified')));
+  assert.equal(
+    require('../src/core/config-transfer.cjs').validateSettings({ preferredRelease: 'onlinefix' })
+      .preferredRelease,
+    'onlinefix',
+  );
+});
+
 test('issue messages and exported diagnostics redact credentials and links', () => {
   const issues = new Issues(),
     secret = 'super-secret-fixture-token';
