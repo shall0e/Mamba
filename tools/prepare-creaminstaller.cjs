@@ -4,6 +4,12 @@ const { download } = require('../src/core/cream-installer.cjs');
 const release = require('../src/shared/cream-installer-release.json');
 
 async function prepare(context) {
+  if (context?.packager) {
+    context.packager.config.extraMetadata = {
+      ...context.packager.config.extraMetadata,
+      mambaBuildHash: require('./build-identity.cjs').buildIdentity(),
+    };
+  }
   if (context?.electronPlatformName && context.electronPlatformName !== 'win32') {
     context.packager.config.extraResources = [];
     context.packager.config.extraFiles = [];

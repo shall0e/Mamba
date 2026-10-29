@@ -73,3 +73,36 @@ test('development builds do not attempt updates and errors are readable', async 
   updater.emit('error', new Error('404 latest.yml'));
   assert.match(updates.state.message, /No update release/);
 });
+
+test('latest release selection uses build identity rather than version ordering', async () => {
+  const updater = new EventEmitter();
+  let feed;
+  updater.setFeedURL = (value) => {
+    feed = value;
+  };
+  updater.isUpdateAvailable = async () => false;
+  updater.isUpdateSupported = async (info) => info.supported !== false;
+  updater.isUserWithinRollout = async (info) => info.rollout !== false;
+  new Updates(updater, {
+    version: '1.4.6',
+    buildHash: 'a'.repeat(64),
+    packaged: true,
+    getConfig: async () => ({}),
+  });
+  assert.equal(feed.url, 'https://github.com/shall0e/Mamba/releases/latest/download/');
+  const info = {
+    version: '1.4.5-hotfix',
+    mambaBuildHash: 'b'.repeat(64),
+    files: [{ url: 'Mamba.exe', sha512: Buffer.alloc(64, 1).toString('base64') }],
+  };
+  assert.equal(await updater.isUpdateAvailable(info), true);
+  assert.equal(await updater.isUpdateAvailable({ ...info, version: '1.4.6' }), true);
+  assert.equal(await updater.isUpdateAvailable({ ...info, mambaBuildHash: 'a'.repeat(64) }), false);
+  assert.equal(await updater.isUpdateAvailable({ ...info, supported: false }), false);
+  assert.equal(await updater.isUpdateAvailable({ ...info, rollout: false }), false);
+  assert.equal(await updater.isUpdateAvailable({ version: '1.4.5' }), false);
+  await assert.rejects(
+    updater.isUpdateAvailable({ ...info, files: [{ sha512: 'bad' }] }),
+    /SHA-512/,
+  );
+});

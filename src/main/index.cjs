@@ -978,6 +978,7 @@ if (!app.requestSingleInstanceLock()) {
       });
       updates = new Updates(require('electron-updater').autoUpdater, {
         version: app.getVersion(),
+        buildHash: require('../../package.json').mambaBuildHash,
         packaged: app.isPackaged,
         getConfig: readConfig,
         canInstall: () =>

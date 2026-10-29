@@ -1,6 +1,6 @@
 {
   "name": "minimal-downloader",
-  "version": "1.4.5-hotfix",
+  "version": "1.4.6",
   "private": true,
   "main": "src/main/index.cjs",
   "scripts": {
@@ -8,10 +8,10 @@
     "dev": "electron .",
     "build": "electron-builder --dir",
     "build:win": "electron-builder --win",
-    "release:win": "electron-builder --win nsis --publish never",
+    "release:win": "electron-builder --win nsis --publish never && node tools/update-metadata.cjs",
     "format": "prettier --write src tools test config package.json README.md docs",
     "format:check": "prettier --check src tools test config package.json README.md docs",
-    "build:linux": "electron-builder --linux --publish never"
+    "build:linux": "electron-builder --linux --publish never && node tools/update-metadata.cjs"
   },
   "build": {
     "beforePack": "./tools/prepare-creaminstaller.cjs",
@@ -95,6 +95,7 @@
       ],
       "icon": "assets/mamba.png",
       "category": "Game",
+      "maintainer": "Mamba contributors",
       "artifactName": "Mamba-${version}-${arch}.${ext}"
     }
   },
@@ -106,6 +107,7 @@
   "dependencies": {
     "electron-updater": "^6.8.9"
   },
+  "homepage": "https://github.com/shall0e/Mamba",
   "description": "A desktop game library and TorBox downloader",
   "productName": "Mamba"
 }

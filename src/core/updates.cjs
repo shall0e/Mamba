@@ -1,6 +1,6 @@
 const { EventEmitter } = require('node:events');
 class Updates extends EventEmitter {
-  constructor(updater, { version, packaged, getConfig, canInstall = () => true }) {
+  constructor(updater, { version, buildHash, packaged, getConfig, canInstall = () => true }) {
     super();
     this.updater = updater;
     this.packaged = packaged;
@@ -16,6 +16,27 @@ class Updates extends EventEmitter {
     updater.autoDownload = true;
     updater.autoInstallOnAppQuit = true;
     updater.allowPrerelease = false;
+    if (packaged && updater.setFeedURL) {
+      updater.setFeedURL({
+        provider: 'generic',
+        url: 'https://github.com/shall0e/Mamba/releases/latest/download/',
+        channel: 'latest',
+      });
+      const versionCheck = updater.isUpdateAvailable.bind(updater);
+      updater.isUpdateAvailable = async (info) => {
+        // Older releases have no fingerprint; preserve the migration path.
+        if (!buildHash || !/^[a-f0-9]{64}$/.test(info.mambaBuildHash || ''))
+          return versionCheck(info);
+        if (info.mambaBuildHash === buildHash) return false;
+        if (
+          !info.files?.length ||
+          info.files.some((file) => !/^[A-Za-z0-9+/]{86}==$/.test(file.sha512 || ''))
+        )
+          throw Error('The latest release has no valid SHA-512 checksums.');
+        if (!(await updater.isUpdateSupported(info))) return false;
+        return updater.isUserWithinRollout(info);
+      };
+    }
     updater.on('checking-for-update', () =>
       this.set({ status: 'checking', message: 'Checking GitHub Releases…' }),
     );
