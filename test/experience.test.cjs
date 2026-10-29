@@ -58,14 +58,19 @@ test('pausing a transfer retains its queue entry and does not convert it to canc
   const downloads = new Downloads(dir, async () => ({}), {}, {});
   const job = { id: '11111111-1111-4111-8111-111111111111', status: 'queued', name: 'Fixture' };
   downloads.jobs = [job];
+  let started;
+  const downloading = new Promise((resolve) => {
+    started = resolve;
+  });
   downloads.execute = async (job, signal) => {
     await downloads.update(job, { status: 'downloading' });
-    await new Promise((_, reject) =>
-      signal.addEventListener('abort', () => reject(Error('aborted')), { once: true }),
-    );
+    await new Promise((_, reject) => {
+      signal.addEventListener('abort', () => reject(Error('aborted')), { once: true });
+      started();
+    });
   };
   const pumping = downloads.pump();
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await downloading;
   await downloads.pause(job.id);
   await pumping;
   assert.equal(job.status, 'paused');

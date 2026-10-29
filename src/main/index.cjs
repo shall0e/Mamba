@@ -1018,6 +1018,20 @@ if (!app.requestSingleInstanceLock()) {
         broadcast('catalog:changed', state);
         if (state.phase === 'error') reportIssue(new Error(state.message), 'catalog:sync');
       });
+      background.on('steam:library-state', (state) => {
+        if (!state.connected) return;
+        let changed = false;
+        for (const issue of issues.items) {
+          if (
+            !issue.resolved &&
+            issue.message === 'Sign into Steam once so Mamba can identify your library.'
+          ) {
+            issue.resolved = true;
+            changed = true;
+          }
+        }
+        if (changed) publishIssues();
+      });
       background.on('library:changed', (games) => {
         installedGames = games;
         broadcast('library:changed', games);

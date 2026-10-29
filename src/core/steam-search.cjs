@@ -123,6 +123,25 @@ function chooseBestMatch(query, items) {
   );
   return eligible.length === 1 && !uncertain ? eligible[0] : null;
 }
+function matchesSearchPhrase(query, title, related = false) {
+  const wanted = titleKey(query).split(' ').filter(Boolean);
+  const actual = titleKey(title).split(' ').filter(Boolean);
+  // A trailing sequel number may expand to related games. Embedded title numbers stay intact.
+  if (related && wanted.length > 1 && /^\d+$/.test(wanted.at(-1))) {
+    const base = wanted.slice(0, -1).join(' ');
+    const titleBase = /^\d+$/.test(actual.at(-1)) ? actual.slice(0, -1) : actual;
+    if ((' ' + titleBase.join(' ')).endsWith(' ' + base)) wanted.pop();
+  }
+  return actual.some((_word, start) =>
+    wanted.every((word, index) => {
+      const candidate = actual[start + index];
+      return (
+        candidate === word ||
+        (index === wanted.length - 1 && !/^\d+$/.test(word) && candidate?.startsWith(word))
+      );
+    }),
+  );
+}
 class SteamSearch {
   constructor(directory, catalog, identity, transport = fetch) {
     this.file = path.join(directory, 'steam-search.json');
@@ -206,11 +225,7 @@ class SteamSearch {
       primaryQueries
         .flatMap((term) => rankedSearch(index, term, 0).items)
         .filter(primaryCandidate)
-        .filter((app) =>
-          primaryQueries.some((term) =>
-            (' ' + titleKey(app.name) + ' ').includes(' ' + titleKey(term) + ' '),
-          ),
-        )
+        .filter((app) => primaryQueries.some((term) => matchesSearchPhrase(term, app.name)))
         .map((app) => app.id),
     );
     const matching = [
@@ -218,16 +233,8 @@ class SteamSearch {
         queries.flatMap((term) => rankedSearch(index, term, 0).items).map((app) => [app.id, app]),
       ).values(),
     ];
-    const phrase = titleKey(topicQueries(query)[0])
-      .split(' ')
-      .filter((word) => !/^\d+$/.test(word))
-      .join(' ');
     const entries = matching
-      .filter(
-        (app) =>
-          phrase.split(' ').length < 2 ||
-          (' ' + titleKey(app.name) + ' ').includes(' ' + phrase + ' '),
-      )
+      .filter((app) => matchesSearchPhrase(topicQueries(query)[0], app.name, true))
       .map((app) => ({ app, releases: this.releasesFor(app) }));
     const claims = new Map();
     for (const { releases } of entries)
@@ -490,6 +497,7 @@ class SteamSearch {
 }
 module.exports = {
   SteamSearch,
+  matchesSearchPhrase,
   titleKey,
   compactTitle,
   titleSimilarity,

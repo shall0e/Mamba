@@ -74,6 +74,13 @@ class BackgroundService {
         return result;
       },
     });
+    if (!headless) {
+      this.library.items = this.libraryState.cached();
+      this.library.installations = this.library.items.flatMap(
+        (game) => game.installations || [game],
+      );
+      this.emit('library:changed', this.library.items);
+    }
     this.catalog.library = this.library;
     this.artwork = new Artwork(directory, this.catalog);
     this.downloads = new Downloads(directory, getConfig, this.catalog, this.library, {
@@ -102,6 +109,7 @@ class BackgroundService {
         .then(async (items) => {
           if (this.config.steamLibraryIntegration !== false) {
             await this.steamLibrary.read();
+            this.emit('steam:library-state', this.steamLibrary.state);
             items = this.steamLibrary.merge(items);
           }
           this.library.items = await this.libraryState.reconcile(
@@ -359,20 +367,6 @@ class BackgroundService {
     this.busy = true;
     try {
       await this.library.scan();
-      for (const game of this.library.items) {
-        if (this.stopping) break;
-        try {
-          if (!game.folder || !game.executable) continue;
-          const file = path.join(game.folder, '.mamba-game.json');
-          const manifest = JSON.parse(await fs.readFile(file, 'utf8'));
-          if (manifest.steam?.status !== 'pending' || !game.executable) continue;
-          const steam = await registerSteam(game).catch((error) => ({
-            status: 'pending',
-            message: error.message,
-          }));
-          await atomicJson(file, { ...manifest, steam });
-        } catch {}
-      }
     } finally {
       this.busy = false;
     }

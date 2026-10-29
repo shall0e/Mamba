@@ -51,3 +51,29 @@ test('Steam launch follows a launcher moved by Add Game folder cleanup', async (
   });
   assert.match(url, /^steam:\/\/rungameid\/\d+$/);
 });
+
+test('native Steam games launch without shortcut registration or local profile discovery', async () => {
+  const url = await steamLaunchUrl(
+    { steamLibrary: true, steamId: 550 },
+    {
+      profile: async () => {
+        throw Error('should not inspect local shortcuts');
+      },
+      setup: async () => {
+        throw Error('should not register a shortcut');
+      },
+    },
+  );
+  assert.equal(url, 'steam://run/550');
+});
+test('non-Steam games can launch directly when the local Steam session is unavailable', async () => {
+  const url = await steamLaunchUrl(
+    {},
+    {
+      profile: async () => {
+        throw Error('Sign into Steam once so Mamba can identify your library.');
+      },
+    },
+  );
+  assert.equal(url, null);
+});

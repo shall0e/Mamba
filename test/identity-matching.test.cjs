@@ -217,3 +217,35 @@ test('free to play games never produce a card or Best Match', () => {
   assert.equal(search.forApp(app), null);
   assert.equal(chooseBestMatch('Free Example', [{ ...app, verified: true }]), null);
 });
+
+test('embedded title numbers and partially typed final words keep matching games visible', () => {
+  const catalog = new Catalog('unused', async () => ({}));
+  const names = ['Left 4 Dead', 'Left 4 Dead 2', 'Left Alive', 'Dead Island 2'];
+  catalog.replace(
+    names.map((name, i) => ({
+      id: String(i),
+      name,
+      sources: ['fixture'],
+      links: [{ kind: 'torrents', uri: 'magnet:?xt=urn:btih:' + String(i + 1).repeat(40) }],
+    })),
+  );
+  const search = new SteamSearch('unused', catalog, {});
+  names.forEach((name, i) =>
+    search.apps.set('steam:' + (i + 1), {
+      steamId: i + 1,
+      type: 'game',
+      name,
+      releaseDate: '2009',
+    }),
+  );
+  for (const query of ['left 4', 'left 4 d', 'left 4 dead', 'left 4 dead 2']) {
+    const result = search.localResults(query);
+    assert.ok(
+      result.items.some((game) => game.name === 'Left 4 Dead 2'),
+      query,
+    );
+    assert.ok(!result.items.some((game) => game.name === 'Left Alive'), query);
+    assert.ok(!result.items.some((game) => game.name === 'Dead Island 2'), query);
+  }
+  assert.equal(search.localResults('left 4 dead 2').bestMatch.name, 'Left 4 Dead 2');
+});

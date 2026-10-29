@@ -175,3 +175,28 @@ test('incremental source merging deduplicates links across batches without leaki
   assert.equal(game.links.length, 2);
   assert.equal(JSON.stringify(game).includes('seenLinks'), false);
 });
+
+test('cached library is available immediately without a filesystem scan and hides removed games', async (t) => {
+  const { LibraryState } = require('../src/core/experience.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-library-cached-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const state = new LibraryState(root);
+  const game = {
+    id: 'cached-game',
+    name: 'Cached Game',
+    steamId: 10,
+    verified: true,
+    status: 'installed',
+    folder: path.join(root, 'games', 'one'),
+  };
+  await state.reconcile([game]);
+  await state.favorite(game, true);
+  const restarted = new LibraryState(root);
+  await restarted.load();
+  const cached = restarted.cached();
+  assert.equal(cached.length, 1);
+  assert.equal(cached[0].cached, true);
+  assert.equal(cached[0].favorite, true);
+  restarted.data.hidden[restarted.key(game)] = true;
+  assert.deepEqual(restarted.cached(), []);
+});

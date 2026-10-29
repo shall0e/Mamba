@@ -332,11 +332,18 @@ function registerSteam(
   return task;
 }
 async function steamLaunchUrl(game, { profile = steamProfile, setup } = {}) {
+  const steamId = Number(game.steamId);
+  if (game.steamLibrary && Number.isSafeInteger(steamId) && steamId > 0)
+    return 'steam://run/' + steamId;
   let file;
   try {
     file = await profile();
   } catch (error) {
-    if (error.message === 'Steam installation was not found.') return null;
+    if (
+      error.message === 'Steam installation was not found.' ||
+      error.message === 'Sign into Steam once so Mamba can identify your library.'
+    )
+      return null;
     throw error;
   }
   const read = () =>

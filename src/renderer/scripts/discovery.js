@@ -75,7 +75,10 @@
     if (sort.value === 'name') matches.sort((a, b) => a.name.localeCompare(b.name));
     if (sort.value === 'year')
       matches.sort((a, b) => (Number(b.releaseYear) || 0) - (Number(a.releaseYear) || 0));
-    renderFeaturedGame(matches.some((game) => game.id === bestMatch?.id) ? bestMatch : null);
+    const shownCount = matches.length;
+    const featured = matches.find((game) => game.id === bestMatch?.id);
+    renderFeaturedGame(featured || null);
+    if (featured) matches = matches.filter((game) => game.id !== featured.id);
     const list = $('#results-list');
     const animateLayout =
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches && !$('#search-page').hidden;
@@ -276,7 +279,7 @@
       });
     }
     revealResults = false;
-    if (!matches.length)
+    if (!matches.length && !featured)
       list.append(
         node(
           'p',
@@ -289,9 +292,7 @@
         ),
       );
     $('#results-status').textContent =
-      (service.value !== 'all' || availability.value !== 'all'
-        ? matches.length + ' shown · '
-        : '') +
+      (service.value !== 'all' || availability.value !== 'all' ? shownCount + ' shown · ' : '') +
       total.toLocaleString() +
       ' ' +
       (total === 1 ? 'game' : 'games') +

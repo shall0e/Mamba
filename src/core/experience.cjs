@@ -61,6 +61,14 @@ class LibraryState {
   decorate(items) {
     return items.map((game) => ({ ...game, ...this.data.games[this.key(game)] }));
   }
+  cached() {
+    const { isNonGame } = require('./game-identity.cjs');
+    return this.decorate(
+      Object.values(this.data.remembered)
+        .filter((game) => !this.data.hidden[this.key(game)] && !isNonGame(game.identity || game))
+        .map((game) => ({ ...game, cached: true })),
+    );
+  }
   async reconcile(items, excluded = []) {
     const nonGame = require('./game-identity.cjs').isNonGame;
     const excludedFolders = new Set(excluded.map((item) => item.folder));
