@@ -354,9 +354,11 @@ if (!app.requestSingleInstanceLock()) {
     task('catalog:search', String(query || '').slice(0, 300), offset),
   );
   ipcMain.handle('catalog:resolve', (_event, id) => task('catalog:resolve', String(id)));
-  const artworkRequest = require('./request-pool.cjs').requestPool((id) =>
-    task('catalog:artwork', id),
-  );
+  const artworkRequest = require('./request-pool.cjs').requestPool(async (id) => {
+    const result = await task('catalog:artwork', id);
+    if (issues.resolveArtworkOverload()) publishIssues();
+    return result;
+  });
   ipcMain.handle('catalog:artwork', (_event, id) => artworkRequest(String(id)));
   ipcMain.handle('home:featured', () => task('home:featured'));
   ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
@@ -406,6 +408,26 @@ if (!app.requestSingleInstanceLock()) {
   });
   ipcMain.handle('downloads:cancel', (_event, id) => task('downloads:cancel', id));
   ipcMain.handle('downloads:retry', (_event, id) => task('downloads:retry', id));
+  ipcMain.handle('downloads:setup-admin', async (_event, id) => {
+    const job = downloadJobs.find((item) => item.id === id && item.status === 'needs-setup');
+    if (!job?.folder) throw Error('This installation is no longer awaiting setup.');
+    const config = await readConfig();
+    const game = { folder: job.folder, name: job.name };
+    authorizeGame(config, [], game);
+    const found = await require('../core/library.cjs').detect(job.folder);
+    await task('downloads:setup-state', id, 'running');
+    try {
+      const installed = await runSetupAsAdministrator(
+        { ...game, installer: found.installer },
+        { automatic: true, wait: true },
+      );
+      await task('downloads:setup-state', id, installed ? 'finished' : 'failed');
+      return installed;
+    } catch (error) {
+      await task('downloads:setup-state', id, 'failed');
+      throw error;
+    }
+  });
   ipcMain.handle('downloads:remove', (_event, id) => task('downloads:remove', String(id)));
   ipcMain.handle('downloads:clear-finished', () => task('downloads:clear-finished'));
   ipcMain.handle('cleanup:scan', () => task('cleanup:scan'));

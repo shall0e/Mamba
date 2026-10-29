@@ -461,6 +461,8 @@ class BackgroundService {
         return this.downloads.pause(...args);
       case 'downloads:retry':
         return this.downloads.retry(...args);
+      case 'downloads:setup-state':
+        return this.downloads.setupState(...args);
       case 'downloads:remove':
         return this.downloads.remove(...args);
       case 'downloads:clear-finished':

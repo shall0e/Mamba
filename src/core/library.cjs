@@ -28,11 +28,13 @@ async function safePath(root, candidate) {
   return original;
 }
 function safeName(value) {
-  let name = String(value)
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
-    .replace(/[. ]+$/g, '')
+  let name = String(value || '')
+    .normalize('NFC')
+    .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 110);
+    .slice(0, 110)
+    .replace(/[. ]+$/g, '');
   if (!name || /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(name)) name = 'Game_' + name;
   return name;
 }
@@ -282,11 +284,22 @@ async function finalizeInstallation(
   await require('./game-helper.cjs').installGameHelper(actual);
   return { folder: actual, ...found, executable: manifest.executable, manifest };
 }
-function run(file, args, { signal, maxOutput = 32 * 1024 * 1024, acceptedCodes = [0] } = {}) {
+function run(
+  file,
+  args,
+  {
+    signal,
+    maxOutput = 32 * 1024 * 1024,
+    acceptedCodes = [0],
+    onStdout,
+    windowsVerbatimArguments = false,
+  } = {},
+) {
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, {
       windowsHide: true,
       shell: false,
+      windowsVerbatimArguments,
       signal,
       cwd: path.dirname(file),
     });
@@ -295,6 +308,7 @@ function run(file, args, { signal, maxOutput = 32 * 1024 * 1024, acceptedCodes =
     let errors = '';
     let exceeded = false;
     child.stdout?.on('data', (chunk) => {
+      onStdout?.(String(chunk));
       output += chunk;
       if (output.length > maxOutput) {
         exceeded = true;
@@ -348,7 +362,7 @@ function validateArchiveListing(listing, destination) {
 async function extractArchive(
   archive,
   destination,
-  { signal, password = '', verifiedArchives } = {},
+  { signal, password = '', verifiedArchives, onProgress } = {},
 ) {
   const seven = sevenZipPath();
   const args = [`-p${password || '__MAMBA_NO_ARCHIVE_PASSWORD__'}`];
@@ -368,7 +382,17 @@ async function extractArchive(
       multiplier: 1,
       reserve: 256 * 1024 ** 2,
     });
-  await run(seven, ['x', '-y', '-aoa', ...args, `-o${destination}`, '--', archive], { signal });
+  let tail = '';
+  await run(seven, ['x', '-y', '-aoa', '-bsp1', ...args, `-o${destination}`, '--', archive], {
+    signal,
+    onStdout: (chunk) => {
+      tail += chunk;
+      const matches = [...tail.matchAll(/(?:^|[\s\r\b])(\d{1,3})%/g)];
+      if (matches.length) onProgress?.(Math.min(100, Number(matches.at(-1)[1])));
+      tail = tail.slice(-32);
+    },
+  });
+  onProgress?.(100);
   await walk(destination, 20);
 }
 function archiveStarts(files) {
@@ -384,18 +408,25 @@ async function unpack(downloads, payload, options, notify) {
   const initial = await detect(downloads);
   const archives = initial.installer || initial.executable ? [] : archiveStarts(files);
   if (!archives.length) {
-    for (const name of await fs.readdir(downloads)) {
+    const names = (await fs.readdir(downloads)).filter((name) => !/^\.mamba-transfer$/i.test(name));
+    let copied = 0;
+    for (const name of names) {
       if (/^\.mamba-transfer$/i.test(name)) continue;
       await fs.cp(path.join(downloads, name), path.join(payload, name), {
         recursive: true,
         errorOnExist: true,
         force: false,
       });
+      notify('Preparing game files', (++copied / names.length) * 100);
     }
   } else {
-    for (const archive of archives) {
-      notify(`Extracting ${path.basename(archive)}`);
-      await extractArchive(archive, payload, options);
+    for (const [index, archive] of archives.entries()) {
+      const message = `Extracting ${path.basename(archive)}`;
+      notify(message, (index / archives.length) * 100);
+      await extractArchive(archive, payload, {
+        ...options,
+        onProgress: (percent) => notify(message, ((index + percent / 100) / archives.length) * 100),
+      });
     }
   }
   await flatten(payload);
@@ -405,9 +436,14 @@ async function unpack(downloads, payload, options, notify) {
     const nestedArchives = archiveStarts(await walk(payload, 2));
     if (!nestedArchives.length) break;
     const nested = path.join(path.dirname(payload), `unpack-${depth}`);
-    for (const archive of nestedArchives) {
-      notify(`Extracting ${path.basename(archive)}`);
-      await extractArchive(archive, nested, options);
+    for (const [index, archive] of nestedArchives.entries()) {
+      const message = `Extracting nested archive ${path.basename(archive)}`;
+      notify(message, (index / nestedArchives.length) * 100);
+      await extractArchive(archive, nested, {
+        ...options,
+        onProgress: (percent) =>
+          notify(message, ((index + percent / 100) / nestedArchives.length) * 100),
+      });
     }
     const old = path.join(path.dirname(payload), `archive-layer-${depth}`);
     await fs.rename(payload, old);
@@ -417,6 +453,7 @@ async function unpack(downloads, payload, options, notify) {
   return detect(payload);
 }
 async function installerType(file) {
+  if (/\.msi$/i.test(file)) return 'msi';
   const handle = await fs.open(file, 'r');
   try {
     const { size } = await handle.stat();
@@ -432,14 +469,36 @@ async function installerType(file) {
     await handle.close();
   }
 }
-async function autoInstall(installer, destination, signal) {
+async function installerCommand(installer, destination) {
   const type = await installerType(installer);
-  if (!type) return false;
+  if (!type) return null;
+  if (type === 'msi')
+    return {
+      file: path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'msiexec.exe'),
+      args: [
+        '/i',
+        installer,
+        '/qn',
+        '/norestart',
+        `INSTALLDIR=${destination}`,
+        `TARGETDIR=${destination}`,
+      ],
+    };
   const args =
     type === 'inno'
       ? ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', `/DIR=${destination}`]
       : ['/S', `/D=${destination}`];
-  await run(installer, args, { signal, acceptedCodes: [0, 3010] });
+  return { file: installer, args, windowsVerbatimArguments: type === 'nsis' };
+}
+async function autoInstall(installer, destination, signal) {
+  if (process.platform !== 'win32') return false;
+  const command = await installerCommand(installer, destination);
+  if (!command) return false;
+  await run(command.file, command.args, {
+    signal,
+    acceptedCodes: [0, 3010],
+    windowsVerbatimArguments: command.windowsVerbatimArguments,
+  });
   return true;
 }
 
@@ -579,5 +638,6 @@ module.exports = {
   archiveStarts,
   unpack,
   autoInstall,
+  installerCommand,
   atomicJson,
 };

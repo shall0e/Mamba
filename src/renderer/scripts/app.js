@@ -282,28 +282,19 @@ function renderJobs(jobs) {
       bar.setAttribute('aria-label', `Progress for ${job.name}`);
       const actions = document.createElement('div');
       actions.className = 'transfer-actions';
-      const stages = document.createElement('ol');
-      stages.className = 'transfer-stages';
-      stages.setAttribute('aria-label', 'Download stages');
-      for (const label of [
-        'Preparing',
-        'Downloading',
-        'Verifying',
-        'Extracting',
-        'Installing',
-        'Ready',
-      ]) {
-        const stage = document.createElement('li');
-        stage.textContent = label;
-        stages.append(stage);
-      }
-      row.append(name, status, stages, message, stats, bar, actions);
+      row.append(name, status, message, stats, bar, actions);
       list.append(row);
     }
     row.querySelector('.transfer-status').textContent =
       {
         'waiting-retry': 'Recovering',
         verifying: 'Verifying',
+        queued: 'Queued',
+        preparing: 'Preparing',
+        downloading: 'Downloading',
+        extracting: 'Extracting',
+        installing: 'Installing',
+        paused: 'Paused',
         'needs-setup': 'Needs setup',
         completed: 'Ready',
         failed: 'Needs attention',
@@ -319,7 +310,7 @@ function renderJobs(jobs) {
             : '');
     const stats = row.querySelector('.transfer-stats');
     stats.replaceChildren();
-    if (job.total > 0) {
+    if (job.status === 'downloading' && job.total > 0) {
       for (const text of [
         `${Math.min(100, Math.max(0, Math.floor(((job.received || 0) / job.total) * 100)))}%`,
         `${formatBytes(job.received)} / ${formatBytes(job.total)}`,
@@ -330,27 +321,16 @@ function renderJobs(jobs) {
         stats.append(value);
       }
     }
-    const current = {
-      queued: 0,
-      preparing: 0,
-      downloading: 1,
-      verifying: 2,
-      extracting: 3,
-      installing: 4,
-      completed: 5,
-      'needs-setup': 4,
-      'waiting-retry': 1,
-    }[['paused', 'failed', 'cancelled'].includes(job.status) ? job.stage : job.status];
-    [...row.querySelectorAll('.transfer-stages li')].forEach((node, index) => {
-      node.classList.toggle('stage-done', current !== undefined && index < current);
-      node.classList.toggle('stage-current', index === current);
-      node.setAttribute('aria-current', index === current ? 'step' : 'false');
-    });
+    if (['extracting', 'installing'].includes(job.status) && Number.isFinite(job.progress)) {
+      const percent = document.createElement('span');
+      percent.textContent = Math.floor(job.progress) + '%';
+      stats.append(percent);
+    }
     row.querySelector('progress').value = job.progress || 0;
     row.querySelector('progress').hidden = ['failed', 'cancelled', 'needs-setup'].includes(
       job.status,
     );
-    if (['preparing', 'verifying', 'extracting', 'installing'].includes(job.status))
+    if (['preparing', 'verifying'].includes(job.status) || job.progress == null)
       row.querySelector('progress').removeAttribute('value');
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
@@ -366,12 +346,23 @@ function renderJobs(jobs) {
             'rotate-ccw',
           ),
         );
-      else if (!['completed', 'needs-setup'].includes(job.status))
+      else if (!['completed', 'needs-setup'].includes(job.status) && !job.externalSetup)
         actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
       if (job.status === 'waiting-retry')
         actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
       if (job.status === 'failed')
         actions.append(button('Get help', () => showPage('activity'), 'circle-alert'));
+      if (job.status === 'needs-setup' && job.error?.code === 'permissions')
+        actions.append(
+          button(
+            'Retry setup as administrator',
+            async () => {
+              if (await window.mamba.retryDownloadSetup(job.id))
+                showToast('Setup finished. Checking the installed game.');
+            },
+            'rotate-ccw',
+          ),
+        );
       if (job.status === 'completed' || job.status === 'needs-setup')
         actions.append(
           button(

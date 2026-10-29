@@ -3,6 +3,13 @@ function explain(error) {
   const text = String(error?.message || error || 'Something went wrong.');
   const rules = [
     [
+      /Windows blocked setup/i,
+      'permissions',
+      'Setup needs administrator access',
+      'Choose Retry setup as administrator. Windows will ask you to approve access.',
+      'setup-admin',
+    ],
+    [
       /settings file.+unreadable|settings.+defaults/i,
       'configuration',
       'Settings were recovered',
@@ -133,6 +140,20 @@ class Issues {
   resolve(id) {
     const item = this.items.find((item) => item.id === id);
     if (item) item.resolved = true;
+  }
+  resolveArtworkOverload() {
+    let changed = false;
+    for (const item of this.items) {
+      if (
+        !item.resolved &&
+        item.context === 'catalog:artwork' &&
+        item.message === 'Mamba is busy. Try again shortly.'
+      ) {
+        item.resolved = true;
+        changed = true;
+      }
+    }
+    return changed;
   }
   diagnostics() {
     return this.items.map(({ code, context, at, count, resolved, message }) => ({

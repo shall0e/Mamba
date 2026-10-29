@@ -1788,19 +1788,11 @@ button svg {
 .issue-details summary::-webkit-details-marker {
   display: none;
 }
-.transfer-stages {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  list-style: none;
-  padding: 0;
-}
 .transfer-stages li {
   color: var(--color-textMuted);
   text-align: center;
 }
 
-.transfer-stages .stage-done {
-  color: var(--color-textSecondary);
-}
 .transfer-row .transfer-message {
   margin-bottom: 12px;
 }
@@ -1842,9 +1834,6 @@ button svg {
   }
   .preference-grid {
     grid-template-columns: 1fr;
-  }
-  .transfer-stages {
-    gap: 3px;
   }
   .transfer-stages li {
     font-size: 9px;
@@ -3210,18 +3199,11 @@ h2 {
 .transfer-row[data-status='completed'] .transfer-status {
   color: var(--color-success);
 }
-.transfer-stages {
-  margin: 22px 0 18px;
-  gap: 5px;
-}
 .transfer-stages li {
   padding: 9px 6px;
   background: var(--panel-inset);
   border-radius: 5px;
   font-size: 10px;
-}
-.transfer-stages .stage-done {
-  background: var(--panel-raised);
 }
 .transfer-stages .stage-current {
   background: var(--color-selection);
@@ -3240,6 +3222,26 @@ h2 {
 }
 .transfer-row progress::-webkit-progress-value {
   background: var(--color-text);
+}
+.transfer-row progress:not([value])::-webkit-progress-bar {
+  background: linear-gradient(90deg, transparent, var(--color-text), transparent) no-repeat
+    var(--panel-inset);
+  background-size: 35% 100%;
+  animation: transfer-working 1.5s ease-in-out infinite alternate;
+}
+@keyframes transfer-working {
+  from {
+    background-position: left center;
+  }
+  to {
+    background-position: right center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transfer-row progress:not([value])::-webkit-progress-bar {
+    animation: none;
+    background-position: center;
+  }
 }
 .transfer-row[data-status='completed'] progress::-webkit-progress-value {
   background: var(--color-success);
@@ -3638,10 +3640,6 @@ h2 {
   .transfer-status {
     top: 20px;
     right: 20px;
-  }
-  .transfer-stages li {
-    font-size: 8px;
-    padding-inline: 2px;
   }
   .transfer-stages {
     gap: 3px;
@@ -4155,9 +4153,6 @@ body.home-active .sidebar {
 }
 .transfer-row h3 {
   font-size: 14px;
-}
-.transfer-stages {
-  display: grid;
 }
 .transfer-message {
   margin: 12px 0 0;

@@ -302,7 +302,7 @@ class Downloads extends EventEmitter {
     this.running = false;
     this.controllers = new Map();
     this.persistQueue = Promise.resolve();
-    this.lastProgress = 0;
+    this.lastProgress = new Map();
     this.bestPending = new Map();
     this.resolveName = resolveName;
     this.registerGame = registerGame;
@@ -442,8 +442,8 @@ class Downloads extends EventEmitter {
     )
       patch.stage = patch.status;
     Object.assign(job, patch, { updatedAt: new Date().toISOString() });
-    if (progressOnly && Date.now() - this.lastProgress < 300) return;
-    this.lastProgress = Date.now();
+    if (progressOnly && Date.now() - (this.lastProgress.get(job.id) || 0) < 300) return;
+    this.lastProgress.set(job.id, Date.now());
     this.emit('change', this.snapshot());
     if (!progressOnly) await this.persist();
   }
@@ -552,6 +552,37 @@ class Downloads extends EventEmitter {
     });
     this.pump().catch((error) => this.emit('failure', error));
   }
+  async setupState(id, state) {
+    const job = this.jobs.find((item) => item.id === id);
+    if (!job || !['needs-setup', 'installing'].includes(job.status))
+      throw Error('This installation is no longer awaiting setup.');
+    if (state === 'running') {
+      if (this.controllers.has(id)) throw Error('Wait for the current setup attempt to finish.');
+      await this.checkpoint(job, 'installing', { installerStarted: true });
+      return this.update(job, {
+        status: 'installing',
+        externalSetup: true,
+        progress: null,
+        error: null,
+        message: 'Running setup with administrator access',
+      });
+    }
+    if (!job.externalSetup) throw Error('No administrator setup is running.');
+    job.externalSetup = false;
+    if (state === 'finished') {
+      await this.checkpoint(job, 'finalizing', {
+        installerStarted: false,
+        installerFinished: true,
+      });
+      await this.update(job, { status: 'queued', message: 'Checking installed game', error: null });
+      this.pump().catch((error) => this.emit('failure', error));
+    } else
+      await this.update(job, {
+        status: 'needs-setup',
+        message: 'Setup did not finish. Your downloaded files are preserved.',
+        error: explain(Error('Windows blocked setup.')),
+      });
+  }
   async remove(id) {
     this.controllers.get(id)?.abort();
     this.jobs = this.jobs.filter((job) => job.id !== id);
@@ -655,6 +686,7 @@ class Downloads extends EventEmitter {
   async pump() {
     if (this.running || this.stopped) return;
     this.running = true;
+    const tasks = [];
     try {
       let job;
       for (const waiting of this.jobs.filter(
@@ -672,69 +704,88 @@ class Downloads extends EventEmitter {
         } else waiting.recovery.nextRetryAt = this.now() + 15000;
       }
       await this.persist();
-      while (!this.stopped && (job = this.jobs.find((entry) => entry.status === 'queued'))) {
+      while (
+        !this.stopped &&
+        (job = this.jobs.find(
+          (entry) => entry.status === 'queued' && !this.controllers.has(entry.id),
+        ))
+      ) {
         const controller = new AbortController();
         this.controllers.set(job.id, controller);
-        try {
-          await this.execute(job, controller.signal);
-        } catch (error) {
-          if (this.stopped) {
-            await this.update(job, {
-              message: 'Interrupted. Recovery will continue after restart.',
-            });
-            continue;
-          }
-          if (!this.jobs.includes(job)) continue;
-          if (!controller.signal.aborted) {
-            try {
-              if (await this.recover(job, error)) continue;
-            } catch (recoveryError) {
-              error = recoveryError;
-            }
-          }
-          const config = await this.getConfig();
-          const message = safeMessage(error.message, [
-            config.torboxApiKey,
-            config.realDebridApiKey,
-            config.archivePassword,
-          ]);
-          if (job.recovery) recovery.record(job, 'needs-attention', message);
-          const paused = this.pauseRequests.has(job.id);
-          await this.update(job, {
-            status: job.recovery?.installerStarted
-              ? 'needs-setup'
-              : controller.signal.aborted
-                ? paused
-                  ? 'paused'
-                  : 'cancelled'
-                : 'failed',
-            ...(error.download
-              ? {
-                  received: (job.downloadOffset || 0) + error.download.received,
-                  downloadFailure: error.download,
-                }
-              : {}),
-            error: controller.signal.aborted ? null : explain(error),
-            message: controller.signal.aborted
-              ? paused
-                ? 'Paused. Resume to continue.'
-                : 'Cancelled. Partial files kept for retry.'
-              : message +
-                (job.recovery?.retryCount >= recovery.MAX_RETRIES
-                  ? ' Automatic retries exhausted. Choose Retry or another download option.'
-                  : ''),
-          });
-        } finally {
-          this.controllers.delete(job.id);
-          this.pauseRequests.delete(job.id);
-        }
+        let releaseTransfer;
+        const transferred = new Promise((resolve) => {
+          releaseTransfer = resolve;
+        });
+        const task = this.runJob(job, controller, releaseTransfer);
+        task.catch(() => {});
+        tasks.push(task);
+        await Promise.race([transferred, task]);
       }
     } finally {
       this.running = false;
       this.schedule();
     }
+    await Promise.all(tasks);
   }
-  async execute(job, signal) {
+  async runJob(job, controller, releaseTransfer) {
+    try {
+      await this.execute(job, controller.signal, releaseTransfer);
+    } catch (error) {
+      if (this.stopped) {
+        await this.update(job, {
+          message: 'Interrupted. Recovery will continue after restart.',
+        });
+        return;
+      }
+      if (!this.jobs.includes(job)) return;
+      if (!controller.signal.aborted) {
+        try {
+          if (await this.recover(job, error)) return;
+        } catch (recoveryError) {
+          error = recoveryError;
+        }
+      }
+      const config = await this.getConfig();
+      const message = safeMessage(error.message, [
+        config.torboxApiKey,
+        config.realDebridApiKey,
+        config.archivePassword,
+      ]);
+      if (job.recovery) recovery.record(job, 'needs-attention', message);
+      const paused = this.pauseRequests.has(job.id);
+      await this.update(job, {
+        status: job.recovery?.installerStarted
+          ? 'needs-setup'
+          : controller.signal.aborted
+            ? paused
+              ? 'paused'
+              : 'cancelled'
+            : 'failed',
+        ...(error.download
+          ? {
+              received: (job.downloadOffset || 0) + error.download.received,
+              downloadFailure: error.download,
+            }
+          : {}),
+        error: controller.signal.aborted ? null : explain(error),
+        message: controller.signal.aborted
+          ? paused
+            ? 'Paused. Resume to continue.'
+            : 'Cancelled. Partial files kept for retry.'
+          : message +
+            (job.recovery?.retryCount >= recovery.MAX_RETRIES
+              ? ' Automatic retries exhausted. Choose Retry or another download option.'
+              : ''),
+      });
+    } finally {
+      this.controllers.delete(job.id);
+      this.pauseRequests.delete(job.id);
+      this.lastProgress.delete(job.id);
+      releaseTransfer();
+      this.schedule();
+    }
+  }
+  async execute(job, signal, releaseTransfer = () => {}) {
     const config = await this.getConfig();
     if (job.recovery?.installerStarted)
       throw Error('Installer interrupted. Review installation before continuing.');
@@ -753,7 +804,7 @@ class Downloads extends EventEmitter {
     await fs.mkdir(raw, { recursive: true });
     let destination = job.folder
       ? within(job.root, job.folder)
-      : within(job.root, path.join(job.root, `${safeName(job.name)}-${job.gameId.slice(0, 6)}`));
+      : within(job.root, path.join(job.root, safeName(job.name)));
     if (job.recovery?.renameTarget) {
       const renamed = await safePath(job.root, job.recovery.renameTarget);
       const manifest = JSON.parse(
@@ -765,6 +816,7 @@ class Downloads extends EventEmitter {
     job.folder = destination;
     const present = await fs.stat(destination).catch(() => null);
     if (present) {
+      releaseTransfer();
       const manifest = JSON.parse(
         await fs.readFile(path.join(destination, '.mamba-game.json'), 'utf8').catch(() => '{}'),
       );
@@ -945,6 +997,7 @@ class Downloads extends EventEmitter {
           ...(md5 ? { md5 } : {}),
         }));
       }
+      releaseTransfer();
       await this.checkpoint(job, 'verifying', { lastCompletedPhase: 'downloading' });
       await this.update(job, {
         status: 'verifying',
@@ -990,7 +1043,7 @@ class Downloads extends EventEmitter {
       await this.update(job, {
         status: 'extracting',
         message: 'Extracting and removing wrapper folders',
-        progress: 100,
+        progress: 0,
       });
       if (!present) {
         const existingPayload = await fs.stat(payload).catch(() => null);
@@ -1005,8 +1058,8 @@ class Downloads extends EventEmitter {
           raw,
           payload,
           { signal, password: config.archivePassword || '', verifiedArchives },
-          (message) => {
-            this.update(job, { message }, true).catch(() => {});
+          (message, progress) => {
+            this.update(job, { message, progress: progress ?? null }, true).catch(() => {});
           },
         );
         signal.throwIfAborted();
@@ -1029,6 +1082,11 @@ class Downloads extends EventEmitter {
       }
     }
     signal.throwIfAborted();
+    await this.update(job, {
+      status: 'installing',
+      message: 'Preparing installation',
+      progress: null,
+    });
     await this.checkpoint(job, 'finalizing');
     await require('./game-helper.cjs').installGameHelper(destination);
     let found = await detect(destination);
@@ -1049,7 +1107,11 @@ class Downloads extends EventEmitter {
       executable: found.executable,
     });
     if (found.installer && config.autoInstall && !job.recovery.installerFinished) {
-      await this.update(job, { status: 'installing', message: 'Running supported installer' });
+      await this.update(job, {
+        status: 'installing',
+        message: 'Running supported installer',
+        progress: null,
+      });
       const installTarget = destination;
       await atomicJson(path.join(destination, '.mamba-game.json'), {
         name: job.name,
@@ -1059,7 +1121,19 @@ class Downloads extends EventEmitter {
         setupInterrupted: true,
       });
       await this.checkpoint(job, 'installing', { installerStarted: true });
-      const installed = await autoInstall(found.installer, installTarget, signal);
+      let installed;
+      try {
+        installed = await autoInstall(found.installer, installTarget, signal);
+      } catch (error) {
+        if (['EACCES', 'EPERM', 'UNKNOWN'].includes(error.code) && process.platform === 'win32')
+          throw Object.assign(
+            Error(
+              'Windows blocked setup. Retry setup as administrator. Your downloaded files are preserved.',
+            ),
+            { code: error.code },
+          );
+        throw error;
+      }
       await atomicJson(path.join(destination, '.mamba-game.json'), {
         name: job.name,
         downloadId: job.id,

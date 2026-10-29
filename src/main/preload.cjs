@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('mamba', {
   storage: () => ipcRenderer.invoke('storage:check'),
   activity: () => ipcRenderer.invoke('app:activity'),
   retrySetupAsAdmin: (id) => ipcRenderer.invoke('issues:setup-admin', id),
+  retryDownloadSetup: (id) => ipcRenderer.invoke('downloads:setup-admin', id),
   resolveIssue: (id) => ipcRenderer.invoke('issues:resolve', id),
   reportIssue: (message) => ipcRenderer.invoke('issues:report', message),
   restartTasks: () => ipcRenderer.invoke('background:restart'),

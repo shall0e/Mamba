@@ -6,6 +6,19 @@ const path = require('node:path');
 const { LibraryState, storageInfo, ensureSpace, sizeBytes } = require('../src/core/experience.cjs');
 const { Library } = require('../src/core/library.cjs');
 const { Issues } = require('../src/core/issues.cjs');
+
+test('successful artwork requests resolve only saved artwork overload warnings', () => {
+  const issues = new Issues();
+  const old = issues.add(Error('Mamba is busy. Try again shortly.'), 'catalog:artwork');
+  const other = issues.add(Error('A different failure'), 'catalog:artwork');
+  assert.equal(issues.resolveArtworkOverload(), true);
+  assert.equal(old.resolved, true);
+  assert.equal(other.resolved, false);
+  assert.equal(issues.resolveArtworkOverload(), false);
+  const current = issues.add(Error('Mamba is busy. Try again shortly.'), 'downloads:start');
+  assert.equal(issues.resolveArtworkOverload(), false);
+  assert.equal(current.resolved, false);
+});
 const { rankOptions } = require('../src/core/search.cjs');
 const { Downloads } = require('../src/core/downloads.cjs');
 async function fixture(t) {

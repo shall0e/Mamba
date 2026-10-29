@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { within } = require('../core/library.cjs');
-async function runSetupAsAdministrator(game) {
+async function runSetupAsAdministrator(game, { automatic = false, wait = false } = {}) {
   if (process.platform !== 'win32')
     throw Error('Administrator setup is only available on Windows.');
 
@@ -13,12 +13,27 @@ async function runSetupAsAdministrator(game) {
   if (!/\.(exe|msi)$/i.test(target) || !(await fs.lstat(target)).isFile())
     throw Error('The setup file is no longer available.');
   const quote = (value) => "'" + value.replace(/'/g, "''") + "'";
+  const commandLineArgument = (value) =>
+    '"' + value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';
+  const plan = automatic
+    ? await require('../core/library.cjs').installerCommand(target, folder)
+    : null;
   const command =
-    'try { Start-Process -FilePath ' +
-    quote(target) +
+    'try { $process = Start-Process -FilePath ' +
+    quote(plan?.file || target) +
     ' -WorkingDirectory ' +
     quote(path.dirname(target)) +
-    ' -Verb RunAs -ErrorAction Stop; exit 0 } catch { if ($_.Exception.NativeErrorCode -eq 1223 -or $_.Exception.InnerException.NativeErrorCode -eq 1223) { exit 2 }; exit 1 }';
+    (plan
+      ? ' -ArgumentList ' +
+        quote(
+          plan.args
+            .map((arg) => (plan.windowsVerbatimArguments ? arg : commandLineArgument(arg)))
+            .join(' '),
+        )
+      : '') +
+    ' -Verb RunAs -ErrorAction Stop' +
+    (wait ? ' -Wait -PassThru; if ($process.ExitCode -notin @(0, 3010)) { exit 1 }' : '') +
+    '; exit 0 } catch { if ($_.Exception.NativeErrorCode -eq 1223 -or $_.Exception.InnerException.NativeErrorCode -eq 1223) { exit 2 }; exit 1 }';
   return new Promise((resolve, reject) => {
     const child = spawn(
       path.join(
