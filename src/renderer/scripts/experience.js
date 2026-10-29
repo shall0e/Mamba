@@ -27,7 +27,7 @@
       '',
     );
     if (/background service (?:stopped|is unavailable)/i.test(text)) return true;
-    showToast(text + ' Â· See Activity for help');
+    showToast(text + ' \u00b7 See Activity for help');
     window.mamba.reportIssue(text).catch(() => {});
     return true;
   }
@@ -365,7 +365,7 @@
           'p',
           [option.fileSize, option.host || 'Torrent', ...option.sources]
             .filter(Boolean)
-            .join(' Â· '),
+            .join(' \u00b7 '),
           'choice-meta',
         );
         info.append(meta);
@@ -521,7 +521,7 @@
           'p',
           [data.developers.join(', '), data.releaseDate, ...data.genres]
             .filter(Boolean)
-            .join(' Â· '),
+            .join(' \u00b7 '),
           'page-description',
         ),
       );
@@ -896,7 +896,7 @@
             data.dlcs.length +
               ' installed DLC folders detected' +
               (data.availableDlcCount
-                ? ' Â· ' + data.availableDlcCount + ' DLC listed by Steam'
+                ? ' \u00b7 ' + data.availableDlcCount + ' DLC listed by Steam'
                 : ''),
             'field-hint',
           ),
@@ -927,7 +927,7 @@
                 data.space.required
                   ? formatBytes(data.space.required) + ' estimated for download and setup'
                   : 'Size will be checked when TorBox prepares the files',
-              ].join(' Â· '),
+              ].join(' \u00b7 '),
             'storage-note',
           );
           section.append(info);
@@ -987,7 +987,7 @@
         node('p', issue.message),
         node(
           'p',
-          date(issue.at) + (issue.count > 1 ? ' Â· Seen ' + issue.count + ' times' : ''),
+          date(issue.at) + (issue.count > 1 ? ' \u00b7 Seen ' + issue.count + ' times' : ''),
           'field-hint',
         ),
       );
@@ -1032,7 +1032,7 @@
           'Sources',
           activity.catalog.phase,
           activity.catalog.count.toLocaleString() +
-            ' checked releases Â· ' +
+            ' checked releases \u00b7 ' +
             activity.catalog.unavailableSources +
             ' sources unavailable',
         ],
@@ -1067,7 +1067,7 @@
     const count = active + openIssues;
     $('#activity-count').hidden = !count;
     $('#activity-count').textContent = count;
-    $('#activity-count').title = active + ' active downloads Â· ' + openIssues + ' issues';
+    $('#activity-count').title = active + ' active downloads \u00b7 ' + openIssues + ' issues';
     $('#activity-count').setAttribute('aria-label', count + ' tasks or issues');
   }
   function jobsChanged(jobs) {

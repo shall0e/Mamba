@@ -354,7 +354,10 @@ if (!app.requestSingleInstanceLock()) {
     task('catalog:search', String(query || '').slice(0, 300), offset),
   );
   ipcMain.handle('catalog:resolve', (_event, id) => task('catalog:resolve', String(id)));
-  ipcMain.handle('catalog:artwork', (_event, id) => task('catalog:artwork', String(id)));
+  const artworkRequest = require('./request-pool.cjs').requestPool((id) =>
+    task('catalog:artwork', id),
+  );
+  ipcMain.handle('catalog:artwork', (_event, id) => artworkRequest(String(id)));
   ipcMain.handle('home:featured', () => task('home:featured'));
   ipcMain.handle('downloads:best', (_event, id) => task('downloads:best', String(id)));
   ipcMain.handle('downloads:list', () => downloadJobs);
