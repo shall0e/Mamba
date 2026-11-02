@@ -260,6 +260,7 @@ class BackgroundService {
       description: info?.description || '',
       genres: info?.genres || [],
       developers: info?.developers || [],
+      publishers: info?.publishers || [],
       releaseDate: info?.releaseDate || null,
       steamId: info?.steamId || base?.steamId || null,
       libraryId: base?.id || null,

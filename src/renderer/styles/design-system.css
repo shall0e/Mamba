@@ -1,0 +1,1897 @@
+/* Final component authority. Theme colors/effects are supplied by theme-model.js. */
+:root {
+  --sidebar-width: 192px;
+  --nav-target: 40px;
+  --nav-icon: 20px;
+  --nav-gap: 4px;
+  --nav-marker: 2px;
+  --panel-padding: 24px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --type-caption: 12px;
+  --type-small: 13px;
+  --type-body: 14px;
+  --type-title: 18px;
+  --type-section: 20px;
+  --type-page: 28px;
+  --control-height: 38px;
+  --toolbar-height: 38px;
+  --motion-fast: 140ms;
+  --motion-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --line: color-mix(in srgb, var(--divider-ink, var(--color-icons)) 8%, transparent);
+  --art-intensity: 0.72;
+  --page-atmosphere: 0.24;
+}
+body {
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+html[data-theme] :is(button, input, textarea, select, p, span, small, label, h1, h2, h3, h4) {
+  text-shadow: none;
+}
+h1 {
+  font-size: var(--type-page);
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  font-family: var(--font-headings, var(--font-default));
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+h2 {
+  font-size: var(--type-title);
+  letter-spacing: -0.015em;
+  line-height: 1.4;
+}
+h3 {
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+button,
+input,
+select,
+textarea,
+summary {
+  border-radius: var(--radius-control);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
+}
+button:active:not(:disabled) {
+  scale: 1;
+  transform: none;
+}
+button:disabled,
+input:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+summary:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  background-color: var(--color-selection);
+  outline: none;
+  box-shadow: inset 3px 0 var(--color-icons);
+}
+.primary-button,
+.secondary-button,
+.text-button,
+.settings-input,
+.discovery-select,
+.library-sort {
+  min-height: var(--control-height);
+  font-size: var(--type-small);
+  border-radius: var(--radius-control);
+}
+.key-field,
+.path-field {
+  padding: 0;
+  min-height: var(--control-height);
+}
+.key-field input,
+.path-field input,
+input.settings-input {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding-block: 0;
+}
+#library-toolbar .library-filter,
+#library-toolbar .library-filter input,
+#library-toolbar .library-view-controls > select,
+#library-toolbar .library-view-controls > button,
+#library-toolbar .library-options > summary,
+#library-page .library-heading-actions > button,
+#library-page .library-heading-actions .game-count {
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
+  max-height: var(--toolbar-height);
+}
+.settings-card,
+.health-card,
+.transfer-row,
+.issue-card,
+.installation-card,
+.download-choice,
+.quiet-state,
+.library-empty,
+.game-card,
+.result-card,
+.speed-card,
+.recent-card,
+.version-card,
+.mamba-dialog,
+.library-option-controls {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.settings-card,
+.health-card,
+.quiet-state,
+.library-empty,
+.game-card,
+.result-card,
+.speed-card,
+.recent-card,
+.installation-card,
+.version-card {
+  border-color: transparent;
+}
+.game-card:hover,
+.discovery-card:hover {
+  transform: none;
+}
+.game-card,
+.discovery-card,
+.settings-panel,
+.detail-hero {
+  animation: none;
+}
+
+/* Desktop shell: labels are the default, compact mode is an explicit preference. */
+:root {
+  --font-display: 'Mamba Coolvetica', var(--font-default);
+}
+@font-face {
+  font-family: 'Mamba Coolvetica';
+  src: url('../../../assets/fonts/Coolvetica-Rg.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+html[data-sidebar-collapsed='true'] {
+  --sidebar-width: 56px;
+}
+.sidebar,
+body.home-active .sidebar {
+  width: var(--sidebar-width);
+  padding: 16px 12px 12px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 28px var(--font-display);
+}
+.sidebar-brand img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.sidebar-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  color: var(--color-icons);
+}
+.sidebar-toggle:hover {
+  background: var(--input-fill);
+}
+.sidebar nav {
+  gap: 4px;
+  min-height: 0;
+  flex: 1;
+}
+.sidebar .nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+.sidebar .nav-button svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+  animation: none;
+  filter: blur(var(--icons-blur, 0px));
+}
+.sidebar .nav-button.active {
+  background: var(--input-fill);
+}
+.sidebar .nav-button:hover:not(:disabled),
+.sidebar .nav-button:focus-visible {
+  transform: none;
+  scale: 1;
+  background: var(--input-fill);
+}
+.sidebar .nav-button:focus-visible {
+  box-shadow: inset 3px 0 var(--divider-ink, var(--color-icons));
+}
+.sidebar .nav-button span,
+.sidebar .nav-button:hover span,
+.sidebar .nav-button:focus-visible span {
+  position: static;
+  display: block;
+  padding: 0;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-size: 14px;
+  font-family: var(--font-navigation, var(--font-default));
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.sidebar .nav-button span kbd {
+  display: none;
+}
+.sidebar .nav-count {
+  top: 8px;
+  right: 8px;
+}
+.sidebar-recents {
+  margin-top: 24px;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: none;
+}
+.sidebar-recents::-webkit-scrollbar {
+  display: none;
+}
+.sidebar-recent-group {
+  margin-bottom: 24px;
+}
+.sidebar-recent-group h2 {
+  font: 400 12px var(--font-body, var(--font-default));
+  font-family: var(--font-headings, var(--font-default));
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+}
+.sidebar-recent-game {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  background: transparent;
+  min-height: 36px;
+  text-align: left;
+  padding: 6px 4px;
+}
+.sidebar-recent-game svg {
+  width: 14px;
+  height: 14px;
+}
+.sidebar-recent-game span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.sidebar-recent-game:hover {
+  background: var(--input-fill);
+}
+.sidebar-recent-empty {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.sidebar #settings-open {
+  margin-top: auto;
+}
+.window-drag-area {
+  left: var(--sidebar-width);
+}
+html[data-sidebar-collapsed='true'] .sidebar {
+  padding-inline: 8px;
+}
+html[data-sidebar-collapsed='true'] .sidebar-heading {
+  justify-content: center;
+}
+html[data-sidebar-collapsed='true'] .sidebar-brand,
+html[data-sidebar-collapsed='true'] .sidebar-recents {
+  display: none;
+}
+html[data-sidebar-collapsed='true'] .sidebar .nav-button {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+}
+html[data-sidebar-collapsed='true'] .sidebar .nav-button span {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 12px;
+  background: var(--foreground-fill);
+  border-radius: 6px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-sidebar-collapsed='true'] .sidebar .nav-button:hover span,
+html[data-sidebar-collapsed='true'] .sidebar .nav-button:focus-visible span {
+  visibility: visible;
+  opacity: 1;
+}
+html[data-sidebar-collapsed='true'] .sidebar .nav-button span kbd {
+  display: inline;
+  margin-left: 12px;
+  font: 12px var(--font-default);
+}
+html[data-navigation]:not([data-navigation='default']) .sidebar {
+  padding: 16px 12px 12px;
+}
+html[data-navigation]:is([data-navigation='left'], [data-navigation='right']) .sidebar nav {
+  height: 100%;
+}
+html[data-navigation]:is([data-navigation='left'], [data-navigation='right'])
+  .sidebar
+  #settings-open {
+  margin-top: auto;
+}
+html[data-navigation='right'][data-sidebar-collapsed='true'] .sidebar .nav-button span {
+  left: auto;
+  right: calc(100% + 12px);
+}
+/* Saved horizontal placements stay available as explicit toolbar layouts. */
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar,
+html[data-navigation='top'][data-navigation] .sidebar {
+  width: auto;
+  height: 56px;
+  padding: 6px 12px;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar-heading {
+  width: auto;
+  margin: 0 24px 0 0;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar-toggle,
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar-recents {
+  display: none;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar nav {
+  flex: 0 1 auto;
+  height: auto;
+  width: auto;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar .nav-button {
+  width: auto;
+  flex: 0 0 auto;
+}
+html:is([data-navigation='top'], [data-navigation='bottom']) .sidebar #settings-open {
+  margin-top: 0;
+}
+html:not([data-sidebar-collapsed='true']):is([data-navigation='top'], [data-navigation='bottom'])
+  .sidebar
+  .nav-button
+  span {
+  position: static;
+  transform: none;
+}
+html[data-navigation='top'] .workspace {
+  padding-top: 56px;
+}
+html[data-navigation='bottom'] .workspace {
+  padding-bottom: 56px;
+}
+.window-controls .window-button {
+  width: 44px;
+  height: 32px;
+  border-radius: 0;
+}
+.content-page {
+  padding: var(--space-12) var(--space-8) var(--space-8);
+}
+.content-page > *,
+.settings-content {
+  max-width: 1600px;
+  margin-inline: auto;
+}
+.page-heading,
+#library-page > .page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  width: 100%;
+}
+.page-heading h1 {
+  margin: 0;
+}
+.page-eyebrow {
+  font-size: var(--type-caption);
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--space-2);
+}
+.page-description {
+  margin: var(--space-2) 0 0;
+  font-size: var(--type-small);
+}
+.search-content {
+  width: min(720px, 100%);
+  text-align: left;
+  transform: none;
+}
+body.home-active .search-content {
+  transform: translateY(-4vh);
+}
+.workspace .search-wordmark {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+.workspace .search-wordmark :is(img, .mamba-mark) {
+  width: 72px;
+  height: 72px;
+}
+.workspace .search-wordmark span {
+  font-size: var(--type-page);
+  letter-spacing: -0.04em;
+}
+.search-field {
+  min-height: 56px;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+.search-field .main-input {
+  height: 56px;
+  font-size: var(--type-title);
+}
+.search-field:focus-within {
+  scale: 1;
+  box-shadow: inset 3px 0 var(--color-icons);
+}
+.search-page.has-results {
+  padding: var(--space-12) var(--space-8) var(--space-8);
+}
+.search-page.has-results .search-content {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+.search-page.has-results .search-wordmark {
+  display: none;
+}
+.search-page.has-results .search-field {
+  max-width: 720px;
+  min-height: 40px;
+}
+.search-page.has-results .main-input {
+  height: 40px;
+}
+.search-results {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+.results-heading,
+.discovery-toolbar,
+.download-filters {
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+#results-list,
+#game-list[data-view='cards'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+}
+#game-list[data-view='cards'] .library-cover,
+.discovery-card .game-cover {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+#game-list[data-view='cards'] .library-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#game-list[data-view='cards'] .library-card-info,
+.discovery-card .result-info {
+  padding: var(--space-4);
+  gap: var(--space-2);
+  min-width: 0;
+}
+.discovery-card .result-info h2,
+.library-card-info h2 {
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+.discovery-card .result-actions.game-result-action {
+  padding: 0 var(--space-4) var(--space-4);
+  margin-top: auto;
+}
+.game-card .game-actions,
+.favorite-button {
+  opacity: 1;
+  visibility: visible;
+}
+#library-toolbar {
+  padding: 0 0 var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+#library-toolbar .library-filter,
+#library-toolbar .library-view-controls > select,
+#library-toolbar .library-options > summary {
+  border-radius: var(--radius-control);
+}
+.library-toolbar,
+.library-heading-actions,
+.library-view-controls {
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.library-filter {
+  flex: 1 1 240px;
+  max-width: 480px;
+}
+.settings-layout {
+  grid-template-columns: 188px minmax(0, 1fr);
+  gap: var(--space-8);
+}
+.settings-nav {
+  gap: var(--space-1);
+}
+.settings-category {
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  font-size: var(--type-small);
+  border-radius: var(--radius-control);
+}
+.settings-panel {
+  gap: var(--space-4);
+  max-width: 960px;
+}
+.settings-section-heading h2 {
+  margin: 0;
+  font-size: var(--type-section);
+}
+.settings-section-heading p {
+  margin: var(--space-2) 0 0;
+}
+.settings-card textarea#extra-game-folders {
+  min-height: 88px;
+  height: 88px;
+}
+.settings-panel .settings-card {
+  padding: var(--panel-padding);
+}
+.settings-card-heading {
+  margin-bottom: var(--space-4);
+  align-items: start;
+}
+.settings-card-heading h2,
+.settings-card > h2 {
+  margin-top: 0;
+}
+.switch-row {
+  min-height: 56px;
+  padding-block: var(--space-3);
+  gap: var(--space-6);
+  border-bottom: 1px solid var(--line);
+}
+.switch-row:last-child {
+  border-bottom: 0;
+}
+.switch-row strong {
+  font-size: var(--type-body);
+  font-family: var(--font-headings, var(--font-default));
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.switch-row small,
+.field-hint {
+  font-size: var(--type-small);
+  line-height: 1.5;
+}
+.appearance-panel {
+  column-gap: var(--space-6);
+}
+.theme-section-button {
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+.artwork-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+.artwork-presets button {
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--input-fill);
+  color: var(--color-text);
+}
+.artwork-presets button[aria-pressed='true'] {
+  background: var(--color-selection);
+  box-shadow: inset 0 -2px var(--color-icons);
+}
+.detail-hero {
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-8);
+  align-items: center;
+}
+.detail-art {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+.detail-intro h1 {
+  font-size: var(--type-page);
+}
+.game-description {
+  max-width: 76ch;
+  line-height: 1.7;
+  font-size: var(--type-body);
+}
+.detail-section {
+  margin-top: var(--space-6);
+}
+.transfer-row,
+.issue-card,
+.installation-card,
+.speed-card,
+.recent-card {
+  padding: var(--space-6);
+}
+.transfer-stats {
+  gap: var(--space-4);
+  font-size: var(--type-small);
+}
+.mamba-dialog {
+  padding: var(--space-6);
+  max-width: min(520px, calc(100vw - 48px));
+}
+.mamba-dialog-actions {
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+body.home-active {
+  --page-atmosphere: 1;
+}
+body:has(#settings-backdrop:not([hidden])) {
+  --page-atmosphere: 0.1;
+}
+body:has(#library-page:not([hidden])) {
+  --page-atmosphere: 0.24;
+}
+#steam-backdrop,
+body:not(.home-active) #steam-backdrop {
+  opacity: calc(var(--art-intensity) * var(--page-atmosphere));
+  filter: blur(var(--background-blur)) saturate(0.85);
+}
+#game-page::before {
+  inset: 0;
+  transform: none;
+  opacity: 0;
+}
+#game-page.has-game-backdrop::before {
+  opacity: var(--art-intensity);
+}
+.ambient-edge-glow,
+body:not(.home-active) .ambient-edge-glow {
+  opacity: var(--background-glow-opacity);
+}
+@media (max-width: 900px) {
+  .content-page,
+  .search-page.has-results {
+    padding-inline: var(--space-6);
+  }
+  .settings-layout {
+    grid-template-columns: 144px minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .detail-hero {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+}
+@media (max-width: 640px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .page-heading,
+  #library-page > .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .settings-panel .settings-card {
+    padding: var(--space-4);
+  }
+}
+
+/* Desktop Settings workspace and its responsive structure. */
+.settings-page .settings-content {
+  width: 100%;
+  max-width: 1168px;
+  margin-inline: auto;
+}
+.settings-panel {
+  max-width: none;
+  gap: 32px;
+}
+.settings-panel > .settings-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  backdrop-filter: none;
+}
+.settings-section-heading h2 {
+  font-size: 20px;
+}
+.settings-card h2 {
+  font-size: 18px;
+}
+.settings-card .field-hint,
+.settings-card-heading p,
+.switch-row small {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.settings-category {
+  font-size: 14px;
+  min-height: 40px;
+}
+.settings-group {
+  margin-block: 24px;
+}
+.storage-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: center;
+}
+.storage-group > :not(#browse-extra-folder) {
+  grid-column: 1/-1;
+}
+.storage-group #folder-list-label {
+  grid-column: 1;
+  margin: 24px 0 12px;
+}
+.storage-group #browse-extra-folder {
+  grid-column: 2;
+  grid-row: 4;
+}
+.storage-group #extra-folders-hint {
+  margin-top: 8px;
+}
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--foreground-fill);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.folder-row button {
+  flex: none;
+}
+.settings-panel .path-field,
+.settings-panel .key-field {
+  min-height: 40px;
+}
+.settings-panel
+  input:not([type='checkbox']):not([type='range']):not([type='color']):not([type='hidden']),
+.settings-panel select {
+  min-height: 38px;
+  height: 40px;
+  font-size: 14px;
+}
+.settings-panel .key-field input,
+.settings-panel .path-field input {
+  min-width: 0;
+}
+.settings-panel .switch-row {
+  min-height: 76px;
+  padding-block: 20px;
+  gap: 24px;
+}
+.settings-panel .switch-row > span {
+  flex: 1;
+  min-width: 0;
+}
+.settings-panel .switch-row strong {
+  font-size: 14px;
+}
+.settings-advanced {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.settings-advanced > summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.settings-advanced input[type='number'] {
+  width: 140px;
+}
+.settings-advanced > label.field-label {
+  display: block;
+  margin-top: 16px;
+}
+.settings-panel .service-card,
+.settings-panel .settings-card:has(#connection-title) {
+  background: var(--foreground-fill);
+  border-radius: 8px;
+  padding: 24px;
+}
+.settings-panel .service-switch strong {
+  font-size: 18px;
+}
+.settings-panel .appearance-panel {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  column-gap: 32px;
+}
+.settings-panel .appearance-heading {
+  grid-column: 1/-1;
+}
+.settings-panel .service-credential-status {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-width: 180px;
+  }
+  .settings-layout {
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+@media (max-width: 900px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .settings-category {
+    padding-inline: 12px;
+  }
+  .settings-panel .appearance-panel {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --sidebar-width: 160px;
+  }
+  .sidebar {
+    padding-inline: 8px;
+  }
+  .sidebar-brand {
+    font-size: 24px;
+    gap: 4px;
+  }
+  .sidebar-brand img {
+    width: 20px;
+    height: 20px;
+  }
+  .content-page,
+  .search-page.has-results {
+    padding-inline: 16px;
+  }
+  .settings-panel .appearance-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .folder-row {
+    flex-wrap: wrap;
+  }
+  .folder-path {
+    flex-basis: 100%;
+  }
+}
+
+/* Fourth-pass typography: actual supplied 400/700 faces, Coolvetica only for identity. */
+@font-face {
+  font-family: 'Mamba Interphases';
+  src: url('../../../assets/fonts/TT-Interphases-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mamba Interphases';
+  src: url('../../../assets/fonts/TT-Interphases-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --font-default: 'Mamba Interphases', system-ui, sans-serif;
+  font-synthesis: none;
+}
+body,
+button,
+input,
+textarea,
+select {
+  font-weight: 400;
+}
+h1,
+h2,
+h3,
+h4,
+strong,
+b,
+.theme-section-copy strong {
+  font-family: var(--font-headings, var(--font-default));
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.sidebar .nav-button span,
+.settings-category,
+.result-title,
+.library-game-title {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.main-input,
+.rotating-search-hint {
+  font-family: var(--font-search, var(--font-default));
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.sidebar-brand,
+.search-wordmark,
+.search-wordmark span {
+  font-family: 'Mamba Coolvetica', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.sidebar-heading {
+  height: 48px;
+  flex: none;
+  margin-bottom: 8px;
+  justify-content: flex-start;
+}
+.sidebar-brand {
+  gap: 8px;
+  font-size: 28px;
+  line-height: 1;
+}
+.sidebar-brand img {
+  width: 32px;
+  height: 32px;
+}
+.sidebar-toggle {
+  align-self: flex-end;
+  margin: 0 0 12px;
+  height: 28px;
+  min-height: 28px;
+}
+html[data-sidebar-collapsed='true'] .sidebar-brand {
+  display: flex;
+}
+html[data-sidebar-collapsed='true'] .sidebar-brand span {
+  display: none;
+}
+html[data-sidebar-collapsed='true'] .sidebar-heading {
+  justify-content: center;
+}
+html[data-sidebar-collapsed='true'] .sidebar-toggle {
+  align-self: center;
+}
+.sidebar-recents {
+  margin-top: 20px;
+}
+.sidebar-recent-group {
+  margin-bottom: 24px;
+}
+.sidebar-recent-group h2 {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.sidebar-game-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  border-radius: 6px;
+}
+.sidebar-game-shortcut:hover,
+.sidebar-game-shortcut:focus-within {
+  background: var(--foreground-fill);
+}
+.shortcut-thumbnail {
+  width: 34px;
+  height: 34px;
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--input-fill);
+  border-radius: 5px;
+}
+.shortcut-thumbnail img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.shortcut-thumbnail svg {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+}
+.shortcut-thumbnail > svg:first-of-type {
+  opacity: 1;
+}
+.shortcut-thumbnail > svg:nth-of-type(2) {
+  opacity: 0;
+}
+.shortcut-thumbnail:hover svg:first-of-type,
+.shortcut-thumbnail:focus-visible svg:first-of-type {
+  opacity: 0;
+}
+.shortcut-thumbnail:hover svg:nth-of-type(2),
+.shortcut-thumbnail:focus-visible svg:nth-of-type(2) {
+  opacity: 1;
+}
+.shortcut-thumbnail.has-artwork > svg:first-of-type {
+  opacity: 0;
+}
+.shortcut-thumbnail.has-artwork:hover img,
+.shortcut-thumbnail.has-artwork:focus-visible img {
+  opacity: 0.35;
+}
+.shortcut-title {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  text-align: left;
+  padding: 4px 0;
+  background: transparent;
+  min-height: 34px;
+}
+.shortcut-title > span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.shortcut-title small {
+  font-size: 12px;
+  color: var(--color-textSecondary);
+}
+.game-context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--foreground-fill);
+  backdrop-filter: blur(var(--foreground-blur));
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  min-height: 36px;
+}
+.context-menu-item svg {
+  width: 16px;
+  height: 16px;
+}
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: var(--input-fill);
+}
+/* All action surfaces follow the same hierarchy; accents live in icons and focus. */
+html[data-theme] :is(.download-button, .play-button),
+html[data-theme] :is(.download-button, .play-button):hover,
+.game-actions .primary-button,
+.result-actions .primary-button,
+.result-actions .secondary-button,
+.detail-actions button,
+.version-controls button {
+  background: var(--input-fill);
+  box-shadow: none;
+  border-radius: 6px;
+}
+html[data-theme] button:is(.download-button, .play-button),
+html[data-theme] button:is(.download-button, .play-button) .button-label {
+  color: var(--button-ink, var(--color-text)) !important;
+  -webkit-text-fill-color: currentColor;
+}
+html[data-theme] button:is(.download-button, .play-button) svg {
+  color: var(--icon-ink, var(--color-icons)) !important;
+  -webkit-text-fill-color: currentColor;
+}
+html[data-theme] :is(.download-button, .play-button):hover,
+.detail-actions button:hover,
+.version-controls button:hover {
+  background: var(--color-selection);
+}
+.result-actions button,
+.game-actions button,
+.version-controls button {
+  min-height: 36px;
+}
+button:active:not(:disabled) {
+  background: var(--color-selection);
+}
+button[aria-busy='true'] {
+  opacity: 0.65;
+  cursor: progress;
+}
+.detail-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) minmax(0, 1fr);
+  gap: 32px;
+  padding: 32px;
+  background: var(--foreground-fill);
+  border-radius: 8px;
+  backdrop-filter: blur(var(--foreground-blur));
+  align-items: center;
+}
+.detail-art {
+  width: 100%;
+  max-width: 460px;
+  aspect-ratio: 460/215;
+  min-height: 0;
+  height: auto;
+}
+.detail-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.detail-intro {
+  min-width: 0;
+}
+.detail-intro h1 {
+  font-size: 32px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  margin: 8px 0 20px;
+}
+.detail-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 20px;
+}
+.detail-metadata dt,
+.release-metadata dt {
+  font-size: 12px;
+  color: var(--color-textSecondary);
+  margin-bottom: 4px;
+}
+.detail-metadata dd,
+.release-metadata dd {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 20px;
+}
+.detail-actions button {
+  min-height: 38px;
+  font-size: 14px;
+  padding: 8px 14px;
+}
+.detail-actions .detail-main-action {
+  min-height: 44px;
+  padding: 10px 24px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+}
+.detail-actions .detail-main-action svg {
+  width: 20px;
+  height: 20px;
+}
+.game-overview {
+  max-width: 84ch;
+  padding: 0;
+}
+.game-overview .game-description {
+  margin-top: 12px;
+}
+#game-page::before {
+  mask-image: linear-gradient(to bottom, currentColor, transparent 85%);
+}
+#game-content > .text-button:first-child {
+  margin-bottom: 20px;
+  min-height: 38px;
+}
+.game-downloads {
+  margin-top: 32px;
+}
+.game-downloads > h2,
+.game-downloads > summary {
+  font-size: 20px;
+}
+.download-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.download-filters .version-search {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 38px;
+}
+.version-list {
+  display: grid;
+  gap: 0;
+}
+.version-list .version-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+.version-info {
+  min-width: 0;
+}
+.version-info h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.release-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0;
+}
+.release-metadata dd {
+  font-size: 13px;
+}
+.version-tags {
+  margin-top: 12px;
+  gap: 8px;
+}
+.version-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 280px;
+}
+html[data-theme] button:is(.download-button, .play-button):is(:enabled, :disabled) svg {
+  color: var(--icon-ink, var(--color-icons)) !important;
+  -webkit-text-fill-color: currentColor;
+}
+.version-controls select {
+  min-height: 36px;
+  max-width: 180px;
+}
+.version-service {
+  font-size: 13px;
+}
+.version-controls .release-download-action {
+  min-height: 38px;
+  padding: 8px 16px;
+}
+@media (max-width: 1100px) {
+  .detail-hero {
+    grid-template-columns: 240px minmax(0, 1fr);
+    padding: 24px;
+    gap: 24px;
+  }
+}
+@media (max-width: 900px) {
+  .detail-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .detail-art {
+    max-width: 360px;
+  }
+  .version-list .version-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .version-controls {
+    max-width: none;
+  }
+}
+@media (max-width: 640px) {
+  .detail-hero {
+    padding: 16px;
+  }
+  .detail-metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .detail-intro h1 {
+    font-size: 28px;
+  }
+}
+
+/* Fixed Library preferences and uncropped artwork. */
+.library-options {
+  width: 100%;
+  flex-basis: 100%;
+}
+.library-option-controls {
+  position: static;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+}
+.library-option-controls .library-steam-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.library-option-controls .library-steam-status {
+  margin: 0;
+  max-width: 32ch;
+}
+#game-list[data-view='cards'] .library-cover,
+.discovery-card .game-cover {
+  display: block;
+  aspect-ratio: auto;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+}
+#game-list[data-view='cards'] .library-cover img,
+.discovery-card .game-cover img {
+  position: relative;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  transform: none;
+  aspect-ratio: auto;
+}
+#game-list[data-view='cards'] .library-cover:not(.has-cover),
+.discovery-card .game-cover:not(.has-cover) {
+  aspect-ratio: 460/215;
+}
+#game-list[data-view='cards'] .library-cover:hover img,
+.discovery-card .game-cover:hover img {
+  transform: none;
+}
+body.home-active .workspace .search-wordmark {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 24px;
+  width: 100%;
+}
+body.home-active .workspace .search-wordmark .mamba-mark {
+  width: 144px;
+  height: 144px;
+}
+.workspace .search-wordmark .search-brand-line {
+  display: none;
+}
+.sidebar-brand-mark {
+  width: 32px;
+  height: 32px;
+}
+.sidebar-brand {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sidebar-brand .search-version {
+  font: 400 11px var(--font-default);
+  letter-spacing: 0;
+  align-self: center;
+  margin: 0;
+}
+/* Installed-game actions use the Icons role, with contrasting Text-role lightness. */
+html[data-theme] body button.play-button,
+html[data-theme] body button.play-button:hover {
+  background: color-mix(
+    in srgb,
+    var(--theme-icons-color) calc(var(--icons-opacity, 1) * 100%),
+    transparent
+  );
+}
+html[data-theme] body button[type='button'].play-button:is(:enabled, :disabled),
+html[data-theme] body button[type='button'].play-button:is(:enabled, :disabled) .button-label,
+html[data-theme] body button[type='button'].play-button:is(:enabled, :disabled) svg {
+  color: var(--play-text-ink) !important;
+  -webkit-text-fill-color: currentColor;
+}
+#game-list .library-cover.has-cover > svg,
+#game-list .library-cover > .button-label,
+.discovery-card .game-cover.has-cover > svg,
+.discovery-card .game-cover > .button-label {
+  display: none;
+}
+.detail-hero {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 24px;
+  gap: 24px;
+  align-items: start;
+}
+.detail-art {
+  max-width: 460px;
+  width: 100%;
+  aspect-ratio: auto;
+  justify-self: start;
+}
+.detail-art img {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.detail-art:not(.has-cover) {
+  aspect-ratio: 460/215;
+}
+.detail-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 24px;
+  align-items: start;
+}
+.detail-intro > .page-eyebrow,
+.detail-intro > h1 {
+  grid-column: 1/-1;
+}
+.detail-intro h1 {
+  margin-top: 0;
+  font-size: 28px;
+}
+.detail-metadata {
+  grid-column: 1;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.detail-intro .detail-owned {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
+}
+.detail-actions {
+  grid-column: 1/-1;
+  margin-top: 0;
+}
+.detail-intro > .field-hint {
+  grid-column: 1/-1;
+}
+@media (min-width: 1450px) {
+  .detail-hero {
+    grid-template-columns: 360px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+@media (max-width: 900px) {
+  .detail-intro {
+    display: block;
+  }
+  .detail-actions {
+    margin-top: 16px;
+  }
+  .detail-metadata {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Cinematic overview: open hero, neutral role-derived canvas, artwork at the page edge. */
+:root {
+  --detail-canvas: hsl(from var(--color-primary) h 0% l);
+  --detail-panel: hsl(from var(--color-surface) h 0% l);
+}
+.settings-page :is(h1, h2, h3, h4, strong, .field-label, .theme-section-copy strong),
+.settings-page .settings-category,
+.settings-page .settings-category:hover,
+.settings-page summary {
+  font-family: var(--font-headings, var(--font-default));
+  font-weight: 700;
+  letter-spacing: 0;
+}
+#game-page {
+  background: var(--detail-canvas);
+  padding: 32px clamp(24px, 4vw, 64px) 48px;
+}
+#game-page::before {
+  display: none;
+}
+#game-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin-inline: auto;
+}
+.detail-cinematic-art {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 520px;
+  pointer-events: none;
+  background-image: var(--game-backdrop-image);
+  background-size: cover;
+  background-position: center 30%;
+  filter: blur(18px) saturate(0.6);
+  opacity: 0.2;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+}
+.release-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+#game-content .release-section-header h2 {
+  margin: 0;
+}
+.release-section-header .download-filters {
+  flex: 1 1 620px;
+}
+#game-content > .text-button:first-child {
+  min-height: 40px;
+  margin: 0 0 28px;
+  padding-left: 0;
+}
+#game-content .detail-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 32px;
+  padding: 24px 0 32px;
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+#game-content .detail-art {
+  width: 100%;
+  max-width: 900px;
+  justify-self: center;
+  aspect-ratio: auto;
+  background: transparent;
+}
+#game-content .detail-art.has-cover > svg {
+  display: none;
+}
+#game-content .detail-art img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+#game-content .detail-art:not(.has-cover) {
+  aspect-ratio: 460/215;
+  background: var(--detail-panel);
+}
+#game-content .detail-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  width: 100%;
+  max-width: 900px;
+  justify-self: center;
+}
+#game-content .detail-intro .page-eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+#game-content .detail-intro h1 {
+  font-family: 'Mamba Coolvetica', var(--font-default);
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size: 40px;
+  line-height: 1.1;
+  margin: 0 0 20px;
+}
+#game-content .detail-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 16px;
+}
+#game-content .detail-metadata > div {
+  flex: 0 1 auto;
+  max-width: 34ch;
+}
+#game-content .detail-metadata dt {
+  font-size: 12px;
+}
+#game-content .detail-metadata dd {
+  font-size: 14px;
+  line-height: 1.5;
+}
+#game-content .detail-owned {
+  order: 3;
+  font-size: 12px;
+  margin: 12px 0 0;
+  background: transparent;
+  padding: 0;
+}
+#game-content .detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 0;
+  align-items: center;
+}
+#game-content .detail-main-action {
+  min-height: 44px;
+  min-width: 140px;
+  padding: 10px 24px;
+}
+#game-content .detail-icon-action {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+#game-content .detail-icon-action > .button-label {
+  display: none;
+}
+#game-content .detail-icon-action:hover {
+  background: var(--input-fill);
+}
+#game-content .detail-icon-action > svg {
+  width: 18px;
+  height: 18px;
+}
+#game-content > .detail-section {
+  margin: 0;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+}
+#game-content > .detail-section h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+  font-weight: 700;
+}
+#game-content .game-overview {
+  max-width: none;
+}
+#game-content .game-description {
+  max-width: 82ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+#game-content .installation-card {
+  background: transparent;
+  backdrop-filter: none;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+}
+#game-content .installation-card h3 {
+  margin: 0 0 8px;
+}
+#game-content .installation-status {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+#game-content .manage-installation {
+  background: transparent;
+  backdrop-filter: none;
+  padding: 0;
+}
+#game-content .manage-installation > summary {
+  padding: 10px 0;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+#game-content .manage-installation:not([open]) > :not(summary) {
+  display: none;
+}
+#game-content .manage-installation[open] {
+  padding: 0;
+  background: transparent;
+}
+#game-content .manage-installation .game-actions {
+  padding: 0;
+  gap: 8px;
+}
+#game-content .manage-installation button {
+  min-height: 36px;
+  font-size: 13px;
+}
+#game-content .game-downloads {
+  margin-top: 0;
+}
+#game-content .game-downloads > summary {
+  cursor: pointer;
+  padding: 0 0 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+#game-content .download-filters {
+  margin: 0 0 8px;
+  gap: 8px;
+}
+#game-content .version-list .version-card {
+  padding: 16px 0;
+  gap: 16px;
+}
+#game-content .version-tags {
+  margin-top: 8px;
+}
+#game-content :is(button, input, select, summary) {
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+@media (max-width: 1100px) {
+  #game-content .detail-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  #game-content .detail-intro h1 {
+    font-size: 32px;
+  }
+}
+@media (max-width: 850px) {
+  #game-content .detail-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 8px;
+  }
+  #game-content .detail-art {
+    max-width: 900px;
+  }
+  .detail-cinematic-art {
+    height: 440px;
+  }
+}
+
+/* Release 1.6: stable compositing and one motion system for interactive controls. */
+#game-list[data-view='cards'] {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(220px, calc((100% - 64px) / 5))), 1fr)
+  );
+}
+body:not(.home-active) .ambient-edge-glow {
+  opacity: calc(var(--background-glow-opacity) * var(--page-atmosphere, 0.24));
+}
+html[data-theme] :is(button, input, select, textarea, summary),
+html[data-theme] button :is(span, svg) {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+}
+html[data-theme] button:hover,
+html[data-theme] button:active {
+  transform: none;
+  scale: 1;
+}
+html[data-theme] button :is(span, svg) {
+  transform: none;
+}
+html[data-theme] button:focus-visible,
+html[data-theme] summary:focus-visible {
+  box-shadow: inset 0 -2px var(--color-icons) !important;
+  background-color: var(--color-selection);
+}
+html[data-theme] .play-button:focus-visible {
+  box-shadow: inset 0 -2px var(--play-text-ink) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] *,
+  html[data-theme] *::before,
+  html[data-theme] *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

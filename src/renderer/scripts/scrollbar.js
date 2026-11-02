@@ -2,7 +2,7 @@
   const entries = new Map();
   let frame = 0,
     nextId = 0;
-  const selector = '.page,.source-errors,textarea';
+  const selector = '.page,.source-errors,textarea,.sidebar-recents';
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(render);
   };

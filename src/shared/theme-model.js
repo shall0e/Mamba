@@ -121,6 +121,9 @@
     )
       throw Error('Invalid navigation position.');
     const result = {
+      artworkIntensity: ['subtle', 'balanced', 'immersive'].includes(value.artworkIntensity)
+        ? value.artworkIntensity
+        : 'balanced',
       navigation: { position: navigation.position },
       schemaVersion: 1,
       name,
@@ -255,7 +258,32 @@
     const inverseBlur = 1 - Math.max(0, Math.min(100, Number(backgroundBlur) || 0)) / 100;
     return opacity * inverseBlur;
   };
+  function playText(value) {
+    const theme = parse(value),
+      c = theme.colors;
+    const surface = mix(
+      mix(c.background, c.foreground, theme.effects.foreground.opacity),
+      c.icons,
+      theme.effects.icons.opacity,
+    );
+    const channels = rgb(c.text).map((v) => v / 255),
+      max = Math.max(...channels),
+      min = Math.min(...channels),
+      delta = max - min,
+      l = (max + min) / 2;
+    let h = 0;
+    if (delta)
+      h =
+        max === channels[0]
+          ? ((channels[1] - channels[2]) / delta) % 6
+          : max === channels[1]
+            ? (channels[2] - channels[0]) / delta + 2
+            : (channels[0] - channels[1]) / delta + 4;
+    const saturation = delta ? delta / (1 - Math.abs(2 * l - 1)) : 0;
+    return `hsl(${(h * 60 + 360) % 360} ${saturation * 100}% ${isLightBackground(surface) ? 1 : 99}%)`;
+  }
   const api = {
+    playText,
     glowOpacity,
     fontRoles,
     navigationPositions,

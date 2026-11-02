@@ -36,11 +36,23 @@ test('one-click download resolves once and uses the selected release and link', 
   let selected;
   const downloads = new Downloads(
     '.',
-    () => ({}),
+    () => ({ torboxApiKey: 'key', preferredDownloadService: 'torbox', cachedOnly: true }),
     {
+      byId: new Map([
+        [
+          'release',
+          {
+            links: [
+              null,
+              null,
+              { uri: 'https://cdn.test/game.zip', services: ['torbox'], cached: false },
+            ],
+          },
+        ],
+      ]),
       resolveGame: async () => {
         resolutions++;
-        return { name: 'Portal', best: { gameId: 'release', linkIndex: 2 } };
+        return { name: 'Portal', best: { gameId: 'release', linkIndex: 2, services: ['direct'] } };
       },
     },
     {},
@@ -54,7 +66,7 @@ test('one-click download resolves once and uses the selected release and link', 
     'job',
   ]);
   assert.equal(resolutions, 1);
-  assert.deepEqual(selected, ['release', 2, 'Portal']);
+  assert.deepEqual(selected, ['release', 2, 'Portal', 'direct']);
 });
 test('unavailable game does not start a download', async () => {
   const downloads = new Downloads(

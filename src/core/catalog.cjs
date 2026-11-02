@@ -9,6 +9,7 @@ const {
   hostKey,
   hostAllowed,
   candidates,
+  directKind,
   RealDebrid,
 } = require('./download-services.cjs');
 
@@ -249,6 +250,13 @@ class Catalog extends EventEmitter {
           (service !== 'torbox' || config.torboxApiKey) &&
           (service !== 'realdebrid' || config.realDebridApiKey),
       );
+      if (
+        link &&
+        enabledServices(config).includes('direct') &&
+        directKind(link.uri) &&
+        !option.services.includes('direct')
+      )
+        option.services.unshift('direct');
       option.available = !!link && hostAllowed(link.uri, config) && option.services.length > 0;
     }
     for (const kind of ['torrents', 'webdl']) {
@@ -264,12 +272,23 @@ class Catalog extends EventEmitter {
               ? torrentHash(releases.get(option.gameId)?.links[option.linkIndex]?.uri)
               : webHash(releases.get(option.gameId)?.links[option.linkIndex]?.uri)),
         );
-        const cached = await api.cached(kind, hashes);
+        let cached,
+          cacheFailed = false;
+        try {
+          cached = await api.cached(kind, hashes);
+        } catch (error) {
+          // A failed cache check must not block independently supported providers.
+          if (!batch.some((option) => option.services.some((service) => service !== 'torbox')))
+            throw error;
+          cached = new Set();
+          cacheFailed = true;
+        }
         batch.forEach((option, index) => {
           option.cached = cached.has(hashes[index]);
-          if (!option.cached && config.cachedOnly)
+          if (cacheFailed || (!option.cached && config.cachedOnly))
             option.services = option.services.filter((service) => service !== 'torbox');
           const link = releases.get(option.gameId)?.links[option.linkIndex];
+          link.cached = option.cached;
           option.available = hostAllowed(link.uri, config) && option.services.length > 0;
         });
       }

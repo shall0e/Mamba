@@ -2,10 +2,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const sourceRoot = path.resolve(__dirname, '../..');
-async function registerHelperRuntime(
-  directory = path.join(process.env.LOCALAPPDATA, 'Mamba'),
-  executable = process.execPath,
-) {
+async function registerHelperRuntime(directory, executable = process.execPath) {
+  if (directory === undefined) {
+    // The PowerShell helper is Windows-only; Linux has no LOCALAPPDATA.
+    if (process.platform !== 'win32') return;
+    directory = path.join(process.env.LOCALAPPDATA, 'Mamba');
+  }
   await fs.mkdir(directory, { recursive: true });
   const file = path.join(directory, 'helper-runtime.json');
   const temporary = file + '.' + randomUUID() + '.tmp';

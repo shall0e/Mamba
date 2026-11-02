@@ -127,7 +127,7 @@
       );
       cover.setAttribute('aria-label', 'View ' + game.name);
       cover.append($('#library-empty svg').cloneNode(true));
-      (game.cover ? Promise.resolve(game.cover) : window.mamba.artwork(game.id))
+      (game.cover ? Promise.resolve(game.cover) : window.MambaArtwork.get(game.id))
         .then((image) => {
           if (!image || !cover.isConnected) return;
           const img = node('img');
@@ -257,8 +257,8 @@
               { opacity: 1, transform: 'translateY(0)' },
             ],
             {
-              duration: 240,
-              delay: Math.min(index * 18, 100),
+              duration: 160,
+              delay: 0,
               easing: 'cubic-bezier(.22,1,.36,1)',
               fill: 'backwards',
             },
@@ -274,7 +274,7 @@
               { transform: `translate(${before.x - after.x}px, ${before.y - after.y}px)` },
               { transform: 'translate(0, 0)' },
             ],
-            { duration: 220, easing: 'cubic-bezier(.22,1,.36,1)' },
+            { duration: 160, easing: 'cubic-bezier(.22,1,.36,1)' },
           );
       });
     }

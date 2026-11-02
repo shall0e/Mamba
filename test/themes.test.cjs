@@ -35,6 +35,7 @@ test('theme sharing whitelists appearance and never includes account or source s
     downloadPath: 'D:/private',
   });
   assert.deepEqual(Object.keys(shared), [
+    'artworkIntensity',
     'navigation',
     'schemaVersion',
     'name',
@@ -46,6 +47,22 @@ test('theme sharing whitelists appearance and never includes account or source s
   assert.ok(!JSON.stringify(shared).includes('secret'));
   assert.ok(!JSON.stringify(shared).includes('private'));
   assert.deepEqual(model.parse(JSON.parse(JSON.stringify(shared))), shared);
+});
+
+test('artwork intensity survives theme sharing and old themes default to Balanced', () => {
+  assert.equal(model.parse(model.presets[0]).artworkIntensity, 'balanced');
+  for (const artworkIntensity of ['subtle', 'balanced', 'immersive']) {
+    const theme = model.parse({ ...model.presets[0], artworkIntensity });
+    assert.equal(model.parse(JSON.parse(JSON.stringify(theme))).artworkIntensity, artworkIntensity);
+    assert.equal(
+      validateSettings({ appearance: theme }).appearance.artworkIntensity,
+      artworkIntensity,
+    );
+  }
+  assert.equal(
+    model.parse({ ...model.presets[0], artworkIntensity: 'invalid' }).artworkIntensity,
+    'balanced',
+  );
 });
 test('invalid colors, glassiness, and empty theme names cannot enter CSS', () => {
   const theme = model.presets[0];

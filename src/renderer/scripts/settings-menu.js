@@ -29,6 +29,16 @@
     const panel = node('section', undefined, 'settings-panel');
     panel.id = 'settings-' + id;
     panel.setAttribute('aria-label', label);
+    const heading = node('header', undefined, 'settings-section-heading');
+    const descriptions = {
+      downloads: 'Choose where games live and how downloads are handled.',
+      services: 'Connect the services used to download your games.',
+      sources: 'Manage your catalog and the hosts you want to use.',
+      appearance: 'Personalize colors, artwork, and typography.',
+      app: 'Manage updates, configuration, and application tools.',
+    };
+    heading.append(node('h2', label), node('p', descriptions[id], 'field-hint'));
+    panel.append(heading);
     panel.hidden = id !== 'downloads';
     panels[id] = panel;
     form.append(panel);
@@ -45,6 +55,7 @@
           else item.removeAttribute('aria-current');
         }
         if (id === 'sources') loadHosts();
+        $('#settings-backdrop').scrollTop = 0;
       },
       symbol,
       'settings-category',
@@ -198,7 +209,7 @@
     serviceSwitch(
       'direct',
       'Direct downloads',
-      'Pixeldrain files and lists, plus direct archive links. No service key required.',
+      'MEGA, 1fichier, Pixeldrain, and direct archive links. No service key required; host limits still apply.',
     ),
   );
   panels.services.append(direct);
@@ -437,6 +448,7 @@
   }
   function saved(value) {
     config = { ...config, ...value };
+    window.MambaDesktop?.updateConnections(config);
     rdKey.value = '';
     rdKey.placeholder = config.realDebridConfigured
       ? 'Token saved · enter a new token to replace'

@@ -449,10 +449,15 @@ class Downloads extends EventEmitter {
   }
   startBest(id) {
     if (this.bestPending.has(id)) return this.bestPending.get(id);
-    const task = this.catalog.resolveGame(id).then((game) => {
+    const task = this.catalog.resolveGame(id).then(async (game) => {
       if (!game.best)
         throw new Error(game.message || 'No compatible download is currently available.');
-      return this.start(game.best.gameId, game.best.linkIndex, game.name);
+      const link = this.catalog.byId.get(game.best.gameId)?.links[game.best.linkIndex];
+      const service = chooseService(
+        { ...link, services: game.best.services },
+        await this.getConfig(),
+      );
+      return this.start(game.best.gameId, game.best.linkIndex, game.name, service);
     });
     this.bestPending.set(id, task);
     task.finally(() => this.bestPending.delete(id)).catch(() => {});
@@ -984,9 +989,10 @@ class Downloads extends EventEmitter {
                 true,
               ).catch(() => {});
             },
-            this.fetch,
+            api.downloadResponse ? api.downloadResponse.bind(api) : this.fetch,
             meter,
           );
+          if (api.verifyFile) await api.verifyFile(target, file.id, signal);
           previous += Number(file.size || 0);
         }
         job.recovery.files = entries.map(({ target, size, sha256, sha1, md5 }) => ({

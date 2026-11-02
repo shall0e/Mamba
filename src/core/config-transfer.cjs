@@ -107,6 +107,7 @@ function validateSettings(value) {
     'automaticUpdates',
     'notifications',
     'libraryShowUnknown',
+    'sidebarCollapsed',
     'automaticGameDetection',
     'steamLibraryIntegration',
   ])

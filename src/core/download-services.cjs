@@ -19,6 +19,18 @@ function directKind(uri) {
   try {
     const url = new URL(uri);
     if (url.protocol !== 'https:' || url.username || url.password) return null;
+    if (
+      ['mega.nz', 'mega.co.nz'].includes(url.hostname) &&
+      (/^\/(?:file|folder)\/[A-Za-z0-9_-]+$/.test(url.pathname) || /^#!?/.test(url.hash)) &&
+      url.hash
+    )
+      return 'mega';
+    if (
+      url.hostname === '1fichier.com' &&
+      url.pathname === '/' &&
+      /^\?[a-z0-9]+(?:&.*)?$/i.test(url.search)
+    )
+      return '1fichier';
     if (url.hostname === 'pixeldrain.com' && /^\/(?:u|l)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname))
       return 'pixeldrain';
     if (/\.(?:zip|rar|7z|exe|bin|\d{3})$/i.test(url.pathname)) return 'https';
@@ -40,12 +52,13 @@ function candidates(link, config, rdHosts = []) {
   return list;
 }
 function chooseService(link, config, requested) {
-  const services = (
-    link.services || ['torbox', ...(directKind(link.uri) ? ['direct'] : [])]
-  ).filter(
+  const services = [
+    ...new Set([...(link.services || ['torbox']), ...(directKind(link.uri) ? ['direct'] : [])]),
+  ].filter(
     (id) =>
       enabledServices(config).includes(id) &&
       (id !== 'torbox' || config.torboxApiKey) &&
+      (id !== 'torbox' || !config.cachedOnly || link.cached !== false) &&
       (id !== 'realdebrid' || config.realDebridApiKey),
   );
   if (!hostAllowed(link.uri, config)) throw Error('This download host is disabled in Settings.');
@@ -82,7 +95,10 @@ class DirectDownloads {
     };
   }
   async info(_kind, id, signal) {
-    if (id.startsWith('u/') || id.startsWith('l/')) {
+    if (directKind(this.uri) === 'mega') {
+      this.mega = new (require('./hosted-downloads.cjs').MegaDownload)(this.uri);
+      this.files = await this.mega.info(signal);
+    } else if (id.startsWith('u/') || id.startsWith('l/')) {
       const [type, key] = id.split('/');
       const data = await json(
         await this.fetch(
@@ -103,10 +119,14 @@ class DirectDownloads {
         };
       });
     } else {
-      let response = await this.fetch(this.uri, { method: 'HEAD', signal });
+      const uri =
+        directKind(this.uri) === '1fichier'
+          ? await require('./hosted-downloads.cjs').resolveOneFichier(this.uri, this.fetch, signal)
+          : this.uri;
+      let response = await this.fetch(uri, { method: 'HEAD', signal });
       let total = Number(response.headers.get('content-length'));
       if (!response.ok || !total) {
-        response = await this.fetch(this.uri, {
+        response = await this.fetch(uri, {
           headers: { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' },
           signal,
         });
@@ -121,8 +141,13 @@ class DirectDownloads {
         /text\/html|application\/(?:json|xhtml)/i.test(response.headers.get('content-type') || '')
       )
         throw Error('The source returned a webpage instead of a downloadable file.');
-      const name = decodeURIComponent(path.posix.basename(new URL(this.uri).pathname));
-      this.files = [{ id: 0, name, size: total || 0, url: this.uri }];
+      const disposition = response.headers.get('content-disposition') || '';
+      const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+      const name = encoded
+        ? decodeURIComponent(encoded)
+        : /filename="([^"]+)"/i.exec(disposition)?.[1] ||
+          decodeURIComponent(path.posix.basename(new URL(uri).pathname));
+      this.files = [{ id: 0, name, size: total || 0, url: uri }];
     }
     if (
       !this.files.length ||
@@ -135,6 +160,12 @@ class DirectDownloads {
     const file = this.files.find((file) => String(file.id) === String(fileId));
     if (!file) throw Error('Download file is unavailable.');
     return file.url;
+  }
+  async downloadResponse(uri, options) {
+    return this.mega ? this.mega.fetch(uri, options) : this.fetch(uri, options);
+  }
+  async verifyFile(filename, fileId, signal) {
+    if (this.mega) await this.mega.verifyFile(filename, fileId, signal);
   }
 }
 class RealDebrid {

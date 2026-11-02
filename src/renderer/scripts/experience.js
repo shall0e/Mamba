@@ -36,8 +36,7 @@
   }
   function cover(container, id, name) {
     container.append($('#library-empty svg').cloneNode(true));
-    window.mamba
-      .artwork(id)
+    window.MambaArtwork.get(id)
       .then((image) => {
         if (!image || !container.isConnected) return;
         const img = node('img');
@@ -74,6 +73,12 @@
     installedGames = Array.isArray(games)
       ? games.filter((game) => game && typeof game.name === 'string')
       : [];
+    window.MambaDesktop?.renderRecent(installedGames);
+    if (currentDetail?.libraryId) {
+      const game = installedGames.find((g) => g.id === currentDetail.libraryId);
+      const label = $('#game-content .detail-main-action.play-button .button-label');
+      if (game && label) label.textContent = game.running ? 'Running' : 'Play';
+    }
     const eligible = installedGames.filter(
       (game) => showUnknown || window.MambaPresence.confirmedGame(game),
     );
@@ -121,6 +126,7 @@
         game.steamId,
         game.steamLibrary,
         game.cover,
+        game.running,
       ]),
     ]);
     if (signature === libraryRenderSignature) return;
@@ -131,6 +137,7 @@
     list.dataset.view = libraryView;
     for (const game of matches) {
       const card = node('li', undefined, 'game-card');
+      card.dataset.gameId = game.id;
       card.dataset.status = game.status;
       const image = action(
         '',
@@ -334,19 +341,30 @@
       ...sources.map((name) => [name, name]),
     ]);
     const query = node('input', undefined, 'version-search');
+    const sort = select('Sort releases', [
+      ['recommended', 'Recommended first'],
+      ['name', 'Name A–Z'],
+    ]);
     query.type = 'search';
     query.placeholder = 'Filter versions';
     query.setAttribute('aria-label', 'Filter versions');
-    filters.append(service, source, query);
-    section.append(filters, list);
+    filters.append(service, source, query, sort);
+    const releaseHeader = node('header', undefined, 'release-section-header');
+    const releaseTitle = section.querySelector(':scope > h2');
+    if (releaseTitle) releaseHeader.append(releaseTitle);
+    releaseHeader.append(filters);
+    section.append(releaseHeader, list);
     let limit = 6;
     const draw = () => {
       list.replaceChildren();
       const options = [...resolved.options]
-        .sort(
-          (a, b) =>
-            Number(b.gameId === data.preferredReleaseId) -
-            Number(a.gameId === data.preferredReleaseId),
+        .sort((a, b) =>
+          sort.value === 'name'
+            ? a.release.localeCompare(b.release)
+            : Number(b.gameId === data.preferredReleaseId) -
+                Number(a.gameId === data.preferredReleaseId) ||
+              Number(b.gameId === resolved.best?.gameId) -
+                Number(a.gameId === resolved.best?.gameId),
         )
         .filter(
           (option) =>
@@ -361,20 +379,25 @@
         const info = node('div', undefined, 'version-info');
         const title = node('h3', option.release);
         info.append(title);
-        const meta = node(
-          'p',
-          [option.fileSize, option.host || 'Torrent', ...option.sources]
-            .filter(Boolean)
-            .join(' \u00b7 '),
-          'choice-meta',
-        );
+        const meta = node('dl', undefined, 'release-metadata');
+        for (const [label, value] of [
+          ['Source', option.sources.join(', ')],
+          ['Host', option.host],
+          ['Size', option.fileSize],
+          ['Version', option.traits.version],
+        ]) {
+          if (!value) continue;
+          const group = node('div');
+          group.append(node('dt', label), node('dd', String(value)));
+          meta.append(group);
+        }
         info.append(meta);
         const tags = node('div', undefined, 'version-tags');
         if (option.gameId === data.preferredReleaseId)
           tags.append(node('span', 'Previously installed'));
-        else if (best) tags.append(node('span', 'Recommended'));
+        else if (best && option.available && !option.traits.incompatible && !option.traits.partial)
+          tags.append(node('span', 'Recommended'));
         if (option.traits.portable) tags.append(node('span', 'Portable'));
-        if (option.traits.version) tags.append(node('span', 'v' + option.traits.version));
         if (option.traits.english) tags.append(node('span', 'English / multilingual'));
         if (!option.available || option.traits.incompatible || option.traits.partial)
           tags.append(
@@ -433,6 +456,7 @@
           'download',
           best ? 'primary-button' : 'secondary-button',
         );
+        download.classList.add('release-download-action');
         download.disabled =
           !option.available || option.traits.incompatible || option.traits.partial;
         controls.append(download);
@@ -453,7 +477,7 @@
           ),
         );
     };
-    for (const control of [service, source])
+    for (const control of [service, source, sort])
       control.onchange = () => {
         limit = 6;
         draw();
@@ -475,6 +499,10 @@
     const returnScroll = $('#' + returnPage + '-page').scrollTop;
     const content = $('#game-content');
     content.replaceChildren();
+    detailPage.querySelector('.detail-cinematic-art')?.remove();
+    const cinematic = node('div', undefined, 'detail-cinematic-art');
+    cinematic.setAttribute('aria-hidden', 'true');
+    detailPage.prepend(cinematic);
     content.append(
       action(
         'Back to ' + (returnPage === 'search' ? 'Home' : 'Library'),
@@ -500,8 +528,7 @@
       currentDetail = data;
       loading.remove();
       title.remove();
-      window.mamba
-        .artwork(data.libraryId || data.catalogId || data.id)
+      window.MambaArtwork.get(data.libraryId || data.catalogId || data.id)
         .then((image) => {
           if (!image || token !== generation) return;
           detailPage.style.setProperty('--game-backdrop-image', `url("${image}")`);
@@ -516,15 +543,21 @@
       heading.id = 'game-title';
       heading.tabIndex = -1;
       intro.append(node('p', data.steamId ? 'STEAM GAME' : 'YOUR GAME', 'page-eyebrow'), heading);
-      intro.append(
-        node(
-          'p',
-          [data.developers.join(', '), data.releaseDate, ...data.genres]
-            .filter(Boolean)
-            .join(' \u00b7 '),
-          'page-description',
-        ),
-      );
+      const metadata = node('dl', undefined, 'detail-metadata');
+      for (const [label, value] of [
+        ['Released', data.releaseDate],
+        ['Developer', (data.developers || []).join(', ')],
+        ['Publisher', (data.publishers || []).join(', ')],
+        ['Genre', (data.genres || []).join(', ')],
+        ['Download', data.downloadSize],
+        ['Storage', data.space?.free == null ? null : formatBytes(data.space.free) + ' available'],
+      ])
+        if (value && !/^unknown$/i.test(String(value))) {
+          const group = node('div');
+          group.append(node('dt', label), node('dd', String(value)));
+          metadata.append(group);
+        }
+      intro.append(metadata);
       const primary = node('div', undefined, 'detail-primary');
       const local = window.MambaPresence.installed(installedGames, data);
       const playable =
@@ -554,7 +587,7 @@
       if (playable)
         primary.append(
           action(
-            'Play',
+            data.running ? 'Running' : 'Play',
             () => window.mamba.gameAction(playable.id, 'play'),
             'play',
             'primary-button',
@@ -566,11 +599,13 @@
         );
       const existingDownload = window.MambaPresence.download(recentJobs, { ...game, ...data });
       if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status))
+        primary.querySelector('.primary-button')?.remove();
+      if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status))
         primary.append(
           action(
             ['paused', 'failed'].includes(existingDownload.status)
               ? 'Resume download'
-              : 'View download',
+              : 'View progress',
             async () => {
               if (['paused', 'failed'].includes(existingDownload.status))
                 await window.mamba.retry(existingDownload.id);
@@ -670,12 +705,47 @@
             ),
           );
       }
+      primary.classList.add('detail-actions');
+      if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status)) {
+        const progress = [...primary.querySelectorAll('button')].find((b) =>
+          ['Resume download', 'View progress'].includes(b.textContent.trim()),
+        );
+        if (progress) {
+          progress.classList.add('detail-main-action');
+          primary.prepend(progress);
+        }
+      }
+      const lead =
+        primary.querySelector('.detail-main-action') ||
+        primary.querySelector('.primary-button') ||
+        primary.querySelector('button');
+      if (lead) lead.classList.add('detail-main-action');
+      if (playable && !primary.querySelector('[data-open-folder]')) {
+        const folder = action(
+          'Open folder',
+          () => window.mamba.gameAction(playable.id, 'folder'),
+          'folder-open',
+          'text-button',
+        );
+        folder.dataset.openFolder = 'true';
+        primary.append(folder);
+      }
+      for (const control of primary.querySelectorAll('button')) {
+        if (control === lead) continue;
+        control.classList.add('detail-icon-action');
+        control.title = control.textContent.trim();
+        control.setAttribute('aria-label', control.title);
+      }
       intro.append(primary);
       if (data.lastPlayed)
         intro.append(node('p', 'Last played ' + date(data.lastPlayed), 'field-hint'));
       hero.append(image, intro);
       content.append(hero);
-      if (data.description) content.append(node('p', data.description, 'game-description'));
+      if (data.description) {
+        const about = node('section', undefined, 'detail-section game-overview');
+        about.append(node('h2', 'Overview'), node('p', data.description, 'game-description'));
+        content.append(about);
+      }
       const presentInstallations = data.installations.filter(
         (item) =>
           item.folderExists || !['not-installed', 'drive-unavailable'].includes(item.status),
@@ -716,7 +786,7 @@
           ])
             details.append(node('dt', label), node('dd', value));
           const manage = node('details', undefined, 'manage-installation');
-          manage.append(node('summary', 'Advanced options'), details);
+          manage.append(node('summary', 'Manage Installation'), details);
           const controls = node('div', undefined, 'game-actions');
           if (
             presentInstallations.length > 1 &&
@@ -873,7 +943,7 @@
           );
           integrations.append(integrationActions);
           manage.append(advancedControls, launchEditor, integrations);
-          card.append(controls);
+          manage.append(controls);
           card.append(manage);
           section.append(card);
         }
@@ -904,15 +974,9 @@
         content.append(section);
       }
       if (data.catalogId) {
-        const section = node(
-          playable ? 'details' : 'section',
-          undefined,
-          'detail-section game-downloads',
-        );
+        const section = node('section', undefined, 'detail-section game-downloads');
         section.id = 'game-downloads';
-        section.append(
-          node(playable ? 'summary' : 'h2', playable ? 'Other downloads' : 'Downloads'),
-        );
+        section.append(node('h2', 'Available Downloads'));
         const hint = node('p', 'Checking your enabled download services\u2026', 'field-hint');
         section.append(hint);
         content.append(section);
@@ -926,7 +990,7 @@
                   : formatBytes(data.space.free) + ' free',
                 data.space.required
                   ? formatBytes(data.space.required) + ' estimated for download and setup'
-                  : 'Size will be checked when TorBox prepares the files',
+                  : 'Size will be checked when the download is prepared',
               ].join(' \u00b7 '),
             'storage-note',
           );
@@ -1267,9 +1331,8 @@
       steamStatus.title = state.message || '';
     } catch {}
   }
-  const options = node('details', undefined, 'library-options');
-  const optionsTitle = node('summary', 'Library options');
-  optionsTitle.prepend(icon('settings-2'));
+  const options = node('section', undefined, 'library-options');
+  options.setAttribute('aria-label', 'Library preferences');
   const optionControls = node('div', undefined, 'library-option-controls');
   const layoutField = node('label', undefined, 'library-layout-field');
   layoutField.append(node('span', 'Library style'), viewSelect);
@@ -1278,10 +1341,8 @@
   const steamSection = node('div', undefined, 'library-steam-section');
   steamSection.append(steamToggle, steamStatus);
   optionControls.append(layoutField, discoveryControls, steamSection);
-  options.append(optionsTitle, optionControls);
-  options.addEventListener('toggle', () => {
-    if (options.open) updateSteamStatus();
-  });
+  options.append(optionControls);
+  updateSteamStatus();
   filters.append(availabilitySelect, sortSelect, favoritesToggle);
   toolbar.append(filters, options);
   const bind = (id, callback, iconName) => {

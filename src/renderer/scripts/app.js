@@ -40,7 +40,7 @@ function renderFeaturedGame(game) {
   cover.className = 'featured-art';
   cover.alt = '';
   cover.decoding = 'async';
-  (game.cover ? Promise.resolve(game.cover) : window.mamba.artwork(game.id))
+  (game.cover ? Promise.resolve(game.cover) : window.MambaArtwork.get(game.id))
     .then((image) => {
       if (image && banner.isConnected && banner.dataset.gameId === String(game.id))
         cover.src = image;
@@ -188,7 +188,7 @@ async function runSearch(more = false) {
     if (!reducedBackdropMotion.matches && !page.hidden) {
       searchLayoutAnimation = content.animate(
         [{ translate: `${before.x - after.x}px ${before.y - after.y}px` }, { translate: '0 0' }],
-        { duration: 480, easing: 'cubic-bezier(.22, 1.08, .36, 1)' },
+        { duration: 160, easing: 'cubic-bezier(.22, 1.08, .36, 1)' },
       );
     }
   }
@@ -782,6 +782,7 @@ function applyLoadedConfig(config) {
   updateSettingsState();
   updateSearchState();
   window.MambaAppearance?.configure(config);
+  window.MambaDesktop?.configure(config);
 }
 function readDownloadPreferences() {
   return {
@@ -833,6 +834,7 @@ function populateDownloadPreferences() {
   document.querySelector('#keep-archives').checked = downloadPreferences.keepArchives;
   document.querySelector('#transfer-timeout').value = downloadPreferences.transferTimeoutMinutes;
   document.querySelector('#automatic-updates').checked = downloadPreferences.automaticUpdates;
+  window.MambaFolders?.render();
   for (const input of document.querySelectorAll('[data-palette]'))
     input.value = downloadPreferences.palette[input.dataset.palette];
   applyPalette(downloadPreferences.palette);
@@ -858,6 +860,7 @@ document.querySelector('#browse-extra-folder').addEventListener('click', async (
     if (folder) {
       const field = document.querySelector('#extra-game-folders');
       field.value = [field.value.trim(), folder].filter(Boolean).join('\n');
+      window.MambaFolders?.render();
       scheduleSettingsSave(150);
     }
   } catch (error) {

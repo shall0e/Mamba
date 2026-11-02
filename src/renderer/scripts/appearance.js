@@ -107,6 +107,22 @@
     editor.append(group);
   }
   const textPreviews = {};
+  const artworkLabel = node('h4', 'Artwork intensity');
+  const artworkPresets = node('div', undefined, 'artwork-presets');
+  artworkPresets.setAttribute('role', 'group');
+  artworkPresets.setAttribute('aria-label', 'Artwork intensity');
+  const artworkButtons = {};
+  for (const intensity of ['subtle', 'balanced', 'immersive']) {
+    const control = node('button', intensity[0].toUpperCase() + intensity.slice(1));
+    control.type = 'button';
+    control.onclick = () => {
+      theme.artworkIntensity = intensity;
+      customize();
+    };
+    artworkButtons[intensity] = control;
+    artworkPresets.append(control);
+  }
+  sectionPanels.background.append(artworkLabel, artworkPresets);
   for (const key of ['text', 'supportingText']) {
     const preview = node('div', undefined, 'theme-text-preview');
     preview.append(node('small', 'Preview'));
@@ -376,6 +392,13 @@
     name.value = currentId === 'custom' ? '' : theme.name;
   }
   function apply() {
+    const intensity = theme.artworkIntensity || 'balanced';
+    document.documentElement.style.setProperty(
+      '--art-intensity',
+      String({ subtle: 0.35, balanced: 0.72, immersive: 1 }[intensity]),
+    );
+    for (const [key, control] of Object.entries(artworkButtons))
+      control.setAttribute('aria-pressed', String(key === intensity));
     for (const key of model.keys) swatches[key].style.background = theme.colors[key];
     applyFonts();
     document.documentElement.dataset.navigation = theme.navigation.position;
@@ -403,6 +426,7 @@
     for (const key of ['text', 'textSecondary', 'textMuted'])
       style.setProperty('--color-' + key, copyColor);
     style.setProperty('--play-ink', theme.colors.icons);
+    style.setProperty('--play-text-ink', model.playText(theme));
     for (const [key, sample] of Object.entries(textPreviews)) {
       sample.style.opacity = theme.effects[key].opacity;
       sample.style.filter = 'blur(' + theme.effects[key].blur + 'px)';
@@ -453,6 +477,7 @@
           (item) =>
             JSON.stringify(model.parse(item).colors) === JSON.stringify(theme.colors) &&
             JSON.stringify(model.parse(item).effects) === JSON.stringify(theme.effects) &&
+            model.parse(item).artworkIntensity === theme.artworkIntensity &&
             !theme.fonts?.length &&
             model.parse(item).navigation.position === theme.navigation.position,
         )

@@ -168,6 +168,7 @@ class GameIdentity {
         .replace(/&quot;/g, '"')
         .slice(0, 2500),
       developers: app.developers || [],
+      publishers: app.publishers || [],
       genres: (app.genres || []).map((item) => item.description),
       originalReleaseYear:
         String(app.about_the_game || app.short_description || '').match(

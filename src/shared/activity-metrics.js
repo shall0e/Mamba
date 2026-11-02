@@ -31,7 +31,19 @@
       .sort((a, b) => Date.parse(b.lastPlayed) - Date.parse(a.lastPlayed))
       .slice(0, 3);
   }
-  const api = { summary, sample, recent };
+  function sidebarRecent(games) {
+    const stamp = (value) => Date.parse(value) || 0;
+    const played = games
+      .filter((g) => stamp(g.lastPlayed) > 0)
+      .sort((a, b) => stamp(b.lastPlayed) - stamp(a.lastPlayed));
+    const newest = games
+      .filter((g) => stamp(g.installedAt) > 0)
+      .sort((a, b) => stamp(b.installedAt) - stamp(a.installedAt))[0];
+    return newest && stamp(newest.lastPlayed) < stamp(newest.installedAt)
+      ? [newest, ...played.filter((g) => g.id !== newest.id)]
+      : played;
+  }
+  const api = { summary, sample, recent, sidebarRecent };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MambaActivity = api;
 })(typeof window === 'undefined' ? globalThis : window);

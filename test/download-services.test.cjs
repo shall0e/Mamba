@@ -66,6 +66,158 @@ test('Pixeldrain files and lists resolve to individual byte-checked downloads', 
   );
   assert.equal(calls.length, 2);
 });
+
+test('MEGA and 1fichier are direct candidates independent of TorBox caching', () => {
+  for (const uri of [
+    'https://mega.co.nz/#!fileid!key',
+    'https://mega.nz/file/fileid#key',
+    'https://mega.nz/folder/folderid#key',
+    'https://1fichier.com/?abc123',
+  ]) {
+    const config = {
+      enabledDownloadServices: ['torbox', 'direct'],
+      torboxApiKey: 'key',
+      cachedOnly: true,
+      preferredDownloadService: 'torbox',
+    };
+    assert.deepEqual(candidates({ uri }, config), ['direct']);
+    assert.equal(chooseService({ uri, services: ['torbox'], cached: false }, config), 'direct');
+  }
+  assert.equal(directKind('https://mega.nz.evil.test/file/fileid#key'), null);
+  assert.equal(directKind('https://1fichier.com/login.pl'), null);
+});
+
+test('stale catalog providers and failed TorBox checks retain direct fallback', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-direct-cache-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  let fail = false;
+  const config = {
+    sourceUrls: ['https://source.test/feed'],
+    enabledDownloadServices: ['torbox', 'direct'],
+    torboxApiKey: 'key',
+    cachedOnly: true,
+    preferredDownloadService: 'torbox',
+  };
+  const catalog = new Catalog(dir, () => config, {
+    transport: async () =>
+      Response.json({
+        name: 'Fixture',
+        downloads: [{ title: 'Example [ENG]', uris: ['https://mega.nz/file/fileid#key'] }],
+      }),
+    apiFactory: () => ({
+      cached: async () => {
+        if (fail) throw Error('TorBox unavailable');
+        return new Set();
+      },
+    }),
+  });
+  await catalog.sync(true);
+  const game = catalog.games[0];
+  game.links[0].services = ['torbox']; // Previously saved catalogs lack the new host support.
+  for (fail of [false, true]) {
+    const resolved = await catalog.resolveGame(catalog.searchIndex[0].id);
+    assert.ok(resolved.best);
+    assert.deepEqual(resolved.best.services, ['direct']);
+    assert.equal(chooseService(game.links[0], config), 'direct');
+  }
+});
+
+test('1fichier free flow resolves file headers and downloads raw bytes without TorBox', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-1fichier-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const uri = 'https://1fichier.com/?abc123';
+  const transport = async (url, options = {}) => {
+    if (url === uri)
+      return new Response(
+        options.method === 'POST'
+          ? '<a class="ok btn-general" href="https://a-1.1fichier.com/token/file">Click here to download</a>'
+          : '<form method="post"><input type="submit" value="Download"></form>',
+      );
+    assert.equal(url, 'https://a-1.1fichier.com/token/file');
+    return new Response(options.method === 'HEAD' ? null : 'abc', {
+      headers: {
+        'Content-Length': '3',
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': 'attachment; filename="game.zip"',
+      },
+    });
+  };
+  const service = new DirectDownloads(transport);
+  const remote = await service.create(uri);
+  const info = await service.info(remote.kind, remote.id);
+  assert.equal(info.files[0].name, 'game.zip');
+  const destination = path.join(dir, 'game.zip');
+  await downloadFile(
+    await service.downloadLink(remote.kind, remote.id, 0),
+    destination,
+    3,
+    undefined,
+    () => {},
+    service.downloadResponse.bind(service),
+  );
+  assert.equal(await fs.readFile(destination, 'utf8'), 'abc');
+  const { resolveOneFichier } = require('../src/core/hosted-downloads.cjs');
+  await assert.rejects(
+    resolveOneFichier(uri, async () => new Response('You must wait 10 minutes')),
+    /waiting period/,
+  );
+  await assert.rejects(
+    resolveOneFichier(
+      uri,
+      async () => new Response('<a class="ok" href="https://evil.test/file">Download</a>'),
+    ),
+    /unexpected/,
+  );
+});
+
+test('MEGA downloads resume decrypted bytes and verify the complete file MAC', async (t) => {
+  const { MegaDownload } = require('../src/core/hosted-downloads.cjs');
+  const { Readable, Writable } = require('node:stream');
+  const { pipeline } = require('node:stream/promises');
+  const { encrypt } = require('megajs');
+  const content = Buffer.from('fixture encrypted game archive');
+  const encryption = encrypt(Buffer.alloc(24, 7));
+  await pipeline(
+    Readable.from([Buffer.from(content)]),
+    encryption,
+    new Writable({
+      write(_chunk, _encoding, done) {
+        done();
+      },
+    }),
+  );
+  let downloadedAt;
+  const file = {
+    name: 'game.zip',
+    size: content.length,
+    key: encryption.key,
+    loadAttributes: async () => {},
+    download: (options) => {
+      downloadedAt = options.start;
+      assert.equal(options.forceHttps, true);
+      return Readable.from([content.subarray(options.start)]);
+    },
+  };
+  const service = new MegaDownload('https://mega.nz/file/id#key', () => file);
+  const [entry] = await service.info();
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-mega-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const target = path.join(dir, entry.name);
+  await fs.writeFile(target + '.part', content.subarray(0, 5));
+  await downloadFile(
+    entry.url,
+    target,
+    entry.size,
+    undefined,
+    () => {},
+    service.fetch.bind(service),
+  );
+  assert.equal(downloadedAt, 5);
+  assert.deepEqual(await fs.readFile(target), content);
+  await service.verifyFile(target, entry.id);
+  await fs.writeFile(target, Buffer.alloc(content.length));
+  await assert.rejects(service.verifyFile(target, entry.id), /verification/i);
+});
 test('Real-Debrid selects torrent files and matches file IDs to unrestricted links', async () => {
   const calls = [];
   let selected = false;

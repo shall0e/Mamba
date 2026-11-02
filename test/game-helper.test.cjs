@@ -5,6 +5,19 @@ const test = require('node:test'),
   path = require('node:path');
 const { installGameHelper, registerHelperRuntime } = require('../src/core/game-helper.cjs');
 const { finalizeInstallation, flatten } = require('../src/core/library.cjs');
+
+test('Linux startup skips Windows helper registration without LOCALAPPDATA', () => {
+  const { execFileSync } = require('node:child_process');
+  execFileSync(process.execPath, [
+    '-e',
+    `
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    delete process.env.LOCALAPPDATA;
+    require(${JSON.stringify(require.resolve('../src/core/game-helper.cjs'))})
+      .registerHelperRuntime().catch(error => { console.error(error); process.exitCode = 1; });
+  `,
+  ]);
+});
 test('every installation gets identical portable commands with no user, game or project paths', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-universal-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));

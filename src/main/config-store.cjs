@@ -12,6 +12,7 @@ function createConfigStore({
 }) {
   const publicConfig = (config) => ({
     onboardingCompleted: config.onboardingCompleted !== false,
+    sidebarCollapsed: config.sidebarCollapsed === true,
     appearance: config.appearance || null,
     enabledDownloadServices: config.enabledDownloadServices || ['torbox', 'direct'],
     preferredDownloadService: config.preferredDownloadService || 'auto',

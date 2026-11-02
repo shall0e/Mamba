@@ -68,10 +68,18 @@ if (!app.requestSingleInstanceLock()) {
     count: 0,
     errors: [],
   };
+  const launchedGames = new Map();
+  const withRunning = (game) => ({
+    ...game,
+    running: launchedGames.has(game.libraryId || game.id),
+  });
   async function task(method, ...args) {
     if (!background) return Promise.reject(new Error('Mamba is starting. Try again shortly.'));
     try {
-      return await background.request(method, ...args);
+      const result = await background.request(method, ...args);
+      if (method === 'library:scan' && Array.isArray(result)) return result.map(withRunning);
+      if (method === 'game:details' && result) return withRunning(result);
+      return result;
     } catch (error) {
       reportIssue(error, method);
       throw error;
@@ -492,6 +500,7 @@ if (!app.requestSingleInstanceLock()) {
         config.libraryView = view.libraryView;
       }
       for (const key of [
+        'sidebarCollapsed',
         'libraryShowUnknown',
         'automaticGameDetection',
         'steamLibraryIntegration',
@@ -809,6 +818,7 @@ if (!app.requestSingleInstanceLock()) {
       if (error) throw new Error(error);
       return;
     }
+    if (action === 'play' && launchedGames.has(id)) return;
     const target =
       action === 'setup'
         ? game.installer
@@ -874,6 +884,11 @@ if (!app.requestSingleInstanceLock()) {
       );
       child.once('error', reject);
       child.once('spawn', () => {
+        launchedGames.set(id, child.pid);
+        child.once('exit', () => {
+          if (launchedGames.get(id) === child.pid) launchedGames.delete(id);
+          task('library:scan').catch(() => {});
+        });
         child.unref();
         resolve();
       });
@@ -1056,8 +1071,8 @@ if (!app.requestSingleInstanceLock()) {
         if (changed) publishIssues();
       });
       background.on('library:changed', (games) => {
-        installedGames = games;
-        broadcast('library:changed', games);
+        installedGames = games.map(withRunning);
+        broadcast('library:changed', installedGames);
       });
       background.on('catalog:results', (result) => broadcast('catalog:results', result));
       const previousStatuses = new Map();

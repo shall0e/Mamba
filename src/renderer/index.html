@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data: https://*.steamstatic.com;"
+      content="default-src 'none'; style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self' data: https://*.steamstatic.com;"
     />
     <title>Mamba</title>
     <link rel="icon" type="image/png" href="../../assets/mamba.png" />
     <link rel="stylesheet" href="styles/app.css" />
+    <link rel="stylesheet" href="styles/design-system.css" />
+    <script src="scripts/artwork-cache.js" defer></script>
     <script src="scripts/background.js" defer></script>
     <script src="scripts/app.js" defer></script>
     <script src="scripts/dialogs.js" defer></script>
@@ -23,6 +25,7 @@
     <script src="scripts/experience.js" defer></script>
     <script src="scripts/file-cleanup.js" defer></script>
     <script src="scripts/scrollbar.js" defer></script>
+    <script src="scripts/desktop-layout.js" defer></script>
     <script src="scripts/welcome.js" defer></script>
     <script src="scripts/search-prompts.js" defer></script>
   </head>
@@ -135,7 +138,8 @@
           id="search-open"
           type="button"
           aria-label="Home"
-          title="Home"
+          aria-describedby="nav-home-tooltip"
+          aria-keyshortcuts="Control+K Meta+K"
           data-page="search"
           aria-current="page"
         >
@@ -155,14 +159,14 @@
             <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
             <path d="M9 21v-8h6v8" />
           </svg>
-          <span>Home</span>
+          <span id="nav-home-tooltip" role="tooltip">Home<kbd>Ctrl K</kbd></span>
         </button>
         <button
           class="nav-button"
           id="library-open"
           type="button"
           aria-label="Library"
-          title="Library"
+          aria-describedby="nav-library-tooltip"
           data-page="library"
         >
           <svg
@@ -183,7 +187,7 @@
               d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"
             />
           </svg>
-          <span>Library</span>
+          <span id="nav-library-tooltip" role="tooltip">Library</span>
         </button>
         <button
           class="nav-button"
@@ -191,7 +195,7 @@
           data-page="activity"
           type="button"
           aria-label="Activity"
-          title="Activity"
+          aria-describedby="nav-activity-tooltip"
         >
           <svg
             aria-hidden="true"
@@ -209,7 +213,8 @@
             <rect width="18" height="18" x="3" y="3" rx="2" />
             <path d="M17 12h-2l-2 5-2-10-2 5H7" />
           </svg>
-          <span>Activity</span><i class="nav-count" id="activity-count" hidden></i>
+          <span id="nav-activity-tooltip" role="tooltip">Activity</span
+          ><i class="nav-count" id="activity-count" hidden></i>
         </button>
 
         <button
@@ -218,7 +223,7 @@
           type="button"
           aria-label="Open settings"
           data-page="settings"
-          title="Settings"
+          aria-describedby="nav-settings-tooltip"
         >
           <svg
             aria-hidden="true"
@@ -243,7 +248,7 @@
             <path d="M5 10V3" />
             <path d="M5 21v-7" />
           </svg>
-          <span>Settings</span>
+          <span id="nav-settings-tooltip" role="tooltip">Settings</span>
         </button>
       </nav>
     </aside>
@@ -651,19 +656,12 @@
                 unfinished download files are cleared after 24 hours without changes, except files
                 protected for automatic recovery.
               </p>
-              <label class="field-label" for="extra-game-folders">Extra game folders</label>
-              <textarea
-                id="extra-game-folders"
-                rows="4"
-                spellcheck="false"
-                autocomplete="off"
-                aria-describedby="extra-folders-hint"
-              ></textarea>
+              <h3 id="folder-list-label">Extra game folders</h3>
+              <input id="extra-game-folders" type="hidden" />
+              <div id="folder-list" aria-labelledby="folder-list-label"></div>
               <button class="text-button" id="browse-extra-folder" type="button">Add folder</button>
               <p class="field-hint" id="extra-folders-hint">
-                One folder per line. Track games here alongside your main folder. New installations
-                use the main folder. Existing Steam, Games, XboxGames, and Epic folders are detected
-                by default. Removing a folder keeps its files.
+                Track games in other folders. Removing a folder keeps its files.
               </p>
               <label class="switch-row"
                 ><span

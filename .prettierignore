@@ -4,3 +4,4 @@ data/
 vendor/
 assets/
 package-lock.json
+docs/design-review/
