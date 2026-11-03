@@ -58,7 +58,7 @@ class Artwork {
     );
     try {
       const saved = JSON.parse(await fs.readFile(cache, 'utf8'));
-      const ttl = saved.image ? 30 * 86400000 : game.verified ? 60000 : 86400000;
+      const ttl = saved.image ? 30 * 86400000 : saved.transient || game.verified ? 60000 : 86400000;
       if (Number.isFinite(saved.at) && Date.now() - saved.at >= 0 && Date.now() - saved.at < ttl)
         return saved.image;
     } catch {}
@@ -114,6 +114,7 @@ class Artwork {
           }
         } else {
           await response.body?.cancel();
+          if (!response.ok) throw Error('Artwork download unavailable');
         }
       }
       await fs.mkdir(this.directory, { recursive: true });
@@ -122,7 +123,9 @@ class Artwork {
     } catch {
       await fs
         .mkdir(this.directory, { recursive: true })
-        .then(() => fs.writeFile(cache, JSON.stringify({ image: null, at: Date.now() })))
+        .then(() =>
+          fs.writeFile(cache, JSON.stringify({ image: null, transient: true, at: Date.now() })),
+        )
         .catch(() => {});
       return null;
     }

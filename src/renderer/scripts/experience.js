@@ -129,6 +129,7 @@
         game.running,
       ]),
     ]);
+    renderRecentGames();
     if (signature === libraryRenderSignature) return;
     libraryRenderSignature = signature;
     const list = $('#game-list');
@@ -223,7 +224,6 @@
       list.append(card);
     }
     if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
-    renderRecentGames();
     window.MambaDiscovery?.render();
   }
   function renderRecentGames() {

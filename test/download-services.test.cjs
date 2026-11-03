@@ -204,6 +204,18 @@ test('MEGA downloads resume decrypted bytes and verify the complete file MAC', a
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const target = path.join(dir, entry.name);
   await fs.writeFile(target + '.part', content.subarray(0, 5));
+  const response = await service.fetch(entry.url);
+  const etag = response.headers.get('etag');
+  await response.body.cancel();
+  await require('../src/core/library.cjs').atomicJson(
+    path.join(
+      dir,
+      '.mamba-transfer',
+      require('node:crypto').createHash('sha256').update(path.basename(target)).digest('hex') +
+        '.json',
+    ),
+    { etag },
+  );
   await downloadFile(
     entry.url,
     target,

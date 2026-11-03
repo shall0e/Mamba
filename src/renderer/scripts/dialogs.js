@@ -17,13 +17,17 @@
     header.className = 'mamba-dialog-heading';
     header.append(symbol, heading);
     const message = document.createElement('p');
+    message.id = 'mamba-dialog-message';
     message.className = 'mamba-dialog-message';
     message.textContent = data.message;
     const detail = document.createElement('p');
     detail.className = 'mamba-dialog-detail';
     detail.id = 'mamba-dialog-detail';
     detail.textContent = data.detail;
-    popup.setAttribute('aria-describedby', detail.id);
+    popup.setAttribute(
+      'aria-describedby',
+      [message.id, ...(data.detail ? [detail.id] : [])].join(' '),
+    );
     const actions = document.createElement('div');
     actions.className = 'mamba-dialog-actions';
     let finished = false;

@@ -2,6 +2,7 @@ const path = require('node:path');
 const { Readable, Writable, addAbortSignal } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { createReadStream } = require('node:fs');
+const { createHash } = require('node:crypto');
 
 class MegaDownload {
   constructor(uri, fileFactory = (url) => require('megajs').File.fromURL(url)) {
@@ -42,6 +43,7 @@ class MegaDownload {
     return new Response(Readable.toWeb(stream), {
       status: start ? 206 : 200,
       headers: {
+        ETag: '"' + createHash('sha256').update(node.key).digest('hex') + '"',
         'Content-Type': 'application/octet-stream',
         'Content-Length': String(node.size - start),
         ...(start ? { 'Content-Range': `bytes ${start}-${node.size - 1}/${node.size}` } : {}),

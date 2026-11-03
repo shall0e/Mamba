@@ -78,3 +78,55 @@ test('saved launch options survive library reload', async (t) => {
     /escapes/,
   );
 });
+
+test(
+  'native Linux executables receive configured arguments and working directory',
+  { skip: process.platform !== 'linux' },
+  async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-native-launch-'));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    const source = await fs.readFile(path.join(__dirname, '../src/main/index.cjs'), 'utf8');
+    const native = source.indexOf("const native = process.platform !== 'win32'");
+    const start = source.lastIndexOf('await new Promise(', native);
+    const end = source.indexOf("    await task('library:played', id);", native);
+    assert.ok(start > 0 && end > start);
+    let exited;
+    const result = require('node:vm').runInNewContext(
+      '(async () => {' + source.slice(start, end) + '})()',
+      {
+        process,
+        target: process.execPath,
+        id: 'game',
+        launchedGames: new Map(),
+        launch: {
+          arguments: 'custom',
+          cwd: root,
+          argv: [
+            '-e',
+            "require('node:fs').writeFileSync('result.json', JSON.stringify({args:process.argv.slice(1),cwd:process.cwd()}))",
+            'first',
+            'two words',
+          ],
+        },
+        task: async () => {},
+        require: () => assert.fail('Native executables must not use Windows shortcut wrappers'),
+        spawn: (...args) => {
+          const child = require('node:child_process').spawn(...args);
+          exited = new Promise((resolve, reject) => {
+            child.once('error', reject);
+            child.once('close', (code) =>
+              code === 0 ? resolve() : reject(Error('Native launch failed: ' + code)),
+            );
+          });
+          return child;
+        },
+      },
+    );
+    await result;
+    await exited;
+    assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, 'result.json'))), {
+      args: ['first', 'two words'],
+      cwd: root,
+    });
+  },
+);

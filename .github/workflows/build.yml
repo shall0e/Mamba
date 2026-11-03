@@ -2,6 +2,8 @@ name: Build Windows app
 on:
   push:
     branches: [main, feature/download-recovery]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

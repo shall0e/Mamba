@@ -194,7 +194,9 @@
         );
       else if (
         job &&
-        ['queued', 'preparing', 'downloading', 'extracting', 'installing'].includes(job.status)
+        ['queued', 'preparing', 'downloading', 'extracting', 'installing', 'needs-setup'].includes(
+          job.status,
+        )
       )
         control = button(
           'View download',
