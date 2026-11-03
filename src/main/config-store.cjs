@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const defaultPalette = require('../shared/palette-defaults.json');
 const { Themes } = require('../core/themes.cjs');
+const { withConfigLock, writePrivateConfig } = require('../core/config-file.cjs');
 function createConfigStore({
   app,
   safeStorage,
@@ -61,6 +62,7 @@ function createConfigStore({
 
   async function readConfig() {
     try {
+      if (process.platform !== 'win32') await fs.chmod(configFile(), 0o600);
       const config = JSON.parse(await fs.readFile(configFile(), 'utf8'));
       if (!config || typeof config !== 'object' || Array.isArray(config))
         throw new Error('Invalid config.json. Expected an object.');
@@ -173,21 +175,21 @@ function createConfigStore({
   }
 
   async function writeConfig(config) {
-    const destination = configFile();
-    await fs.mkdir(path.dirname(destination), { recursive: true });
-    await fs.writeFile(`${destination}.tmp`, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-    await fs.rename(`${destination}.tmp`, destination);
+    await writePrivateConfig(configFile(), config);
   }
 
   function updateConfig(update) {
     const pending = configQueue.then(async () => {
-      const config = await readConfig();
-      const previous = JSON.stringify(config);
-      await update(config);
-      if (JSON.stringify(config) !== previous) {
-        await writeConfig(config);
-        await onChange();
-      }
+      let changed = false;
+      const config = await withConfigLock(configFile(), async () => {
+        const current = await readConfig();
+        const previous = JSON.stringify(current);
+        await update(current);
+        changed = JSON.stringify(current) !== previous;
+        if (changed) await writeConfig(current);
+        return current;
+      });
+      if (changed) await onChange();
       return { ...publicConfig(config), installedGames: getInstalledGames() };
     });
     configQueue = pending.catch(() => {});

@@ -402,6 +402,17 @@ function archiveStarts(files) {
     return /\.(zip|7z|rar)$/i.test(name) || /\.(7z|zip)\.001$/i.test(name);
   });
 }
+async function copyArchiveSidecars(source, destination) {
+  await fs.mkdir(destination, { recursive: true });
+  for (const entry of await fs.readdir(source, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw Error('Symbolic links in game content are not supported.');
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+    if (entry.isDirectory()) await copyArchiveSidecars(from, to);
+    else if (!/\.(?:zip|7z|rar|r\d+|(?:7z|zip)\.\d+)$/i.test(entry.name))
+      await fs.copyFile(from, to, require('node:fs').constants.COPYFILE_EXCL);
+  }
+}
 async function unpack(downloads, payload, options, notify) {
   await fs.mkdir(payload, { recursive: true });
   const files = await walk(downloads);
@@ -445,6 +456,8 @@ async function unpack(downloads, payload, options, notify) {
           notify(message, ((index + percent / 100) / nestedArchives.length) * 100),
       });
     }
+    // Keep sidecar content from the wrapper, without recursively extracting its archives again.
+    await copyArchiveSidecars(payload, nested);
     const old = path.join(path.dirname(payload), `archive-layer-${depth}`);
     await fs.rename(payload, old);
     await fs.rename(nested, payload);
@@ -577,8 +590,11 @@ class Library {
           .slice(0, 24);
         let executable = found.executable;
         if (manifest.executable) {
-          const candidate = within(folder, path.resolve(folder, manifest.executable));
-          if ((await fs.lstat(candidate).catch(() => null))?.isFile()) executable = candidate;
+          try {
+            const candidate = within(folder, path.resolve(folder, manifest.executable));
+            await safePath(folder, candidate);
+            if ((await fs.lstat(candidate).catch(() => null))?.isFile()) executable = candidate;
+          } catch {}
         }
         const localMetadata = await require('./installed-metadata.cjs').installedMetadata(folder);
         const created = (await fs.stat(folder)).birthtimeMs;

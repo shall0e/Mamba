@@ -129,8 +129,17 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
   );
   await safePath(path.dirname(destination), metadataFile);
   await safePath(path.dirname(destination), metadataFile + '.tmp');
-  const metadata = JSON.parse(await fs.readFile(metadataFile, 'utf8').catch(() => '{}'));
-  const validator = metadata.etag || metadata.lastModified;
+  let metadata = {};
+  try {
+    metadata = JSON.parse(await fs.readFile(metadataFile, 'utf8')) || {};
+  } catch (error) {
+    if (!(error instanceof SyntaxError) && error.code !== 'ENOENT') throw error;
+  }
+  const validator =
+    (typeof metadata.etag === 'string' && !metadata.etag.startsWith('W/') && metadata.etag) ||
+    (typeof metadata.lastModified === 'string' && metadata.lastModified);
+  const restart = start > 0 && !validator;
+  if (restart) start = 0;
   const transferController = new AbortController();
   const transferSignal = signal
     ? AbortSignal.any([signal, transferController.signal])
@@ -219,10 +228,17 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
         metadata.lastModified !== lastModified))
   )
     return rejectResponse('Download server returned changed content');
+  const backup = metadataFile + '.partial-backup';
   try {
+    if (restart) {
+      await safePath(path.dirname(destination), backup);
+      await fs.mkdir(path.dirname(backup), { recursive: true });
+      if (await fs.lstat(backup).catch(() => null)) await fs.rm(partial);
+      else await fs.rename(partial, backup);
+    }
     await atomicJson(metadataFile, {
-      etag: etag && !etag.startsWith('W/') ? etag : null,
-      lastModified,
+      etag: etag && !etag.startsWith('W/') ? etag : response.status === 206 ? metadata.etag : null,
+      lastModified: lastModified || (response.status === 206 ? metadata.lastModified : null),
       total,
     });
   } catch (error) {
@@ -264,6 +280,8 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
     });
   signal?.throwIfAborted();
   await fs.rename(partial, destination);
+  await safePath(path.dirname(destination), backup);
+  await fs.rm(backup, { force: true });
 }
 
 class Downloads extends EventEmitter {
@@ -935,8 +953,8 @@ class Downloads extends EventEmitter {
         job.storage = await this.checkDisk(job.root, total, { existing: existingBytes });
         const meter = new RollingSpeed();
         const seen = new Set();
+        const targets = new Map();
         for (const file of files) {
-          signal.throwIfAborted();
           const relative = String(file.name || file.short_name || `file-${file.id}`).replaceAll(
             '\\',
             '/',
@@ -957,9 +975,26 @@ class Downloads extends EventEmitter {
           )
             throw new Error('TorBox returned an unsafe file path.');
           const target = within(raw, path.join(raw, relative));
-          if (seen.has(target.toLowerCase()))
-            throw new Error('TorBox returned colliding filenames.');
-          seen.add(target.toLowerCase());
+          const key = target.toLowerCase();
+          const temporary = key + '.part';
+          if (seen.has(key) || seen.has(temporary))
+            throw new Error('Download service returned colliding filenames.');
+          seen.add(key);
+          seen.add(temporary);
+          targets.set(file, target);
+        }
+        for (const reserved of seen) {
+          for (
+            let parent = path.dirname(reserved);
+            parent !== path.dirname(parent);
+            parent = path.dirname(parent)
+          )
+            if (seen.has(parent)) throw new Error('Download service returned colliding filenames.');
+        }
+        for (const file of files) {
+          signal.throwIfAborted();
+          const target = targets.get(file);
+          const relative = path.relative(raw, target);
           await safePath(job.root, target);
           job.activeFile = target;
           entries.push({ ...file, size: Number(file.size), target });

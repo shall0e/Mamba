@@ -868,8 +868,10 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     await new Promise((resolve, reject) => {
-      const wrapped = require('../core/shortcuts.cjs').launchTarget(target, launch.arguments);
-      const native = /\.(exe|com)$/i.test(target);
+      const native = process.platform !== 'win32' || /\.(exe|com)$/i.test(target);
+      const wrapped = native
+        ? null
+        : require('../core/shortcuts.cjs').launchTarget(target, launch.arguments);
       const child = spawn(
         native ? target : wrapped.exe.slice(1, -1),
         native ? launch.argv : [wrapped.args],

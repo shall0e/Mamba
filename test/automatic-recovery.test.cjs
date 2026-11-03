@@ -451,6 +451,14 @@ test('identical-service fallback resumes the existing partial through Real-Debri
   const raw = path.join(f.dir, '.mamba-downloads', f.job.id, 'raw');
   await fs.mkdir(raw, { recursive: true });
   await fs.writeFile(path.join(raw, 'game.exe.part'), 'abc');
+  await atomicJson(
+    path.join(
+      raw,
+      '.mamba-transfer',
+      createHash('sha256').update('game.exe').digest('hex') + '.json',
+    ),
+    { etag: '"original"' },
+  );
   await f.queue.pump();
   assert.equal(f.job.service, 'realdebrid');
   assert.equal(f.job.status, 'waiting-retry');

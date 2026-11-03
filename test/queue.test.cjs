@@ -9,6 +9,15 @@ test('speed reports bytes per second without counting resumed bytes', async (t) 
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'game.bin');
   await fs.writeFile(file + '.part', Buffer.alloc(100));
+  await require('../src/core/library.cjs').atomicJson(
+    path.join(
+      dir,
+      '.mamba-transfer',
+      require('node:crypto').createHash('sha256').update(path.basename(file)).digest('hex') +
+        '.json',
+    ),
+    { etag: '"fixture"' },
+  );
   let positive = false;
   const transport = async () =>
     new Response(

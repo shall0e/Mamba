@@ -26,7 +26,18 @@ const cardJobs = new Map();
 function renderFeaturedGame(game) {
   const banner = document.querySelector('#featured-game');
   const owned = game ? window.MambaPresence?.installed(installedGames, game) : null;
-  const signature = JSON.stringify([game, owned?.id, owned?.status, owned?.executable]);
+  const job = game
+    ? window.MambaPresence?.download(window.MambaExperience?.jobs || [], game)
+    : null;
+  const signature = JSON.stringify([
+    game,
+    owned?.id,
+    owned?.status,
+    owned?.executable,
+    job?.id,
+    job?.status,
+    game && cardJobs.get(game.id),
+  ]);
   if (banner.dataset.signature === signature) return;
   banner.dataset.signature = signature;
   banner.replaceChildren();
@@ -58,22 +69,53 @@ function renderFeaturedGame(game) {
   title.textContent = game.name;
   const actions = document.createElement('div');
   actions.className = 'featured-actions';
-  actions.append(
-    button(
-      owned?.executable && owned.status === 'installed' ? 'Play' : 'Download',
+  let primary;
+  if (owned?.executable && owned.status === 'installed')
+    primary = button('Play', () => window.MambaExperience.play(owned), 'play', 'primary-button');
+  else if (job && ['paused', 'failed'].includes(job.status))
+    primary = button(
+      job.status === 'paused' ? 'Resume' : 'Retry',
       async () => {
-        if (owned?.executable && owned.status === 'installed') {
-          await window.mamba.gameAction(owned.id, 'play');
-          return;
-        }
+        await window.mamba.retry(job.id);
+        showPage('activity');
+      },
+      'rotate-ccw',
+      'secondary-button',
+    );
+  else if (
+    job &&
+    ['queued', 'preparing', 'downloading', 'extracting', 'installing', 'needs-setup'].includes(
+      job.status,
+    )
+  )
+    primary = button('View download', () => showPage('activity'), 'download', 'secondary-button');
+  else if (owned || job?.status === 'completed')
+    primary = button(
+      owned ? 'Review setup' : 'View game',
+      () => openGame(game),
+      owned ? 'settings-2' : 'arrow-right',
+      'secondary-button',
+    );
+  else {
+    primary = button(
+      'Download',
+      async () => {
+        if (cardJobs.has(game.id)) return;
         const jobId = await window.mamba.downloadBest(game.id);
         cardJobs.set(game.id, jobId);
+        renderFeaturedGame(game);
         showToast(`${game.name} added to downloads`);
       },
-      owned?.executable && owned.status === 'installed' ? 'play' : 'download',
+      'download',
       'primary-button',
-    ),
-  );
+    );
+    if (cardJobs.has(game.id)) {
+      primary.lastChild.textContent = 'Queued';
+      primary.disabled = true;
+      primary.dataset.locked = 'true';
+    }
+  }
+  actions.append(primary);
   actions.append(button('Details', () => openGame(game), 'info', 'secondary-button'));
   content.append(badge, title, actions);
   banner.append(cover, shade, content);

@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { sevenZipPath } = require('../src/core/library.cjs');
 const { InstallMetadata } = require('../src/core/install-metadata.cjs');
 
 test('metadata extracts arbitrary nested and binary files into every installation and overwrites existing files', async (t) => {
@@ -14,7 +15,7 @@ test('metadata extracts arbitrary nested and binary files into every installatio
   const bytes = Buffer.from([0, 255, 42]);
   await fs.writeFile(path.join(source, 'nested', 'extra.bin'), bytes);
   const archive = path.join(root, 'package.zip');
-  execFileSync(path.resolve('vendor/7zip/7z.exe'), ['a', archive, '.'], { cwd: source });
+  execFileSync(sevenZipPath(), ['a', archive, '.'], { cwd: source });
   const archiveBytes = await fs.readFile(archive);
   let requests = 0;
   const metadata = new InstallMetadata(root, async (url) => {
@@ -43,7 +44,7 @@ test('metadata backs up Steam DLLs and extracts beside them, preserving original
   for (const name of ['steam_api.dll', 'steam_api64.dll'])
     await fs.writeFile(path.join(source, name), 'replacement');
   const archive = path.join(root, 'package.zip');
-  execFileSync(path.resolve('vendor/7zip/7z.exe'), ['a', archive, '.'], { cwd: source });
+  execFileSync(sevenZipPath(), ['a', archive, '.'], { cwd: source });
   const bytes = await fs.readFile(archive);
   const metadata = new InstallMetadata(root, async () => ({
     ok: true,
@@ -83,7 +84,7 @@ test('integration reinstall finds a nested Steam backup even when the active DLL
   await fs.mkdir(source);
   await fs.writeFile(path.join(source, 'steam_api64.dll'), 'replacement');
   const zip = path.join(root, 'metadata.zip');
-  execFileSync(path.resolve('vendor/7zip/7z.exe'), ['a', zip, '.'], { cwd: source });
+  execFileSync(sevenZipPath(), ['a', zip, '.'], { cwd: source });
   const bytes = await fs.readFile(zip);
   const metadata = new InstallMetadata(root, async () => ({
     ok: true,

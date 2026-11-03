@@ -1,21 +1,34 @@
 name: Publish Linux release packages
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and update
+        required: true
+        type: string
 permissions:
   contents: write
 jobs:
   linux:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v1.4.4
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Validate release version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node -e 'if (process.env.RELEASE_TAG !== "v" + require("./package.json").version) throw Error("Release tag must match package.json version")'
+          gh release view "$RELEASE_TAG"
       - run: npm ci
       - run: npm run build:linux -- --config.linux.maintainer="Mamba contributors" --config.extraMetadata.homepage="https://github.com/shall0e/Mamba"
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload v1.4.4 dist/*.AppImage dist/*.deb dist/latest-linux.yml --clobber
+        run: gh release upload "$RELEASE_TAG" dist/*.AppImage dist/*.deb dist/latest-linux.yml --clobber

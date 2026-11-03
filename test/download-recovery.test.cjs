@@ -4,12 +4,24 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { downloadFile } = require('../src/core/downloads.cjs');
+const { createHash } = require('node:crypto');
+const { atomicJson } = require('../src/core/library.cjs');
 const { explain, Issues } = require('../src/core/issues.cjs');
 async function fixture(t, partial = '') {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-recovery-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'game.rar');
-  if (partial) await fs.writeFile(file + '.part', partial);
+  if (partial) {
+    await fs.writeFile(file + '.part', partial);
+    await atomicJson(
+      path.join(
+        dir,
+        '.mamba-transfer',
+        createHash('sha256').update(path.basename(file)).digest('hex') + '.json',
+      ),
+      { etag: '"fixture"' },
+    );
+  }
   return file;
 }
 test('terminated stream resumes from flushed disk bytes and finalizes', async (t) => {
@@ -38,7 +50,7 @@ test('terminated stream resumes from flushed disk bytes and finalizes', async (t
               );
             },
           }),
-          { headers: { 'Content-Length': '6' } },
+          { headers: { 'Content-Length': '6', ETag: '"fixture"' } },
         );
       assert.equal(options.headers.Range, 'bytes=3-');
       return new Response('def', {

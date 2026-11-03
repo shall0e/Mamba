@@ -22,7 +22,13 @@ Downloads run in this terminal; Ctrl+C pauses active transfers and preserves sav
 async function dataDirectory() {
   if (process.env.MAMBA_DATA_DIR) return path.resolve(process.env.MAMBA_DATA_DIR);
   const root = path.resolve(__dirname, '..');
-  const appData = process.env.APPDATA || path.join(require('node:os').homedir(), '.config');
+  const home = require('node:os').homedir();
+  const appData =
+    process.platform === 'win32'
+      ? process.env.APPDATA || path.join(home, 'AppData', 'Roaming')
+      : process.platform === 'darwin'
+        ? path.join(home, 'Library', 'Application Support')
+        : process.env.XDG_CONFIG_HOME || path.join(home, '.config');
   const locations = [path.join(appData, 'minimal-downloader'), path.join(appData, 'Mamba')];
   if (!root.includes('app.asar')) locations.unshift(path.join(root, 'data'));
   for (const directory of locations)
@@ -98,6 +104,10 @@ async function main(args = process.argv.slice(2)) {
     return;
   }
   const file = path.join(directory, 'config.json');
+  if (process.platform !== 'win32')
+    await fs.chmod(file, 0o600).catch((error) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
   const config = JSON.parse(
     await fs.readFile(file, 'utf8').catch((error) => {
       if (error.code === 'ENOENT') return '{}';
@@ -105,9 +115,19 @@ async function main(args = process.argv.slice(2)) {
     }),
   );
   config.sourceUrls ||= [];
-  const save = async () => {
-    require('../src/core/config-transfer.cjs').validateSettings(config);
-    await require('../src/core/catalog.cjs').atomicJson(file, config);
+  const save = async (update) => {
+    const { withConfigLock, writePrivateConfig } = require('../src/core/config-file.cjs');
+    await withConfigLock(file, async () => {
+      const latest = JSON.parse(
+        await fs.readFile(file, 'utf8').catch((error) => {
+          if (error.code === 'ENOENT') return '{}';
+          throw error;
+        }),
+      );
+      update(latest);
+      require('../src/core/config-transfer.cjs').validateSettings(latest);
+      await writePrivateConfig(file, latest);
+    });
     if (json) print({ saved: true });
     else console.log('Settings saved.');
   };
@@ -138,7 +158,10 @@ async function main(args = process.argv.slice(2)) {
       }
     } else if (action === 'unset') delete config[key];
     else throw Error('Use config list, path, get, set or unset.');
-    await save();
+    await save((latest) => {
+      if (action === 'unset') delete latest[key];
+      else latest[key] = config[key];
+    });
     return;
   }
   if (command === 'sources') {
@@ -153,7 +176,11 @@ async function main(args = process.argv.slice(2)) {
     else if (action === 'remove')
       config.sourceUrls = config.sourceUrls.filter((item) => item !== url);
     else throw Error('Use sources list, add or remove.');
-    await save();
+    await save((latest) => {
+      const sources = latest.sourceUrls || [];
+      latest.sourceUrls =
+        action === 'add' ? [...new Set([...sources, url])] : sources.filter((item) => item !== url);
+    });
     return;
   }
   if (!rest.length && command !== 'sync')
