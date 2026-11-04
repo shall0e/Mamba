@@ -48,23 +48,42 @@ class Artwork {
       (!game.verified && releaseHints(game.identityTitle || game.name).year)
     )
       return null;
-    if (/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(game.cover || ''))
-      return game.cover;
+    const embeddedCover = /^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(
+      game.cover || '',
+    )
+      ? game.cover
+      : null;
+    const knownSteamId = /^\d+$/.test(String(game.steamId || '')) ? String(game.steamId) : null;
+    if (embeddedCover && !knownSteamId) return embeddedCover;
     const cache = path.join(
       this.directory,
       createHash('sha256')
-        .update('identity-v3|' + (game.identityTitle || game.name) + (game.cover || ''))
+        .update(
+          JSON.stringify([
+            'library-hero-v6',
+            game.steamId || '',
+            game.identityTitle || game.name,
+            game.cover || '',
+          ]),
+        )
         .digest('hex') + '.json',
     );
     try {
       const saved = JSON.parse(await fs.readFile(cache, 'utf8'));
-      const ttl = saved.image ? 30 * 86400000 : saved.transient || game.verified ? 60000 : 86400000;
+      const ttl = saved.transient
+        ? 60000
+        : saved.image
+          ? 30 * 86400000
+          : game.verified
+            ? 60000
+            : 86400000;
       if (Number.isFinite(saved.at) && Date.now() - saved.at >= 0 && Date.now() - saved.at < ttl)
         return saved.image;
     } catch {}
     let url = game.cover;
+    let steamId = knownSteamId;
     try {
-      if (!url) {
+      if (!url && !steamId) {
         const search = new URL('https://store.steampowered.com/api/storesearch/');
         search.searchParams.set('term', game.name);
         search.searchParams.set('l', 'english');
@@ -82,43 +101,69 @@ class Artwork {
             assessIdentity(game.identityTitle || game.name, { name: item.name }).accepted,
         );
         const match = matches.length === 1 ? matches[0] : null;
-        if (match)
+        if (match) {
+          steamId ||= String(match.id);
           url = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${match.id}/header.jpg`;
-      }
-      let image = null;
-      if (url && new URL(url).protocol === 'https:') {
-        const response = await this.fetch(url, { signal: AbortSignal.timeout(8000) });
-        const type = response.headers.get('content-type')?.split(';')[0];
-        if (
-          response.ok &&
-          ['image/jpeg', 'image/png', 'image/webp'].includes(type) &&
-          Number(response.headers.get('content-length') || 0) <= 2 * 1024 * 1024
-        ) {
-          const reader = response.body.getReader();
-          const chunks = [];
-          let length = 0;
-          try {
-            while (true) {
-              const part = await reader.read();
-              if (part.done) break;
-              length += part.value.length;
-              if (length > 2 * 1024 * 1024) {
-                await reader.cancel();
-                throw new Error('Artwork too large');
-              }
-              chunks.push(Buffer.from(part.value));
-            }
-            image = `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
-          } finally {
-            reader.releaseLock();
-          }
-        } else {
-          await response.body?.cancel();
-          if (!response.ok) throw Error('Artwork download unavailable');
         }
       }
+      let image = null;
+      if (!url && steamId)
+        url = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${steamId}/header.jpg`;
+      const candidates = [];
+      if (steamId)
+        candidates.push(
+          `https://shared.fastly.steamstatic.com/steam/apps/${steamId}/library_hero.jpg`,
+        );
+      if (url) {
+        try {
+          if (new URL(url).protocol === 'https:') candidates.push(url);
+        } catch {}
+      }
+      for (const candidate of candidates) {
+        try {
+          const response = await this.fetch(candidate, { signal: AbortSignal.timeout(8000) });
+          const type = response.headers.get('content-type')?.split(';')[0];
+          if (
+            response.ok &&
+            ['image/jpeg', 'image/png', 'image/webp'].includes(type) &&
+            Number(response.headers.get('content-length') || 0) <= 2 * 1024 * 1024 &&
+            response.body
+          ) {
+            const reader = response.body.getReader();
+            const chunks = [];
+            let length = 0;
+            try {
+              while (true) {
+                const part = await reader.read();
+                if (part.done) break;
+                length += part.value.length;
+                if (length > 2 * 1024 * 1024) {
+                  await reader.cancel();
+                  throw new Error('Artwork too large');
+                }
+                chunks.push(Buffer.from(part.value));
+              }
+              if (length) image = `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
+            } finally {
+              reader.releaseLock();
+            }
+          } else {
+            await response.body?.cancel();
+          }
+          if (image) break;
+        } catch {}
+      }
+      const usedEmbeddedFallback = !image && !!embeddedCover;
+      image ||= embeddedCover;
       await fs.mkdir(this.directory, { recursive: true });
-      await fs.writeFile(cache, JSON.stringify({ image, at: Date.now() }));
+      await fs.writeFile(
+        cache,
+        JSON.stringify({
+          image,
+          transient: usedEmbeddedFallback || (!image && candidates.length > 0),
+          at: Date.now(),
+        }),
+      );
       return image;
     } catch {
       await fs
@@ -127,7 +172,7 @@ class Artwork {
           fs.writeFile(cache, JSON.stringify({ image: null, transient: true, at: Date.now() })),
         )
         .catch(() => {});
-      return null;
+      return embeddedCover;
     }
   }
 }

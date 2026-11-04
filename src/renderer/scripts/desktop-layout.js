@@ -34,21 +34,12 @@
   $('#settings-open').before(recent);
   let recentGames = [];
   function recentLimit() {
-    const settings = $('#settings-open'),
-      group = recent.querySelector('.sidebar-recent-group'),
-      heading = group.querySelector('h2');
-    const available =
-      sidebar.getBoundingClientRect().bottom -
-      parseFloat(getComputedStyle(sidebar).paddingBottom) -
-      settings.offsetHeight -
-      recent.getBoundingClientRect().top -
-      8;
-    const overhead =
-      heading.offsetHeight +
-      parseFloat(getComputedStyle(heading).marginBottom) +
-      parseFloat(getComputedStyle(group).marginBottom);
-    const rowHeight = recent.querySelector('.sidebar-game-shortcut')?.offsetHeight || 42;
-    return Math.max(1, Math.floor((available - overhead) / rowHeight));
+    const list = groups.played;
+    const settingsTop = $('#settings-open').getBoundingClientRect().top;
+    const listTop = list.getBoundingClientRect().top;
+    const row = list.querySelector('.sidebar-game-shortcut');
+    const rowHeight = row?.getBoundingClientRect().height || 42;
+    return Math.max(0, Math.floor((settingsTop - listTop - 8) / rowHeight));
   }
   function renderRecent(games = installedGames) {
     recentGames = games;
@@ -117,7 +108,7 @@
           }
         };
         groups[key].append(row);
-        (game.cover ? Promise.resolve(game.cover) : window.MambaArtwork.get(game.id))
+        window.MambaArtwork.get(game.id)
           .then(showImage)
           .catch(() => {});
       }

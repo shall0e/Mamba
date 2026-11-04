@@ -146,7 +146,14 @@ app
     await fs.mkdir(output, { recursive: true });
     await win.loadFile(path.join(__dirname, '../src/renderer/index.html'));
     await new Promise((r) => setTimeout(r, 2200));
-    const js = (code) => win.webContents.executeJavaScript(code);
+    const js = async (code) => {
+      try {
+        return await win.webContents.executeJavaScript(code);
+      } catch (error) {
+        console.error('Renderer check failed:', code, errors);
+        throw error;
+      }
+    };
     await js('document.fonts.ready');
     const displayFont = await js(
       `Array.from(document.fonts).find(f => f.family === 'Mamba Coolvetica')?.status`,
@@ -189,7 +196,48 @@ app
       await screenshot(name);
       if (name === 'library') {
         await ratioCheck();
-        assert.equal(await js(`document.querySelector('.library-options').tagName`), 'SECTION');
+        assert.equal(await js(`document.querySelector('.recent-view-all')`), null);
+        const cardPoint = await js(
+          `(()=>{const r=document.querySelector('#game-list .library-cover').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`,
+        );
+        win.webContents.sendInputEvent({ type: 'mouseMove', ...cardPoint });
+        await screenshot('library-hover');
+        assert.equal(
+          await js(
+            `(()=>{const c=document.querySelector('.library-card-caption');return Number(getComputedStyle(c).opacity)>.9 && getComputedStyle(c).zIndex==='1';})()`,
+          ),
+          true,
+        );
+        await js(`document.querySelector('.library-layout-toggle').click()`);
+        const listGeometry = await js(
+          `(()=>{const r=document.querySelector('#game-list .library-cover').getBoundingClientRect(),t=document.querySelector('.library-card-caption').getBoundingClientRect();return {view:document.querySelector('#game-list').dataset.view,visible:t.width>0 && t.x>=r.x && t.right<=r.right+1 && t.bottom<=r.bottom+1};})()`,
+        );
+        assert.equal(listGeometry.view, 'list');
+        assert.equal(listGeometry.visible, true);
+        await screenshot('library-list');
+        await js(`document.querySelector('.library-layout-toggle').click()`);
+        win.webContents.send('steam:library-state', {
+          connected: true,
+          accountName: 'Review account',
+          count: 20,
+        });
+        await new Promise((r) => setTimeout(r, 50));
+        assert.match(
+          await js(`document.querySelector('.library-steam-status').textContent`),
+          /Review account/,
+        );
+        await js(
+          `document.querySelector('.library-manage').open=true; document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`,
+        );
+        assert.equal(await js(`document.querySelector('.library-manage').open`), false);
+
+        assert.equal(await js(`document.querySelector('.library-manage').tagName`), 'DETAILS');
+        assert.equal(
+          await js(
+            `document.querySelectorAll('#game-list .play-button, #game-list .favorite-button').length`,
+          ),
+          0,
+        );
       }
       if (name === 'home') {
         assert.equal(
@@ -202,7 +250,7 @@ app
         const art = await js(
           `(()=>{const r=document.querySelector('.detail-art').getBoundingClientRect(),p=document.querySelector('.detail-hero').getBoundingClientRect();return{width:r.width,center:r.x+r.width/2,parentCenter:p.x+p.width/2};})()`,
         );
-        assert.ok(art.width >= Math.min(900, 1700 / scale - 320) - 2);
+        assert.ok(art.width <= 900 && art.width > 0);
         assert.ok(Math.abs(art.center - art.parentCenter) < 2);
         assert.equal(
           await js(`getComputedStyle(document.querySelector('.detail-hero')).backgroundColor`),
@@ -261,11 +309,7 @@ app
         ),
       );
     }
-    assert.ok(
-      recentSizes[1].counts.reduce((a, b) => a + b, 0) >
-        recentSizes[0].counts.reduce((a, b) => a + b, 0),
-      JSON.stringify(recentSizes),
-    );
+    assert.ok(recentSizes[1].counts[0] > recentSizes[0].counts[0], JSON.stringify(recentSizes));
     assert.ok(
       recentSizes.every((s) => s.bottom <= s.settingsTop + 1),
       JSON.stringify(recentSizes),
@@ -279,6 +323,7 @@ app
       [1700, 900],
       [1280, 720],
       [1920, 1080],
+      [2560, 1440],
     ]) {
       win.setSize(Math.round(width / scale), Math.round(height / scale));
       for (const page of ['settings', 'library', 'search', 'game']) {

@@ -1895,3 +1895,429 @@ html[data-theme] .play-button:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* Focused library and discovery workspace. */
+#library-page > .page-heading,
+#library-page > .library-toolbar {
+  width: 100%;
+  max-width: 1600px;
+}
+#library-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+#library-toolbar .library-filter {
+  flex: 1 1 200px;
+  max-width: none;
+}
+#library-toolbar .library-view-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+}
+#library-toolbar [hidden] {
+  display: none !important;
+}
+.library-layout-toggle {
+  width: 38px;
+  padding: 8px;
+}
+.library-layout-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+.library-manage {
+  position: relative;
+}
+.library-manage summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-input);
+}
+.library-manage summary::-webkit-details-marker {
+  display: none;
+}
+.library-manage summary svg {
+  width: 16px;
+  height: 16px;
+}
+.library-manage-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 260px;
+  padding: 12px;
+  z-index: 20;
+  background: var(--foreground-fill);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  backdrop-filter: blur(var(--foreground-blur));
+}
+.library-manage-menu > button {
+  width: 100%;
+  justify-content: flex-start;
+}
+.library-steam-status {
+  margin: 8px 12px;
+}
+#game-list .game-card {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+#game-list .library-cover {
+  position: relative;
+  width: 100%;
+  display: block;
+  padding: 0;
+  border-radius: var(--radius-card);
+}
+#game-list .library-card-caption {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 32px 16px 16px;
+  background: linear-gradient(transparent, var(--color-background));
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+  text-align: left;
+}
+#game-list .library-cover:is(:hover, :focus-visible) .library-card-caption,
+#game-list .library-cover:not(.has-cover) .library-card-caption,
+#game-list[data-view='list'] .library-card-caption {
+  opacity: 1;
+}
+#game-list[data-view='list'] .library-cover {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+#game-list[data-view='list'] .library-cover img {
+  width: 144px;
+  flex: 0 0 144px;
+}
+#game-list[data-view='list'] .library-card-caption {
+  position: static;
+  padding: 12px;
+  background: transparent;
+}
+#game-content .detail-hero {
+  gap: 16px;
+  padding: 0 0 24px;
+}
+#game-content .detail-art {
+  max-width: 640px;
+}
+#game-content .detail-art img {
+  max-height: 280px;
+  object-fit: contain;
+}
+#game-content .detail-intro {
+  max-width: 100%;
+}
+#game-content .detail-intro h1 {
+  margin-bottom: 16px;
+  font-size: 32px;
+}
+#game-content .detail-metadata {
+  margin-top: 16px;
+}
+#game-content .detail-metadata dt,
+.game-card-meta,
+.game-card-source,
+.library-steam-status,
+.search-sync-status {
+  color: var(--color-text);
+  opacity: 1;
+}
+#game-content .game-description {
+  max-width: 68ch;
+  line-height: 1.7;
+}
+#game-content > .text-button:first-child {
+  margin-bottom: 16px;
+}
+#game-content .detail-icon-action[aria-label='Uninstall'] {
+  margin-left: 16px;
+}
+#game-content .installation-card {
+  margin: 0;
+  padding: 0;
+}
+#game-content .manage-installation {
+  margin-top: 0;
+}
+#game-content .manage-installation > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#game-content .manage-installation > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.discovery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.discovery-toolbar #sync-catalog {
+  margin-left: auto;
+}
+.search-sync-status {
+  font-size: 12px;
+}
+#results-list {
+  gap: 24px;
+}
+.discovery-card {
+  border: 1px solid var(--line);
+  transition: border-color var(--motion-fast);
+}
+.discovery-card:hover,
+.discovery-card:focus-within {
+  border-color: var(--color-icons);
+}
+.discovery-card .result-info h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.discovery-card .game-card-meta,
+.discovery-card .game-card-source {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.discovery-card .result-actions.game-result-action {
+  margin-top: 0;
+  padding: 8px 16px 16px;
+  justify-content: flex-end;
+}
+.discovery-card .compact-download {
+  width: auto;
+  min-width: 38px;
+  margin-left: auto;
+  background: transparent;
+}
+.discovery-card .compact-download .button-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+.discovery-card:is(:hover, :focus-within) .compact-download .button-label {
+  max-width: 160px;
+  opacity: 1;
+}
+@media (hover: none) {
+  .discovery-card .compact-download .button-label {
+    max-width: 160px;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-card-caption,
+  .discovery-card {
+    transition: none !important;
+  }
+}
+
+.discovery-card .game-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.metadata-chip {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+.discovery-card .result-actions button.compact-download {
+  width: auto;
+  flex: 0 0 auto;
+  background: transparent;
+}
+.discovery-card .result-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.discovery-card .result-info {
+  padding: 12px 16px 8px;
+}
+.discovery-toolbar > .search-sync-status {
+  margin-left: 0;
+}
+
+/* Keep delayed artwork below its hover/focus title. */
+#game-list .library-cover {
+  isolation: isolate;
+}
+#game-list .library-cover img {
+  z-index: 0;
+}
+#game-list .library-card-caption {
+  z-index: 1;
+  pointer-events: none;
+  width: 100%;
+}
+#game-list[data-view='list'] .game-card {
+  display: block;
+  padding: 0;
+}
+#game-list[data-view='list'] .library-cover {
+  height: auto;
+  min-height: 76px;
+  padding: 8px;
+}
+#game-list[data-view='list'] .library-cover img {
+  position: relative;
+  inset: auto;
+  width: 128px;
+  height: auto;
+  max-height: 80px;
+  flex: 0 0 128px;
+  object-fit: contain;
+}
+#game-list[data-view='list'] .library-card-caption {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+#game-content .detail-metadata dt,
+#game-content .field-hint {
+  color: var(--color-text);
+  opacity: 1;
+}
+.discovery-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.discovery-toolbar {
+  align-items: center;
+}
+.discovery-filter .discovery-select {
+  width: auto;
+  min-width: 128px;
+}
+.discovery-card .result-actions.game-result-action {
+  display: flex;
+}
+
+#game-content .detail-art img {
+  width: auto;
+  max-width: 100%;
+  max-height: 240px;
+  height: auto;
+  margin-inline: auto;
+}
+.library-manage summary {
+  background: var(--input-fill);
+}
+
+/* The hero keeps title and actions attached to the artwork. */
+#game-content .detail-hero {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  isolation: isolate;
+}
+#game-content .detail-art {
+  grid-area: 1 / 1;
+  width: 100%;
+  max-width: none;
+  align-self: start;
+}
+#game-content .detail-art img {
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+}
+#game-content .detail-intro {
+  grid-area: 1 / 1;
+  align-self: end;
+  z-index: 1;
+  max-width: none;
+  padding: 64px 24px 24px;
+  background: linear-gradient(transparent, var(--detail-canvas, var(--color-background)) 60%);
+}
+#game-content .detail-intro h1 {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+#game-content .detail-metadata {
+  width: 100%;
+  max-width: 900px;
+  justify-self: center;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+#game-content .detail-owned {
+  margin-top: 12px;
+  color: var(--color-text);
+}
+#game-content .detail-art:not(.has-cover) {
+  min-height: 280px;
+}
+.library-manage-menu {
+  padding: 8px;
+}
+.library-manage-menu > button {
+  background: transparent;
+  gap: 8px;
+  min-height: 40px;
+}
+.library-manage-menu .button-label {
+  flex: 1;
+  text-align: left;
+}
+.manage-toggle-state {
+  font-size: 12px;
+  color: var(--color-text);
+}
+.library-manage-menu > button[aria-pressed='true'] {
+  box-shadow: inset 2px 0 var(--color-icons);
+}
+.library-steam-status {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin: 8px;
+  font-size: 12px;
+}
+@media (max-width: 850px) {
+  #game-content .detail-intro {
+    padding: 32px 16px 16px;
+  }
+  #game-content .detail-intro h1 {
+    font-size: 28px;
+  }
+}
+
+#game-content {
+  max-width: 900px;
+  width: 100%;
+  margin-inline: auto;
+}

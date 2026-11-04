@@ -105,14 +105,15 @@
     $('#filter-empty').hidden = matches.length > 0 || !installedGames.length;
     $('#filter-empty p').textContent =
       !eligible.length && installedGames.length
-        ? 'No confirmed Steam games found. Turn on Show unknown to review detected candidates.'
+        ? 'No confirmed Steam games found. Turn on Unmatched games to review detected candidates.'
         : 'Try a different name or reset your library filters.';
     $('#game-count').textContent = matches.length + (matches.length === 1 ? ' game' : ' games');
     const unknownCount = installedGames.filter(
       (game) => !window.MambaPresence.confirmedGame(game),
     ).length;
     if ($('#library-unknown-toggle'))
-      $('#library-unknown-toggle').lastChild.textContent = 'Show unknown (' + unknownCount + ')';
+      $('#library-unknown-toggle .button-label').textContent =
+        'Unmatched games (' + unknownCount + ')';
     const signature = JSON.stringify([
       libraryView,
       matches.map((game) => [
@@ -140,87 +141,12 @@
       const card = node('li', undefined, 'game-card');
       card.dataset.gameId = game.id;
       card.dataset.status = game.status;
-      const image = action(
-        '',
-        async () => {
-          if (game.imported && ['not-installed', 'drive-unavailable'].includes(game.status)) {
-            if (await window.mamba.locateGame(game.id)) await refreshLibrary();
-          } else await openGame(game, 'library');
-        },
-        null,
-        'game-art library-cover',
-      );
+      const image = action('', () => openGame(game, 'library'), null, 'game-art library-cover');
       image.setAttribute('aria-label', 'View ' + game.name);
+      image.title = game.name;
       cover(image, game.id, game.name);
-      const favorite = action(
-        '',
-        () => toggleFavorite(game),
-        'star',
-        'favorite-button' + (game.favorite ? ' is-favorite' : ''),
-      );
-      favorite.setAttribute(
-        'aria-label',
-        (game.favorite ? 'Unfavorite ' : 'Favorite ') + game.name,
-      );
-      favorite.setAttribute('aria-pressed', String(!!game.favorite));
-      favorite.title = favorite.getAttribute('aria-label');
-      const heading = node('h2');
-      const title = action(game.name, () => openGame(game, 'library'), null, 'library-game-title');
-      title.title = game.name;
-      heading.append(title);
-      const controls = node('div', undefined, 'game-actions');
-      if (game.status === 'installed' && game.executable)
-        controls.append(action('Play', () => playGame(game), 'play', 'primary-button'));
-      else if (game.steamLibrary && game.status === 'not-installed')
-        controls.append(
-          action(
-            'Install',
-            () => window.mamba.installSteamGame(game.id),
-            'download',
-            'primary-button',
-          ),
-        );
-      else
-        controls.append(
-          action(
-            ['not-installed', 'drive-unavailable'].includes(game.status)
-              ? game.imported && !game.releaseId
-                ? 'Locate files'
-                : 'Install'
-              : 'Review',
-            async () => {
-              if (
-                game.imported &&
-                !game.releaseId &&
-                ['not-installed', 'drive-unavailable'].includes(game.status)
-              ) {
-                if (await window.mamba.locateGame(game.id)) await refreshLibrary();
-              } else await openGame(game, 'library');
-            },
-            ['not-installed', 'drive-unavailable'].includes(game.status)
-              ? 'download'
-              : 'settings-2',
-            'primary-button',
-          ),
-        );
-      if (game.steamLibrary && game.status === 'not-installed') {
-        controls.firstChild.title = 'Install with Steam';
-        controls.firstChild.setAttribute('aria-label', 'Install ' + game.name + ' with Steam');
-      }
-      const info = node('div', undefined, 'library-card-info');
-      const subtitle = node(
-        'p',
-        !window.MambaPresence.confirmedGame(game)
-          ? 'Unknown ï¿½ no confirmed Steam information'
-          : game.status === 'installed'
-            ? 'Installed'
-            : game.status === 'drive-unavailable'
-              ? 'Drive unavailable'
-              : 'Not installed',
-        'library-game-meta',
-      );
-      info.append(heading, subtitle, controls);
-      card.append(image, favorite, info);
+      image.append(node('span', game.name, 'library-card-caption'));
+      card.append(image);
       list.append(card);
     }
     if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
@@ -550,14 +476,13 @@
         ['Publisher', (data.publishers || []).join(', ')],
         ['Genre', (data.genres || []).join(', ')],
         ['Download', data.downloadSize],
-        ['Storage', data.space?.free == null ? null : formatBytes(data.space.free) + ' available'],
       ])
         if (value && !/^unknown$/i.test(String(value))) {
           const group = node('div');
           group.append(node('dt', label), node('dd', String(value)));
           metadata.append(group);
         }
-      intro.append(metadata);
+
       const primary = node('div', undefined, 'detail-primary');
       const local = window.MambaPresence.installed(installedGames, data);
       const playable =
@@ -639,6 +564,8 @@
             data.favorite = !data.favorite;
             favorite.lastChild.textContent = data.favorite ? 'Favorited' : 'Favorite';
             favorite.setAttribute('aria-pressed', String(data.favorite));
+            favorite.title = data.favorite ? 'Favorited' : 'Favorite';
+            favorite.setAttribute('aria-label', favorite.title);
           },
           'star',
         );
@@ -735,12 +662,13 @@
         control.classList.add('detail-icon-action');
         control.title = control.textContent.trim();
         control.setAttribute('aria-label', control.title);
+        if (control.title === 'Uninstall') control.title = 'Uninstall (confirmation required)';
       }
       intro.append(primary);
-      if (data.lastPlayed)
-        intro.append(node('p', 'Last played ' + date(data.lastPlayed), 'field-hint'));
+      const state = intro.querySelector('.detail-owned');
+      if (state && data.lastPlayed) state.textContent += ' · Last played ' + date(data.lastPlayed);
       hero.append(image, intro);
-      content.append(hero);
+      content.append(hero, metadata);
       if (data.description) {
         const about = node('section', undefined, 'detail-section game-overview');
         about.append(node('h2', 'Overview'), node('p', data.description, 'game-description'));
@@ -757,23 +685,6 @@
         );
         for (const installation of presentInstallations) {
           const card = node('article', undefined, 'installation-card');
-          card.append(
-            node(
-              'h3',
-              installation.version
-                ? 'Version ' + installation.version
-                : installation.sourceName || data.name,
-            ),
-          );
-          card.append(
-            node(
-              'p',
-              installation.status === 'installed'
-                ? 'Ready to play'
-                : 'Setup or launcher review required',
-              'installation-status',
-            ),
-          );
           const details = node('dl', undefined, 'installation-fields');
           for (const [label, value] of [
             ['Game folder', installation.folder],
@@ -786,7 +697,9 @@
           ])
             details.append(node('dt', label), node('dd', value));
           const manage = node('details', undefined, 'manage-installation');
-          manage.append(node('summary', 'Manage Installation'), details);
+          const manageSummary = node('summary');
+          manageSummary.append(node('span', 'Manage Installation'), icon('chevron-down'));
+          manage.append(manageSummary, details);
           const controls = node('div', undefined, 'game-actions');
           if (
             presentInstallations.length > 1 &&
@@ -1179,12 +1092,14 @@
     },
     configure(config) {
       steamEnabled = config.steamLibraryIntegration !== false;
+      updateSteamStatus();
       $('#library-steam-toggle').setAttribute('aria-pressed', String(steamEnabled));
       sort = config.librarySort || 'name';
-      libraryView = config.libraryView || 'cards';
+      libraryView = config.libraryView === 'list' ? 'list' : 'cards';
       showUnknown = config.libraryShowUnknown === true;
       favoritesOnly = config.libraryFavoritesOnly === true;
       $('#library-view').value = libraryView;
+      updateLayoutToggle();
       $('#library-unknown-toggle').setAttribute('aria-pressed', String(showUnknown));
       $('#library-favorites-toggle').setAttribute('aria-pressed', String(favoritesOnly));
       $('#library-detection-toggle').setAttribute(
@@ -1262,7 +1177,7 @@
     window.mamba.saveView({ libraryView }).catch(handleError);
   };
   const unknownToggle = action(
-    'Show unknown',
+    'Unmatched games',
     () => {
       showUnknown = !showUnknown;
       unknownToggle.setAttribute('aria-pressed', String(showUnknown));
@@ -1320,31 +1235,69 @@
   steamToggle.id = 'library-steam-toggle';
   steamToggle.setAttribute('aria-pressed', 'true');
   const steamStatus = node('p', '', 'field-hint library-steam-status');
-  async function updateSteamStatus() {
+  window.mamba.onSteamLibrary?.((state) => updateSteamStatus(state));
+  async function updateSteamStatus(latest) {
     try {
-      const state = await window.mamba.steamLibraryState();
+      const state = latest || (await window.mamba.steamLibraryState());
       steamStatus.textContent = !steamEnabled
         ? 'Steam library is off.'
         : state.connected
-          ? state.accountName + ' / ' + state.count + ' Steam games'
-          : state.message;
+          ? state.accountName + ' · ' + state.count + ' Steam games'
+          : 'Steam not connected';
       steamStatus.title = state.message || '';
     } catch {}
   }
-  const options = node('section', undefined, 'library-options');
-  options.setAttribute('aria-label', 'Library preferences');
-  const optionControls = node('div', undefined, 'library-option-controls');
-  const layoutField = node('label', undefined, 'library-layout-field');
-  layoutField.append(node('span', 'Library style'), viewSelect);
-  const discoveryControls = node('div', undefined, 'library-discovery-controls');
-  discoveryControls.append(unknownToggle, detectionToggle);
-  const steamSection = node('div', undefined, 'library-steam-section');
-  steamSection.append(steamToggle, steamStatus);
-  optionControls.append(layoutField, discoveryControls, steamSection);
-  options.append(optionControls);
+  const manage = node('details', undefined, 'library-manage');
+  const manageSummary = node('summary');
+  manageSummary.append(node('span', 'Manage'), icon('chevron-down'));
+  manage.append(manageSummary);
+  const menu = node('div', undefined, 'library-manage-menu');
+  menu.append(unknownToggle, detectionToggle, steamToggle, steamStatus);
+  for (const toggle of [unknownToggle, detectionToggle, steamToggle]) {
+    const state = node('span', '', 'manage-toggle-state');
+    state.setAttribute('aria-hidden', 'true');
+    toggle.append(state);
+    const sync = () => {
+      state.textContent = toggle.getAttribute('aria-pressed') === 'true' ? 'On' : 'Off';
+    };
+    new MutationObserver(sync).observe(toggle, {
+      attributes: true,
+      attributeFilter: ['aria-pressed'],
+    });
+    sync();
+  }
+  manage.append(menu);
+  document.addEventListener('pointerdown', (event) => {
+    if (manage.open && !manage.contains(event.target)) manage.open = false;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && manage.open) {
+      manage.open = false;
+      manageSummary.focus();
+    }
+  });
+  viewSelect.hidden = true;
+  const layoutToggle = action(
+    '',
+    () => {
+      viewSelect.value = libraryView === 'list' ? 'cards' : 'list';
+      viewSelect.onchange();
+      updateLayoutToggle();
+    },
+    'list',
+    'text-button library-layout-toggle',
+  );
+  function updateLayoutToggle() {
+    const label = libraryView === 'list' ? 'Switch to grid view' : 'Switch to list view';
+    layoutToggle.title = label;
+    layoutToggle.setAttribute('aria-label', label);
+    layoutToggle.setAttribute('aria-pressed', String(libraryView === 'list'));
+    layoutToggle.replaceChildren(icon(libraryView === 'list' ? 'layout-grid' : 'list'));
+  }
+  updateLayoutToggle();
   updateSteamStatus();
-  filters.append(availabilitySelect, sortSelect, favoritesToggle);
-  toolbar.append(filters, options);
+  filters.append(availabilitySelect, sortSelect, favoritesToggle, layoutToggle, manage, viewSelect);
+  toolbar.append(filters);
   const bind = (id, callback, iconName) => {
     const element = $(id);
     if (iconName) element.prepend(icon(iconName));

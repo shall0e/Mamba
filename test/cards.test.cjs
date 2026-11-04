@@ -21,7 +21,7 @@ test('artwork matches the exact game and reuses its local cache', async (t) => {
             { id: 400, name: 'Portal' },
           ],
         });
-      assert.match(String(url), /\/400\/header.jpg$/);
+      assert.match(String(url), /\/400\/library_hero.jpg$/);
       return new Response(Buffer.from('fixture'), { headers: { 'content-type': 'image/png' } });
     },
   );
@@ -30,6 +30,53 @@ test('artwork matches the exact game and reuses its local cache', async (t) => {
   assert.equal(calls, 2);
   assert.equal(await artwork.get('missing'), null);
   assert.equal(exactGameName('Portal', 'Portal 2'), false);
+});
+test('artwork falls back to the supplied cover when the Steam hero is invalid', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-art-fallback-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const calls = [];
+  const artwork = new Artwork(
+    dir,
+    { getGame: () => ({ name: 'Portal', steamId: 400, cover: 'https://example.test/cover.jpg' }) },
+    async (url) => {
+      calls.push(String(url));
+      if (calls.length === 1)
+        return new Response('missing', { headers: { 'content-type': 'text/html' } });
+      return new Response(Buffer.from('fallback'), { headers: { 'content-type': 'image/jpeg' } });
+    },
+  );
+  assert.equal(await artwork.get('portal'), 'data:image/jpeg;base64,ZmFsbGJhY2s=');
+  assert.match(calls[0], /\/400\/library_hero.jpg$/);
+  assert.equal(calls[1], 'https://example.test/cover.jpg');
+});
+test('Steam hero takes precedence over an embedded saved cover and caches it', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-art-embedded-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  let calls = 0;
+  const catalog = {
+    getGame: () => ({ name: 'Portal', steamId: 400, cover: 'data:image/png;base64,b2xk' }),
+  };
+  const artwork = new Artwork(dir, catalog, async (url) => {
+    calls++;
+    assert.match(String(url), /\/400\/library_hero.jpg$/);
+    return new Response(Buffer.from('hero'), { headers: { 'content-type': 'image/jpeg' } });
+  });
+  assert.equal(await artwork.get('portal'), 'data:image/jpeg;base64,aGVybw==');
+  assert.equal(await artwork.get('portal'), 'data:image/jpeg;base64,aGVybw==');
+  assert.equal(calls, 1);
+});
+test('embedded saved cover remains available when the Steam hero fails', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mamba-art-embedded-fallback-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const cover = 'data:image/png;base64,b2xk';
+  const artwork = new Artwork(
+    dir,
+    { getGame: () => ({ name: 'Portal', steamId: 400, cover }) },
+    async () => {
+      throw Error('offline');
+    },
+  );
+  assert.equal(await artwork.get('portal'), cover);
 });
 test('one-click download resolves once and uses the selected release and link', async () => {
   let resolutions = 0;

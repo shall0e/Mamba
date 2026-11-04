@@ -1059,6 +1059,7 @@ if (!app.requestSingleInstanceLock()) {
         if (state.phase === 'error') reportIssue(new Error(state.message), 'catalog:sync');
       });
       background.on('steam:library-state', (state) => {
+        broadcast('steam:library-state', state);
         if (!state.connected) return;
         let changed = false;
         for (const issue of issues.items) {

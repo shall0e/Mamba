@@ -26,7 +26,7 @@
     return select;
   };
   const service = makeSelect('Filter download service', [
-    ['all', 'All services'],
+    ['all', 'All sources'],
     ['torbox', 'TorBox'],
     ['realdebrid', 'Real-Debrid'],
     ['direct', 'Direct downloads'],
@@ -41,7 +41,27 @@
     ['name', 'Name A–Z'],
     ['year', 'Newest release'],
   ]);
-  toolbar.append(service, availability, sort);
+  const clear = button(
+    'Clear filters',
+    () => {
+      service.value = availability.value = 'all';
+      sort.value = 'relevance';
+      render();
+    },
+    'x',
+    'text-button',
+  );
+  const syncButton = $('#sync-catalog');
+  const sourceField = node('label', undefined, 'discovery-filter');
+  sourceField.append(node('span', 'Source'), service);
+  const typeField = node('label', undefined, 'discovery-filter');
+  typeField.append(node('span', 'Type'), availability);
+  toolbar.append(sourceField, typeField, sort, clear, syncButton);
+  const syncStatus = node('span', '', 'search-sync-status');
+  toolbar.append(syncStatus);
+  syncButton.addEventListener('click', () => {
+    syncStatus.textContent = 'Syncing…';
+  });
   $('#results-list').before(toolbar);
   const searchLoader = node('div', undefined, 'search-loader');
   searchLoader.hidden = true;
@@ -58,6 +78,8 @@
   };
   function render() {
     if (loading) return;
+    clear.hidden =
+      service.value === 'all' && availability.value === 'all' && sort.value === 'relevance';
     const library = installedGames;
     const ownership = new Map(
       games.map((game) => [game.id, window.MambaPresence.installed(library, game)]),
@@ -127,7 +149,7 @@
       );
       cover.setAttribute('aria-label', 'View ' + game.name);
       cover.append($('#library-empty svg').cloneNode(true));
-      (game.cover ? Promise.resolve(game.cover) : window.MambaArtwork.get(game.id))
+      window.MambaArtwork.get(game.id)
         .then((image) => {
           if (!image || !cover.isConnected) return;
           const img = node('img');
@@ -164,15 +186,36 @@
         ),
       );
       info.append(title);
-      info.append(
-        node(
-          'p',
-          [game.releaseYearLabel || game.releaseYear, game.downloadSize]
-            .filter(Boolean)
-            .join(' · '),
-          'game-card-meta',
-        ),
-      );
+      const metadata = node('div', undefined, 'game-card-meta');
+      for (const [label, value] of [
+        [
+          'Release year',
+          game.releaseYear || String(game.releaseYearLabel || '').match(/\b(?:19|20)\d{2}\b/)?.[0],
+        ],
+        ['Download size', game.downloadSize],
+      ]) {
+        if (!value || /^unknown$/i.test(String(value))) continue;
+        const chip = node('span', String(value), 'metadata-chip');
+        chip.title = label;
+        chip.setAttribute('aria-label', label + ': ' + value);
+        metadata.append(chip);
+      }
+      info.append(metadata);
+      const sources = [...new Set((game.options || []).flatMap((option) => option.services || []))];
+      if (sources.length)
+        info.append(
+          node(
+            'p',
+            sources
+              .map(
+                (value) =>
+                  ({ torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' })[value] ||
+                  value,
+              )
+              .join(' · '),
+            'game-card-source',
+          ),
+        );
       const actions = node('div', undefined, 'result-actions game-result-action');
       let control;
       if (owned?.status === 'installed' && owned.executable)
@@ -233,7 +276,7 @@
             }
           },
           'download',
-          'primary-button',
+          'text-button compact-download',
         );
         control.title = 'Download · Shift-click to choose a version';
         if (queueing.has(game.id) || cardJobs.has(game.id)) {
@@ -298,10 +341,23 @@
       total.toLocaleString() +
       ' ' +
       (total === 1 ? 'game' : 'games') +
-      (pending ? ' · More matches are being checked' : '');
+      (pending ? ' · Checking more matches…' : '');
+    searchLoader.hidden = !pending;
+    list.setAttribute('aria-busy', String(pending));
+    $('#results-more').disabled = pending;
   }
   window.MambaDiscovery = {
     render,
+    reset(message) {
+      games = [];
+      total = 0;
+      bestMatch = null;
+      pending = false;
+      cardCache.clear();
+      $('#results-list').replaceChildren();
+      setSearching(false);
+      $('#results-status').textContent = message;
+    },
     start(more) {
       setSearching(true);
     },

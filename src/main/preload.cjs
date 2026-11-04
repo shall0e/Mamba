@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('mamba', {
   onDialog: (callback) => subscribe('app:dialog', callback),
   respondDialog: (id, response) => ipcRenderer.invoke('app:dialog-response', id, response),
   steamLibraryState: () => ipcRenderer.invoke('steam:library-state'),
+  onSteamLibrary: (callback) => subscribe('steam:library-state', callback),
   installSteamGame: (id) => ipcRenderer.invoke('steam:install', id),
   addLibraryFolder: () => ipcRenderer.invoke('library:add-folder'),
   importGame: () => ipcRenderer.invoke('library:import'),

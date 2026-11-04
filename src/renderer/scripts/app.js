@@ -19,6 +19,8 @@ let searchGeneration = 0;
 let searchTimer;
 let searchLayoutAnimation;
 let searchOffset = 0;
+let searchPagingStarted = false;
+let searchUpdateRevision = 0;
 let catalogState = {};
 let detailGeneration = 0;
 const cardJobs = new Map();
@@ -175,6 +177,14 @@ function renderCatalog(state) {
   const previousCount = catalogState.count;
   const previousPhase = catalogState.phase;
   catalogState = state;
+  const syncStatus = document.querySelector('.search-sync-status');
+  if (syncStatus)
+    syncStatus.textContent =
+      state.phase !== 'ready'
+        ? state.message || ''
+        : state.updatedAt
+          ? 'Last synced ' + new Date(state.updatedAt).toLocaleString()
+          : '';
   const text =
     state.message + (state.errors?.length ? ` · ${state.errors.length} sources unavailable` : '');
   document.querySelector('#catalog-status').textContent = text;
@@ -235,20 +245,33 @@ async function runSearch(more = false) {
     }
   }
   document.querySelector('#search-results').hidden = !query;
-  if (!query || !window.mamba) return;
+  if (query.length < 2 || !window.mamba) {
+    searchOffset = 0;
+    searchPagingStarted = false;
+    document.querySelector('#results-more').hidden = true;
+    renderFeaturedGame(null);
+    window.MambaDiscovery?.reset(query ? 'Type at least 2 characters to search' : '');
+    return;
+  }
   if (!more) {
     searchOffset = 0;
+    searchPagingStarted = false;
+  } else {
+    searchPagingStarted = true;
   }
+  const updateRevision = searchUpdateRevision;
   document.querySelector('#results-status').textContent = 'Searching…';
   window.MambaDiscovery.start(more);
   try {
     const result = await window.mamba.search(query, searchOffset);
     if (generation !== searchGeneration) return;
+    if (!more && updateRevision !== searchUpdateRevision) return;
     window.MambaDiscovery.update(result, more);
     searchOffset += result.items.length;
     document.querySelector('#results-more').hidden = searchOffset >= result.total;
   } catch (error) {
     if (generation !== searchGeneration) return;
+    if (more && searchOffset <= 40) searchPagingStarted = false;
     renderFeaturedGame(null);
     window.MambaDiscovery.fail(error.message);
   }
@@ -258,10 +281,12 @@ async function openGame(game) {
 }
 window.mamba?.onSearchResults(({ query, result }) => {
   if (
+    query.length < 2 ||
     query !== document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ') ||
-    searchOffset > 40
+    searchPagingStarted
   )
     return;
+  searchUpdateRevision++;
   window.MambaDiscovery.update(result, false);
   searchOffset = result.items.length;
   document.querySelector('#results-more').hidden = searchOffset >= result.total;
