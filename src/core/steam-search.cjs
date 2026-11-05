@@ -7,7 +7,7 @@ const {
   optionTraits,
   rankedSearch,
 } = require('./search.cjs');
-const { atomicJson } = require('./catalog.cjs');
+const { atomicJson } = require('./atomic-json.cjs');
 const { releaseHints, assessIdentity } = require('./identity-match.cjs');
 
 function titleKey(raw) {
@@ -528,9 +528,7 @@ class SteamSearch {
         }),
       );
     })();
-    const sourceCandidates = this.identity.identify
-      ? [...new Map(sourceResults.map((item) => [item.id, item])).values()].slice(0, 24)
-      : [];
+    const sourceCandidates = this.identity.identify ? sourceResults.slice(0, 24) : [];
     const sourceTask = (async () => {
       let index = 0;
       await Promise.all(

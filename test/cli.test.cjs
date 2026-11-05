@@ -46,6 +46,7 @@ test('CLI AppID search uses cached Steam identity, groups releases and does not 
   }));
   await fs.writeFile(path.join(directory, 'catalog.json'), JSON.stringify({ games }));
   const app = {
+    detailsVersion: 6,
     steamId: 550,
     name: 'Left 4 Dead 2',
     type: 'game',

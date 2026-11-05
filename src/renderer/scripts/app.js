@@ -198,7 +198,7 @@ function renderCatalog(state) {
     errorList.append(item);
   }
   if (['ready', 'error', 'needs-key'].includes(state.phase)) {
-    const urls = new Set(urlsForSourceErrors());
+    const urls = new Set(sourceLines());
     const failedSources = (state.errors || [])
       .map((error) => error.source)
       .filter((source) => urls.has(source));
@@ -217,14 +217,11 @@ function renderCatalog(state) {
     runSearch();
   if (state.phase === 'ready' && previousPhase !== 'ready') window.MambaSettings?.loadHosts();
 }
-function urlsForSourceErrors() {
-  return sourceUrlsInput.value
-    .split(/\r?\n/)
-    .map((url) => url.trim())
-    .filter(Boolean);
+function searchQuery() {
+  return document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ');
 }
 async function runSearch(more = false) {
-  const query = document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ');
+  const query = searchQuery();
   const generation = ++searchGeneration;
   detailGeneration++;
   document.querySelector('#game-detail').hidden = true;
@@ -280,12 +277,7 @@ async function openGame(game) {
   return window.MambaExperience.openGame(game);
 }
 window.mamba?.onSearchResults(({ query, result }) => {
-  if (
-    query.length < 2 ||
-    query !== document.querySelector('#main-search').value.trim().replace(/\s+/g, ' ') ||
-    searchPagingStarted
-  )
-    return;
+  if (query.length < 2 || query !== searchQuery() || searchPagingStarted) return;
   searchUpdateRevision++;
   window.MambaDiscovery.update(result, false);
   searchOffset = result.items.length;
@@ -295,8 +287,14 @@ function renderJobs(jobs) {
   window.MambaExperience?.jobsChanged(jobs);
   const jobIds = new Set(jobs.map((job) => job.id));
   for (const [gameId, jobId] of cardJobs) if (!jobIds.has(jobId)) cardJobs.delete(gameId);
+  const controlsByJob = new Map();
   for (const control of document.querySelectorAll('button[data-job-id]')) {
-    if (jobIds.has(control.dataset.jobId)) continue;
+    const id = control.dataset.jobId;
+    if (jobIds.has(id)) {
+      if (!controlsByJob.has(id)) controlsByJob.set(id, []);
+      controlsByJob.get(id).push(control);
+      continue;
+    }
     delete control.dataset.jobId;
     control.dataset.locked = 'false';
     control.disabled = false;
@@ -304,11 +302,8 @@ function renderJobs(jobs) {
   }
   downloadJobsForRecovery = jobs;
   for (const job of jobs) {
-    const controls = [...document.querySelectorAll('button[data-job-id]')].filter(
-      (control) => control.dataset.jobId === job.id,
-    );
     const failed = ['failed', 'cancelled'].includes(job.status);
-    for (const control of controls) {
+    for (const control of controlsByJob.get(job.id) || []) {
       control.lastChild.textContent = failed
         ? 'Download'
         : job.status === 'completed'
@@ -381,7 +376,7 @@ function renderJobs(jobs) {
       for (const text of [
         `${Math.min(100, Math.max(0, Math.floor(((job.received || 0) / job.total) * 100)))}%`,
         `${formatBytes(job.received)} / ${formatBytes(job.total)}`,
-        ...(job.status === 'downloading' ? [remainingTime(job)] : []),
+        remainingTime(job),
       ]) {
         const value = document.createElement('span');
         value.textContent = text;

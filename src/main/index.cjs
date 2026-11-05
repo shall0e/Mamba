@@ -49,11 +49,7 @@ if (!app.requestSingleInstanceLock()) {
     return issue;
   }
   const { registerHelperRuntime, openGameHelper } = require('../core/game-helper.cjs');
-  const {
-    validateSettings,
-    decodeConfig,
-    encodeSetupConfig,
-  } = require('../core/config-transfer.cjs');
+  const { decodeConfig, encodeSetupConfig } = require('../core/config-transfer.cjs');
   const { Updates } = require('../core/updates.cjs');
   const { BackgroundClient } = require('../core/background-client.cjs');
   const { spawn } = require('node:child_process');
@@ -151,24 +147,23 @@ if (!app.requestSingleInstanceLock()) {
     onChange: refreshBackgroundConfig,
     getInstalledGames: () => installedGames,
   });
-  const { readConfig, updateConfig, publicConfig, configFile, getThemeStore } = configStore;
+  const {
+    readConfig,
+    readLegacyTorBoxKey,
+    updateConfig,
+    saveSettings,
+    saveView,
+    publicConfig,
+    configFile,
+    getThemeStore,
+  } = configStore;
 
   ipcMain.handle('config:load', (_event, legacyUrls) =>
     updateConfig(async (config) => {
       if (!config.legacyUrlsMigrated) {
         if (!config.torboxApiKey) {
-          try {
-            const legacy = JSON.parse(
-              await fs.readFile(path.join(app.getPath('userData'), 'torbox-key.json'), 'utf8'),
-            );
-            if (legacy.encryptedKey && safeStorage.isEncryptionAvailable()) {
-              config.torboxApiKey = safeStorage.decryptString(
-                Buffer.from(legacy.encryptedKey, 'base64'),
-              );
-            }
-          } catch (error) {
-            if (error.code !== 'ENOENT') throw error;
-          }
+          const legacyKey = await readLegacyTorBoxKey();
+          if (legacyKey) config.torboxApiKey = legacyKey;
         }
         const previous = Array.isArray(legacyUrls)
           ? legacyUrls.filter((url) => typeof url === 'string')
@@ -179,74 +174,7 @@ if (!app.requestSingleInstanceLock()) {
     }),
   );
   ipcMain.handle('config:save', async (_event, settings) => {
-    const saved = await updateConfig((config) => {
-      if (!settings || !Array.isArray(settings.sourceUrls) || typeof settings.apiKey !== 'string') {
-        throw new Error('Invalid settings.');
-      }
-      const urls = settings.sourceUrls.map((value) => {
-        if (typeof value !== 'string') throw new Error('Invalid source URL.');
-        const url = value.trim();
-        if (!['http:', 'https:'].includes(new URL(url).protocol))
-          throw new Error('Sources must be HTTP or HTTPS JSON URLs.');
-        return url;
-      });
-      if (settings.apiKey.trim()) config.torboxApiKey = settings.apiKey.trim();
-      if (typeof settings.realDebridApiKey === 'string' && settings.realDebridApiKey.trim())
-        config.realDebridApiKey = settings.realDebridApiKey.trim();
-      Object.assign(
-        config,
-        validateSettings(
-          Object.fromEntries(
-            [
-              'enabledDownloadServices',
-              'preferredDownloadService',
-              'disabledDownloadHosts',
-              'disabledSourceUrls',
-            ]
-              .filter((key) => settings[key] !== undefined)
-              .map((key) => [key, settings[key]]),
-          ),
-        ),
-      );
-      config.sourceUrls = [...new Set(urls)];
-      if (settings.extraGameFolders !== undefined)
-        config.extraGameFolders = require('../core/library-folders.cjs').normalizeFolders(
-          settings.extraGameFolders,
-        );
-      if (settings.downloadPath !== undefined) {
-        if (
-          typeof settings.downloadPath !== 'string' ||
-          !path.isAbsolute(settings.downloadPath.trim())
-        )
-          throw new Error('Choose an absolute game folder path.');
-        config.downloadPath = path.resolve(settings.downloadPath.trim());
-      }
-      if (typeof settings.automaticRecovery === 'boolean')
-        config.automaticRecovery = settings.automaticRecovery;
-      if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
-      if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
-      if (typeof settings.archivePassword === 'string')
-        config.archivePassword = settings.archivePassword;
-      Object.assign(
-        config,
-        validateSettings(
-          Object.fromEntries(
-            [
-              'keepArchives',
-              'transferTimeoutMinutes',
-              'automaticUpdates',
-              'palette',
-              'notifications',
-              'preferredLanguage',
-              'preferredRelease',
-              'appearance',
-            ]
-              .filter((key) => settings[key] !== undefined)
-              .map((key) => [key, settings[key]]),
-          ),
-        ),
-      );
-    });
+    const saved = await saveSettings(settings);
     task('library:scan').catch(() => {});
     return saved;
   });
@@ -492,38 +420,7 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('library:favorite', (_event, id, value) =>
     task('library:favorite', String(id), !!value),
   );
-  ipcMain.handle('config:view', (_event, view) =>
-    updateConfig((config) => {
-      if (view.libraryView !== undefined) {
-        if (!['cards', 'list', 'banners'].includes(view.libraryView))
-          throw Error('Invalid library view.');
-        config.libraryView = view.libraryView;
-      }
-      for (const key of [
-        'sidebarCollapsed',
-        'libraryShowUnknown',
-        'automaticGameDetection',
-        'steamLibraryIntegration',
-      ]) {
-        if (view[key] !== undefined) {
-          if (typeof view[key] !== 'boolean') throw Error('Invalid library preference.');
-          config[key] = view[key];
-        }
-      }
-      if (view.librarySort !== undefined) {
-        if (!['name', 'recent', 'installed'].includes(view.librarySort))
-          throw Error('Invalid library sort.');
-        config.librarySort = view.librarySort;
-      }
-      if (view.libraryFavoritesOnly !== undefined)
-        config.libraryFavoritesOnly = !!view.libraryFavoritesOnly;
-      if (view.libraryAvailability !== undefined) {
-        if (!['all', 'installed', 'not-installed'].includes(view.libraryAvailability))
-          throw Error('Invalid library filter.');
-        config.libraryAvailability = view.libraryAvailability;
-      }
-    }),
-  );
+  ipcMain.handle('config:view', (_event, view) => saveView(view));
   ipcMain.handle('storage:check', () => task('storage:check'));
   ipcMain.handle('library:import', async (event) => {
     const chosen = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {

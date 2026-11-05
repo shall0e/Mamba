@@ -76,16 +76,13 @@ function createSearchIndex(games, metadata = new Map()) {
   const groups = new Map();
   for (const game of games) {
     const cleaned = gameTitle(game.name);
-    const candidate = metadata.get(
-      identityKey(game.name, tokens(cleaned.replace(/[’']/g, '')).join(' ')),
-    );
+    const sourceKey = identityKey(game.name, tokens(cleaned.replace(/[’']/g, '')).join(' '));
+    const candidate = metadata.get(sourceKey);
     const info = candidate && assessIdentity(game.name, candidate).accepted ? candidate : null;
     const hints = releaseHints(game.name);
     const name = info?.name || cleaned;
     const words = tokens(name);
-    const key = info?.steamId
-      ? `steam:${info.steamId}`
-      : identityKey(game.name, tokens(cleaned.replace(/[’']/g, '')).join(' '));
+    const key = info?.steamId ? `steam:${info.steamId}` : sourceKey;
     let group = groups.get(key);
     if (!group) {
       group = {
@@ -149,47 +146,51 @@ function createSearchIndex(games, metadata = new Map()) {
 function rankedSearch(index, query, offset = 0) {
   const terms = tokens(query);
   if (!terms.length) return { total: 0, items: [] };
-  const numericTerms = terms.filter((term) => /^\d+$/.test(term));
+  const searchTerms = terms.map((term) => {
+    const numeric = /^\d+$/.test(term);
+    return { term, numeric, prefix: term.length >= 3 && !numeric };
+  });
   const phrase = terms.join(' ');
+  const sequencePhrase = ` ${phrase} `;
+  const minimumMatches =
+    terms.length <= 2 ? terms.length : Math.max(2, Math.ceil(terms.length * 0.6));
   const results = [];
   for (const game of index) {
-    if (numericTerms.some((term) => !game.words.includes(term) && game.releaseYear !== term))
-      continue;
-
-    const matchedTerms = terms.filter(
-      (term, position) =>
-        game.releaseYear === term ||
-        game.words.some(
-          (word) =>
-            word === term || (!/^\d+$/.test(term) && term.length >= 3 && word.startsWith(term)),
-        ),
-    );
-
-    const minimumMatches =
-      terms.length <= 2 ? terms.length : Math.max(2, Math.ceil(terms.length * 0.6));
-    if (matchedTerms.length < minimumMatches) continue;
+    let matches = 0;
+    let firstPosition = Infinity;
+    let lastPosition = -1;
+    let missingNumber = false;
+    for (const { term, numeric, prefix } of searchTerms) {
+      const position = game.words.findIndex(
+        (word) => word === term || (prefix && word.startsWith(term)),
+      );
+      if (position === -1 && game.releaseYear !== term) {
+        if (numeric) {
+          missingNumber = true;
+          break;
+        }
+        continue;
+      }
+      matches++;
+      if (position >= 0) {
+        firstPosition = Math.min(firstPosition, position);
+        lastPosition = Math.max(lastPosition, position);
+      }
+    }
+    if (missingNumber || matches < minimumMatches) continue;
     const title = game.words.join(' ');
     const exact = title === phrase;
-    const sequence = ` ${title} `.includes(` ${phrase} `);
-    let span = game.words.length;
-    const positions = matchedTerms
-      .map((term) =>
-        game.words.findIndex(
-          (word) =>
-            word === term || (!/^\d+$/.test(term) && term.length >= 3 && word.startsWith(term)),
-        ),
-      )
-      .filter((position) => position >= 0);
-    if (positions.length) span = Math.max(...positions) - Math.min(...positions) + 1;
-    const coverage = matchedTerms.length / terms.length;
+    const sequence = ` ${title} `.includes(sequencePhrase);
+    const span = lastPosition < 0 ? game.words.length : lastPosition - firstPosition + 1;
+    const coverage = matches / terms.length;
     const score =
       (exact ? 10000 : 0) +
       (sequence ? 2000 : 0) +
       coverage * 1200 +
-      matchedTerms.length * 40 -
+      matches * 40 -
       (game.isCollection ? 5000 : 0) -
       span * 20 -
-      Math.max(0, game.words.length - matchedTerms.length) * 8;
+      Math.max(0, game.words.length - matches) * 8;
     results.push({ game, score });
   }
   results.sort((a, b) => b.score - a.score || a.game.name.localeCompare(b.game.name));

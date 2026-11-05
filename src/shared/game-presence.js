@@ -13,23 +13,25 @@
         (/^steam:/.test(game.id || '') ? game.id.slice(6) : ''),
     );
   function installed(games, game) {
-    const matches = games.filter((item) => {
-      if (['not-installed', 'drive-unavailable'].includes(item.status)) return false;
-      const a = steamId(item),
-        b = steamId(game);
-      return a && b ? a === b : !!nameKey(game.name) && nameKey(item.name) === nameKey(game.name);
-    });
-    return (
-      matches.find((item) => item.status === 'installed' && item.executable) || matches[0] || null
-    );
+    const id = steamId(game);
+    const name = nameKey(game.name);
+    let firstMatch = null;
+    for (const item of games) {
+      if (['not-installed', 'drive-unavailable'].includes(item.status)) continue;
+      const itemId = steamId(item);
+      const matches = id && itemId ? id === itemId : name && nameKey(item.name) === name;
+      if (!matches) continue;
+      if (item.status === 'installed' && item.executable) return item;
+      firstMatch ||= item;
+    }
+    return firstMatch;
   }
   function download(jobs, game) {
     const ids = new Set([game.id, ...(game.options || []).map((option) => option.gameId)]);
+    const name = nameKey(game.name);
     return (
       jobs.find(
-        (job) =>
-          job.status !== 'cancelled' &&
-          (ids.has(job.gameId) || nameKey(job.name) === nameKey(game.name)),
+        (job) => job.status !== 'cancelled' && (ids.has(job.gameId) || nameKey(job.name) === name),
       ) || null
     );
   }

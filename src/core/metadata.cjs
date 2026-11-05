@@ -2,13 +2,14 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { tokens, gameTitle } = require('./search.cjs');
 const { identityKey, assessIdentity } = require('./identity-match.cjs');
-const { atomicJson } = require('./library.cjs');
+const { atomicJson } = require('./atomic-json.cjs');
 const key = (name) => identityKey(name, tokens(gameTitle(name).replace(/[’']/g, '')).join(' '));
 function matchGame(name, items) {
+  const title = tokens(gameTitle(name)).join(' ');
   const exact = items.filter(
     (item) =>
       Number.isSafeInteger(item.id) &&
-      tokens(gameTitle(item.name)).join(' ') === tokens(gameTitle(name)).join(' ') &&
+      tokens(gameTitle(item.name)).join(' ') === title &&
       assessIdentity(name, item).accepted,
   );
   return exact.length === 1 ? exact[0] : null;
@@ -80,19 +81,19 @@ class Metadata {
       }),
     );
     this.apply();
-    this.persist = this.persist
-      .catch(() => {})
-      .then(() => atomicJson(this.file, [...this.entries]));
-    await this.persist.catch(() => {});
+    await this.save();
     return this.catalog.search(query, offset);
   }
   async resolveName(name) {
     await this.lookup(name);
+    await this.save();
+    return this.entries.get(key(name))?.name || name;
+  }
+  save() {
     this.persist = this.persist
       .catch(() => {})
       .then(() => atomicJson(this.file, [...this.entries]));
-    await this.persist.catch(() => {});
-    return this.entries.get(key(name))?.name || name;
+    return this.persist.catch(() => {});
   }
 }
 module.exports = { Metadata, matchGame, metadataKey: key };

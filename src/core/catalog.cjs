@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { EventEmitter } = require('node:events');
+const { atomicJson } = require('./atomic-json.cjs');
 const { TorBox, torrentHash, webHash } = require('./torbox.cjs');
 const { createSearchIndex, rankedSearch, rankOptions } = require('./search.cjs');
 const {
@@ -44,11 +45,6 @@ async function sourceText(response) {
   }
 }
 
-async function atomicJson(file, data) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file + '.tmp', JSON.stringify(data), 'utf8');
-  await fs.rename(file + '.tmp', file);
-}
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const titleKey = (title) =>
   title
@@ -57,10 +53,6 @@ const titleKey = (title) =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
-function linkIdentity(uri) {
-  return torrentHash(uri) || uri;
-}
-
 function mergeDownloads(sources, accumulator) {
   const games = accumulator?.games || new Map();
   let records = accumulator?.records || 0;
@@ -92,6 +84,7 @@ function mergeDownloads(sources, accumulator) {
         game.cover = cover;
       game.occurrences++;
       if (!game.sources.includes(source.name)) game.sources.push(source.name);
+      let seenLinks = identities.get(key);
       for (const value of row.uris) {
         if (typeof value !== 'string' || value.length > 12000) continue;
         let url;
@@ -103,8 +96,7 @@ function mergeDownloads(sources, accumulator) {
         const hash = torrentHash(value);
 
         if (!hash && url.protocol !== 'https:') continue;
-        const identity = linkIdentity(value);
-        let seenLinks = identities.get(key);
+        const identity = hash || value;
         if (!seenLinks) {
           seenLinks = new Set(game.links.map((link) => link.identity));
           identities.set(key, seenLinks);

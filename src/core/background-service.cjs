@@ -7,7 +7,7 @@ const { Metadata } = require('./metadata.cjs');
 const { GameIdentity, cleanTitle } = require('./game-identity.cjs');
 const { identityKey } = require('./identity-match.cjs');
 const { Artwork } = require('./artwork.cjs');
-const { registerSteam } = require('./shortcuts.cjs');
+const { registerSteam, desktopShortcut } = require('./shortcuts.cjs');
 const { registerXbox } = require('./xbox.cjs');
 const { openGameHelper } = require('./game-helper.cjs');
 const { SteamSearch } = require('./steam-search.cjs');
@@ -15,7 +15,6 @@ const { SteamFeatured } = require('./steam-featured.cjs');
 const { FileCleanup } = require('./file-cleanup.cjs');
 const { addGame } = require('../../tools/add-game.cjs');
 const { LibraryState, sizeBytes, storageInfo, authorizeGame } = require('./experience.cjs');
-const { desktopShortcut } = require('./shortcuts.cjs');
 
 class BackgroundService {
   constructor(emit) {
@@ -356,12 +355,13 @@ class BackgroundService {
   }
   installationBusy(game) {
     if (!game.folder) return false;
-    if (this.integrationRepairs.has(path.resolve(game.folder).toLowerCase())) return true;
+    const folder = path.resolve(game.folder).toLowerCase();
+    if (this.integrationRepairs.has(folder)) return true;
     return this.downloads.jobs.some(
       (job) =>
         this.downloads.controllers.has(job.id) &&
         job.folder &&
-        path.resolve(job.folder).toLowerCase() === path.resolve(game.folder).toLowerCase(),
+        path.resolve(job.folder).toLowerCase() === folder,
     );
   }
   async addXboxGame(game) {
@@ -388,19 +388,14 @@ class BackgroundService {
       case 'initialize':
         return this.initialize(args);
       case 'configure': {
-        const foldersChanged =
+        const scanSettings = (config) =>
           JSON.stringify([
-            this.config.downloadPath,
-            this.config.extraGameFolders || [],
-            this.config.automaticGameDetection !== false,
-            this.config.steamLibraryIntegration !== false,
-          ]) !==
-          JSON.stringify([
-            args[0].downloadPath,
-            args[0].extraGameFolders || [],
-            args[0].automaticGameDetection !== false,
-            args[0].steamLibraryIntegration !== false,
+            config.downloadPath,
+            config.extraGameFolders || [],
+            config.automaticGameDetection !== false,
+            config.steamLibraryIntegration !== false,
           ]);
+        const foldersChanged = scanSettings(this.config) !== scanSettings(args[0]);
         this.config = args[0];
         if (foldersChanged) await this.library.scan();
         return true;
