@@ -103,6 +103,11 @@ async function downloadFile(
   }
 }
 
+function transferMetadataPath(file) {
+  const key = createHash('sha256').update(path.basename(file)).digest('hex');
+  return path.join(path.dirname(file), '.mamba-transfer', key + '.json');
+}
+
 async function downloadAttempt(url, destination, expected, signal, onProgress, transport, meter) {
   const partial = destination + '.part';
   await fs.mkdir(path.dirname(destination), { recursive: true });
@@ -122,11 +127,7 @@ async function downloadAttempt(url, destination, expected, signal, onProgress, t
     onProgress(start, expected);
     return;
   }
-  const metadataFile = path.join(
-    path.dirname(destination),
-    '.mamba-transfer',
-    createHash('sha256').update(path.basename(destination)).digest('hex') + '.json',
-  );
+  const metadataFile = transferMetadataPath(destination);
   await safePath(path.dirname(destination), metadataFile);
   await safePath(path.dirname(destination), metadataFile + '.tmp');
   let metadata = {};
@@ -349,38 +350,34 @@ class Downloads extends EventEmitter {
     try {
       const saved = JSON.parse(await fs.readFile(this.file, 'utf8'));
       if (!Array.isArray(saved)) throw new SyntaxError('The saved queue must be a list.');
-      this.jobs = Array.isArray(saved)
-        ? saved
-            .filter((job) => /^[a-f0-9-]{36}$/i.test(job.id))
-            .map((job) => {
-              if (
-                ['completed', 'cancelled', 'failed', 'needs-setup', 'paused'].includes(job.status)
-              )
-                return job;
-              if (job.recovery?.installerStarted)
-                return {
-                  ...job,
-                  status: 'needs-setup',
-                  message: 'Installer interrupted. Review installation before continuing.',
-                };
-              if (job.recovery?.enabled && job.pauseReason !== 'manual')
-                return {
-                  ...job,
-                  status: 'waiting-retry',
-                  message: 'Recovering interrupted download',
-                  recovery: {
-                    ...job.recovery,
-                    nextRetryAt: job.recovery.nextRetryAt || this.now(),
-                  },
-                };
-              return {
-                ...job,
-                status: 'paused',
-                pauseReason: 'interrupted',
-                message: 'Interrupted. Retry to resume.',
-              };
-            })
-        : [];
+      this.jobs = saved
+        .filter((job) => /^[a-f0-9-]{36}$/i.test(job.id))
+        .map((job) => {
+          if (['completed', 'cancelled', 'failed', 'needs-setup', 'paused'].includes(job.status))
+            return job;
+          if (job.recovery?.installerStarted)
+            return {
+              ...job,
+              status: 'needs-setup',
+              message: 'Installer interrupted. Review installation before continuing.',
+            };
+          if (job.recovery?.enabled && job.pauseReason !== 'manual')
+            return {
+              ...job,
+              status: 'waiting-retry',
+              message: 'Recovering interrupted download',
+              recovery: {
+                ...job.recovery,
+                nextRetryAt: job.recovery.nextRetryAt || this.now(),
+              },
+            };
+          return {
+            ...job,
+            status: 'paused',
+            pauseReason: 'interrupted',
+            message: 'Interrupted. Retry to resume.',
+          };
+        });
     } catch (error) {
       if (error.code !== 'ENOENT') {
         if (!(error instanceof SyntaxError)) throw error;
@@ -608,14 +605,15 @@ class Downloads extends EventEmitter {
   }
   async remove(id) {
     this.controllers.get(id)?.abort();
-    this.jobs = this.jobs.filter((job) => job.id !== id);
-    await this.persist();
-    this.emit('change', this.snapshot());
+    await this.removeJobs((job) => job.id === id);
   }
   async clearFinished() {
-    this.jobs = this.jobs.filter(
-      (job) => !['completed', 'needs-setup', 'cancelled', 'failed'].includes(job.status),
+    await this.removeJobs((job) =>
+      ['completed', 'needs-setup', 'cancelled', 'failed'].includes(job.status),
     );
+  }
+  async removeJobs(matches) {
+    this.jobs = this.jobs.filter((job) => !matches(job));
     await this.persist();
     this.emit('change', this.snapshot());
   }
@@ -680,14 +678,7 @@ class Downloads extends EventEmitter {
       const raw = path.join(job.root, '.mamba-downloads', job.id, 'raw');
       const target = await safePath(job.root, within(raw, job.activeFile));
       await fs.rm(target + '.part', { force: true });
-      await fs.rm(
-        path.join(
-          path.dirname(target),
-          '.mamba-transfer',
-          createHash('sha256').update(path.basename(target)).digest('hex') + '.json',
-        ),
-        { force: true },
-      );
+      await fs.rm(transferMetadataPath(target), { force: true });
       state.restartedFile = job.activeFile;
     }
     const connected = await this.isOnline();
@@ -1063,14 +1054,7 @@ class Downloads extends EventEmitter {
           await this.persist();
           await fs.rm(await safePath(job.root, damaged.target), { force: true });
           await fs.rm(damaged.target + '.part', { force: true });
-          await fs.rm(
-            path.join(
-              path.dirname(damaged.target),
-              '.mamba-transfer',
-              createHash('sha256').update(path.basename(damaged.target)).digest('hex') + '.json',
-            ),
-            { force: true },
-          );
+          await fs.rm(transferMetadataPath(damaged.target), { force: true });
           job.recovery.files = null;
           await this.persist();
           throw Object.assign(
@@ -1153,18 +1137,18 @@ class Downloads extends EventEmitter {
         message: 'Running supported installer',
         progress: null,
       });
-      const installTarget = destination;
-      await atomicJson(path.join(destination, '.mamba-game.json'), {
+      const setupManifest = {
         name: job.name,
         downloadId: job.id,
         releaseId: job.gameId,
         status: 'needs-setup',
-        setupInterrupted: true,
-      });
+      };
+      const manifestFile = path.join(destination, '.mamba-game.json');
+      await atomicJson(manifestFile, { ...setupManifest, setupInterrupted: true });
       await this.checkpoint(job, 'installing', { installerStarted: true });
       let installed;
       try {
-        installed = await autoInstall(found.installer, installTarget, signal);
+        installed = await autoInstall(found.installer, destination, signal);
       } catch (error) {
         if (['EACCES', 'EPERM', 'UNKNOWN'].includes(error.code) && process.platform === 'win32')
           throw Object.assign(
@@ -1175,19 +1159,13 @@ class Downloads extends EventEmitter {
           );
         throw error;
       }
-      await atomicJson(path.join(destination, '.mamba-game.json'), {
-        name: job.name,
-        downloadId: job.id,
-        releaseId: job.gameId,
-        status: 'needs-setup',
-        setupInterrupted: false,
-      });
+      await atomicJson(manifestFile, { ...setupManifest, setupInterrupted: false });
       await this.checkpoint(job, 'finalizing', {
         installerStarted: false,
         installerFinished: installed,
       });
       if (installed) {
-        found = await detect(installTarget);
+        found = await detect(destination);
         status = found.executable && found.confidence === 'high' ? 'installed' : 'needs-setup';
       }
     }

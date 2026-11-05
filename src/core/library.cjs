@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { atomicJson } = require('./catalog.cjs');
+const { atomicJson } = require('./atomic-json.cjs');
 
 function within(root, candidate) {
   const relative = path.relative(path.resolve(root), path.resolve(candidate));

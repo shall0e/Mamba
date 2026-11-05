@@ -108,22 +108,19 @@ async function main(args = process.argv.slice(2)) {
     await fs.chmod(file, 0o600).catch((error) => {
       if (error.code !== 'ENOENT') throw error;
     });
-  const config = JSON.parse(
-    await fs.readFile(file, 'utf8').catch((error) => {
-      if (error.code === 'ENOENT') return '{}';
-      throw error;
-    }),
-  );
+  const readSettings = async () =>
+    JSON.parse(
+      await fs.readFile(file, 'utf8').catch((error) => {
+        if (error.code === 'ENOENT') return '{}';
+        throw error;
+      }),
+    );
+  const config = await readSettings();
   config.sourceUrls ||= [];
   const save = async (update) => {
     const { withConfigLock, writePrivateConfig } = require('../src/core/config-file.cjs');
     await withConfigLock(file, async () => {
-      const latest = JSON.parse(
-        await fs.readFile(file, 'utf8').catch((error) => {
-          if (error.code === 'ENOENT') return '{}';
-          throw error;
-        }),
-      );
+      const latest = await readSettings();
       update(latest);
       require('../src/core/config-transfer.cjs').validateSettings(latest);
       await writePrivateConfig(file, latest);
@@ -172,10 +169,7 @@ async function main(args = process.argv.slice(2)) {
     }
     if (!url || !['http:', 'https:'].includes(new URL(url).protocol))
       throw Error('Provide an HTTP or HTTPS source URL.');
-    if (action === 'add') config.sourceUrls = [...new Set([...config.sourceUrls, url])];
-    else if (action === 'remove')
-      config.sourceUrls = config.sourceUrls.filter((item) => item !== url);
-    else throw Error('Use sources list, add or remove.');
+    if (action !== 'add' && action !== 'remove') throw Error('Use sources list, add or remove.');
     await save((latest) => {
       const sources = latest.sourceUrls || [];
       latest.sourceUrls =

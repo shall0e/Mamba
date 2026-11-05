@@ -3,6 +3,17 @@ const path = require('node:path');
 const defaultPalette = require('../shared/palette-defaults.json');
 const { Themes } = require('../core/themes.cjs');
 const { withConfigLock, writePrivateConfig } = require('../core/config-file.cjs');
+const { validateSettings } = require('../core/config-transfer.cjs');
+const { defaultFolders, normalizeFolders } = require('../core/library-folders.cjs');
+
+function validatedFields(settings, keys) {
+  const fields = {};
+  for (const key of keys) {
+    if (settings[key] !== undefined) fields[key] = settings[key];
+  }
+  return validateSettings(fields);
+}
+
 function createConfigStore({
   app,
   safeStorage,
@@ -60,6 +71,19 @@ function createConfigStore({
   const getThemeStore = () => themeStore || (themeStore = new Themes(dataDirectory()));
   let configQueue = Promise.resolve();
 
+  async function readLegacyTorBoxKey() {
+    try {
+      const legacy = JSON.parse(
+        await fs.readFile(path.join(app.getPath('userData'), 'torbox-key.json'), 'utf8'),
+      );
+      if (legacy.encryptedKey && safeStorage.isEncryptionAvailable())
+        return safeStorage.decryptString(Buffer.from(legacy.encryptedKey, 'base64'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    return '';
+  }
+
   async function readConfig() {
     try {
       if (process.platform !== 'win32') await fs.chmod(configFile(), 0o600);
@@ -70,8 +94,8 @@ function createConfigStore({
         ...config,
         extraGameFolders:
           config.extraGameFolders === undefined
-            ? await require('../core/library-folders.cjs').defaultFolders()
-            : require('../core/library-folders.cjs').normalizeFolders(config.extraGameFolders),
+            ? await defaultFolders()
+            : normalizeFolders(config.extraGameFolders),
         onboardingCompleted: config.onboardingCompleted !== false,
         palette: readPalette(config.palette),
         downloadPath:
@@ -141,20 +165,10 @@ function createConfigStore({
       }
       if (error.code !== 'ENOENT') throw error;
 
-      let torboxApiKey = '';
-      try {
-        const legacy = JSON.parse(
-          await fs.readFile(path.join(app.getPath('userData'), 'torbox-key.json'), 'utf8'),
-        );
-        if (legacy.encryptedKey && safeStorage.isEncryptionAvailable()) {
-          torboxApiKey = safeStorage.decryptString(Buffer.from(legacy.encryptedKey, 'base64'));
-        }
-      } catch (legacyError) {
-        if (legacyError.code !== 'ENOENT') throw legacyError;
-      }
+      const torboxApiKey = await readLegacyTorBoxKey();
       return {
         onboardingCompleted: false,
-        extraGameFolders: await require('../core/library-folders.cjs').defaultFolders(),
+        extraGameFolders: await defaultFolders(),
         notifications: true,
         preferredLanguage: 'english',
         preferredRelease: 'portable',
@@ -196,8 +210,101 @@ function createConfigStore({
     return pending;
   }
 
+  function saveSettings(settings) {
+    return updateConfig((config) => {
+      if (!settings || !Array.isArray(settings.sourceUrls) || typeof settings.apiKey !== 'string') {
+        throw new Error('Invalid settings.');
+      }
+      const urls = settings.sourceUrls.map((value) => {
+        if (typeof value !== 'string') throw new Error('Invalid source URL.');
+        const url = value.trim();
+        if (!['http:', 'https:'].includes(new URL(url).protocol))
+          throw new Error('Sources must be HTTP or HTTPS JSON URLs.');
+        return url;
+      });
+      if (settings.apiKey.trim()) config.torboxApiKey = settings.apiKey.trim();
+      if (typeof settings.realDebridApiKey === 'string' && settings.realDebridApiKey.trim())
+        config.realDebridApiKey = settings.realDebridApiKey.trim();
+      Object.assign(
+        config,
+        validatedFields(settings, [
+          'enabledDownloadServices',
+          'preferredDownloadService',
+          'disabledDownloadHosts',
+          'disabledSourceUrls',
+        ]),
+      );
+      config.sourceUrls = [...new Set(urls)];
+      if (settings.extraGameFolders !== undefined)
+        config.extraGameFolders = normalizeFolders(settings.extraGameFolders);
+      if (settings.downloadPath !== undefined) {
+        if (
+          typeof settings.downloadPath !== 'string' ||
+          !path.isAbsolute(settings.downloadPath.trim())
+        )
+          throw new Error('Choose an absolute game folder path.');
+        config.downloadPath = path.resolve(settings.downloadPath.trim());
+      }
+      if (typeof settings.automaticRecovery === 'boolean')
+        config.automaticRecovery = settings.automaticRecovery;
+      if (typeof settings.autoInstall === 'boolean') config.autoInstall = settings.autoInstall;
+      if (typeof settings.cachedOnly === 'boolean') config.cachedOnly = settings.cachedOnly;
+      if (typeof settings.archivePassword === 'string')
+        config.archivePassword = settings.archivePassword;
+      Object.assign(
+        config,
+        validatedFields(settings, [
+          'keepArchives',
+          'transferTimeoutMinutes',
+          'automaticUpdates',
+          'palette',
+          'notifications',
+          'preferredLanguage',
+          'preferredRelease',
+          'appearance',
+        ]),
+      );
+    });
+  }
+
+  function saveView(view) {
+    return updateConfig((config) => {
+      if (view.libraryView !== undefined) {
+        if (!['cards', 'list', 'banners'].includes(view.libraryView))
+          throw Error('Invalid library view.');
+        config.libraryView = view.libraryView;
+      }
+      for (const key of [
+        'sidebarCollapsed',
+        'libraryShowUnknown',
+        'automaticGameDetection',
+        'steamLibraryIntegration',
+      ]) {
+        if (view[key] !== undefined) {
+          if (typeof view[key] !== 'boolean') throw Error('Invalid library preference.');
+          config[key] = view[key];
+        }
+      }
+      if (view.librarySort !== undefined) {
+        if (!['name', 'recent', 'installed'].includes(view.librarySort))
+          throw Error('Invalid library sort.');
+        config.librarySort = view.librarySort;
+      }
+      if (view.libraryFavoritesOnly !== undefined)
+        config.libraryFavoritesOnly = !!view.libraryFavoritesOnly;
+      if (view.libraryAvailability !== undefined) {
+        if (!['all', 'installed', 'not-installed'].includes(view.libraryAvailability))
+          throw Error('Invalid library filter.');
+        config.libraryAvailability = view.libraryAvailability;
+      }
+    });
+  }
+
   return {
     readConfig,
+    saveSettings,
+    saveView,
+    readLegacyTorBoxKey,
     updateConfig,
     publicConfig,
     configFile,

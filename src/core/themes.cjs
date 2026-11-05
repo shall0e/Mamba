@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { atomicJson } = require('./library.cjs');
+const { atomicJson } = require('./atomic-json.cjs');
 const { parse } = require('../shared/theme-model.js');
 class Themes {
   constructor(directory) {
