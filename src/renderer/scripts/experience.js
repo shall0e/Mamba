@@ -14,6 +14,8 @@
   let speedHistory = [];
   let discoveryJobsSignature = '';
   let libraryRenderSignature = '';
+  let recentRenderSignature = '';
+  let libraryRefreshGeneration = 0;
   let steamEnabled = true;
   const node = (tag, text, className) => {
     const element = document.createElement(tag);
@@ -34,9 +36,9 @@
   function action(label, callback, iconName, className) {
     return button(label, callback, iconName, className);
   }
-  function cover(container, id, name) {
+  function cover(container, id, name, fallback) {
     container.append($('#library-empty svg').cloneNode(true));
-    window.MambaArtwork.get(id)
+    window.MambaArtwork.get(id, fallback)
       .then((image) => {
         if (!image || !container.isConnected) return;
         const img = node('img');
@@ -60,7 +62,9 @@
       : 'Not played yet';
   }
   async function refreshLibrary() {
-    renderLibrary(await window.mamba.library());
+    const request = ++libraryRefreshGeneration;
+    const games = await window.mamba.library();
+    if (request === libraryRefreshGeneration) renderLibrary(games);
   }
   async function toggleFavorite(game) {
     await window.mamba.favorite(game.id, !game.favorite);
@@ -135,11 +139,32 @@
     libraryRenderSignature = signature;
     const list = $('#game-list');
     const scrollTop = $('#library-page')?.scrollTop;
-    list.replaceChildren();
+    const existing = new Map([...list.children].map((card) => [card.dataset.gameId, card]));
+    const retained = new Set(matches.map((game) => String(game.id)));
+    for (const card of [...list.children]) if (!retained.has(card.dataset.gameId)) card.remove();
     list.dataset.view = libraryView;
-    for (const game of matches) {
-      const card = node('li', undefined, 'game-card');
+    for (const [index, game] of matches.entries()) {
+      let card = existing.get(String(game.id));
+      const artworkKey = JSON.stringify([game.name, game.cover, game.steamId]);
+      if (card && card.dataset.artworkKey !== artworkKey) {
+        card.remove();
+        card = null;
+      }
+      if (card) {
+        card.dataset.status = game.status;
+        const caption = card.querySelector('.library-card-caption');
+        if (caption) caption.textContent = game.name;
+        const control = card.querySelector('button');
+        if (control) {
+          control.setAttribute('aria-label', 'View ' + game.name);
+          control.title = game.name;
+        }
+        if (list.children[index] !== card) list.insertBefore(card, list.children[index] || null);
+        continue;
+      }
+      card = node('li', undefined, 'game-card');
       card.dataset.gameId = game.id;
+      card.dataset.artworkKey = artworkKey;
       card.dataset.status = game.status;
       const image = action('', () => openGame(game, 'library'), null, 'game-art library-cover');
       image.setAttribute('aria-label', 'View ' + game.name);
@@ -147,17 +172,20 @@
       cover(image, game.id, game.name);
       image.append(node('span', game.name, 'library-card-caption'));
       card.append(image);
-      list.append(card);
+      list.insertBefore(card, list.children[index] || null);
     }
     if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
     window.MambaDiscovery?.render();
   }
   function renderRecentGames() {
     const list = $('#recently-played');
-    list.replaceChildren();
     const games = window.MambaActivity.recent(
       installedGames.filter((game) => showUnknown || window.MambaPresence.confirmedGame(game)),
     );
+    const signature = JSON.stringify(games);
+    if (signature === recentRenderSignature) return;
+    recentRenderSignature = signature;
+    list.replaceChildren();
     for (const game of games) {
       const row = node('article', undefined, 'recent-game');
       const image = action('', () => openGame(game, 'library'), null, 'game-art recent-art');
@@ -359,7 +387,7 @@
               ? 'Resume'
               : 'Retry'
             : existing
-              ? 'View download'
+              ? downloadLabel(existing)
               : 'Download',
           async () => {
             if (existing) {
@@ -382,6 +410,7 @@
           'download',
           best ? 'primary-button' : 'secondary-button',
         );
+        if (existing) trackDownload(download, existing);
         download.classList.add('release-download-action');
         download.disabled =
           !option.available || option.traits.incompatible || option.traits.partial;
@@ -414,6 +443,233 @@
     };
     draw();
   }
+  // Steam media is only loaded from Steam's own HTTPS hosts, matching the CSP.
+  const MEDIA_HOST = /\.(?:steamstatic|steamcontent|steamusercontent)\.com$/;
+  function mediaUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && MEDIA_HOST.test(url.hostname) ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  function mediaItems(data) {
+    let screenshot = 0;
+    return [
+      ...(data.trailers || []).map((trailer) => ({
+        type: 'trailer',
+        name: String(trailer.name || 'Trailer'),
+        url: mediaUrl(trailer.url),
+        thumbnail: mediaUrl(trailer.poster),
+      })),
+      ...(data.screenshots || []).map((shot) => ({
+        type: 'screenshot',
+        url: mediaUrl(shot.full),
+        thumbnail: mediaUrl(shot.thumbnail) || mediaUrl(shot.full),
+      })),
+    ]
+      .filter((item) => item.url)
+      .map((item) =>
+        item.type === 'screenshot'
+          ? { ...item, index: screenshot, name: data.name + ' screenshot ' + ++screenshot }
+          : item,
+      );
+  }
+  function openScreenshot(shots, start) {
+    let index = start;
+    const dialog = node('dialog', undefined, 'screenshot-dialog');
+    dialog.setAttribute('aria-label', 'Screenshot viewer');
+    const body = node('div', undefined, 'screenshot-dialog-body');
+    const close = action('', () => dialog.close(), 'x', 'text-button screenshot-close');
+    close.setAttribute('aria-label', 'Close screenshot');
+    close.title = 'Close (Esc)';
+    const full = node('img');
+    full.decoding = 'async';
+    const counter = node('span', '', 'game-media-counter');
+    counter.setAttribute('aria-live', 'polite');
+    const previous = action('', () => show(index - 1), 'arrow-left', 'secondary-button');
+    const next = action('', () => show(index + 1), 'arrow-right', 'secondary-button');
+    previous.setAttribute('aria-label', 'Previous screenshot');
+    next.setAttribute('aria-label', 'Next screenshot');
+    previous.title = 'Previous (Left arrow)';
+    next.title = 'Next (Right arrow)';
+    const navigation = node('div', undefined, 'game-media-navigation');
+    navigation.append(previous, counter, next);
+    navigation.hidden = shots.length < 2;
+    function show(value) {
+      index = (value + shots.length) % shots.length;
+      full.src = shots[index].url;
+      full.alt = shots[index].name;
+      counter.textContent = index + 1 + ' / ' + shots.length;
+    }
+    dialog.addEventListener('keydown', (event) => {
+      if (shots.length < 2 || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      show(index + (event.key === 'ArrowLeft' ? -1 : 1));
+    });
+    // The dialog itself is only hit outside the body, which is the backdrop area.
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    body.append(close, full, navigation);
+    dialog.append(body);
+    show(index);
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+  function mountMedia(content, data) {
+    const items = mediaItems(data);
+    if (!items.length) return;
+    const shots = items.filter((item) => item.type === 'screenshot');
+    const hasTrailers = items.length > shots.length;
+    const title = !shots.length
+      ? 'Trailers'
+      : hasTrailers
+        ? 'Screenshots & trailers'
+        : 'Screenshots';
+    const section = node('section', undefined, 'detail-section game-media');
+    section.append(node('h2', title));
+    section.setAttribute('aria-roledescription', 'carousel');
+    section.setAttribute('aria-label', title);
+    const stage = node('div', undefined, 'game-media-stage');
+    const navigation = node('div', undefined, 'game-media-navigation');
+    const counter = node('span', '', 'game-media-counter');
+    counter.setAttribute('aria-live', 'polite');
+    const strip = node('div', undefined, 'game-media-thumbnails');
+    strip.setAttribute('role', 'group');
+    strip.setAttribute('aria-label', 'Choose media');
+    const slides = [],
+      thumbs = [];
+    let selected = 0;
+    const previous = action('', () => show(selected - 1), 'arrow-left', 'secondary-button');
+    const next = action('', () => show(selected + 1), 'arrow-right', 'secondary-button');
+    for (const [control, label] of [
+      [previous, 'Previous media'],
+      [next, 'Next media'],
+    ]) {
+      control.setAttribute('aria-label', label);
+      control.title = label;
+    }
+    navigation.append(previous, counter, next);
+    function show(value) {
+      selected = (value + items.length) % items.length;
+      slides.forEach((slide, i) => {
+        slide.hidden = i !== selected;
+        if (i !== selected) slide.querySelector('video')?.pause();
+      });
+      thumbs.forEach((thumb, i) => thumb.setAttribute('aria-current', String(i === selected)));
+      counter.textContent = selected + 1 + ' / ' + items.length;
+      // Scroll only the strip so the page itself never jumps while browsing media.
+      const thumb = thumbs[selected];
+      if (thumb && strip.isConnected) {
+        const area = strip.getBoundingClientRect(),
+          box = thumb.getBoundingClientRect();
+        const offset =
+          box.left < area.left
+            ? box.left - area.left - 8
+            : box.right > area.right
+              ? box.right - area.right + 8
+              : 0;
+        if (offset)
+          strip.scrollBy({
+            left: offset,
+            behavior: reducedBackdropMotion.matches ? 'instant' : 'smooth',
+          });
+      }
+    }
+    section.addEventListener('keydown', (event) => {
+      if (event.target.closest('video, dialog, input, select, textarea')) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      show(selected + (event.key === 'ArrowLeft' ? -1 : 1));
+    });
+    strip.addEventListener(
+      'wheel',
+      (event) => {
+        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+        if (strip.scrollWidth <= strip.clientWidth) return;
+        event.preventDefault();
+        strip.scrollLeft += event.deltaY;
+      },
+      { passive: false },
+    );
+    for (const [index, item] of items.entries()) {
+      const figure = node('figure');
+      figure.setAttribute('role', 'group');
+      figure.setAttribute('aria-roledescription', 'slide');
+      figure.setAttribute('aria-label', index + 1 + ' of ' + items.length);
+      if (item.type === 'trailer') {
+        const video = node('video');
+        video.controls = true;
+        video.preload = 'none';
+        video.src = item.url;
+        if (item.thumbnail) video.poster = item.thumbnail;
+        video.setAttribute('aria-label', item.name);
+        video.addEventListener('play', () => {
+          for (const other of stage.querySelectorAll('video')) if (other !== video) other.pause();
+        });
+        video.addEventListener(
+          'error',
+          () => {
+            video.hidden = true;
+            figure.append(node('p', 'Trailer unavailable.', 'field-hint'));
+          },
+          { once: true },
+        );
+        figure.append(video, node('figcaption', item.name));
+      } else {
+        const image = node('img');
+        image.src = item.url;
+        image.alt = item.name;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        const expand = action(
+          '',
+          () => openScreenshot(shots, item.index),
+          undefined,
+          'screenshot-button',
+        );
+        expand.replaceChildren(image);
+        expand.setAttribute('aria-label', item.name + ' — enlarge');
+        expand.title = 'Enlarge screenshot';
+        image.onerror = () => {
+          image.hidden = true;
+          figure.append(node('p', 'Screenshot unavailable.', 'field-hint'));
+        };
+        figure.append(expand);
+      }
+      slides.push(figure);
+      stage.append(figure);
+      const thumb = action('', () => show(index), undefined, 'game-media-thumbnail');
+      thumb.replaceChildren();
+      thumb.setAttribute(
+        'aria-label',
+        item.type === 'trailer' ? 'Show trailer: ' + item.name : 'Show ' + item.name,
+      );
+      thumb.title = item.type === 'trailer' ? item.name : 'Screenshot ' + (item.index + 1);
+      if (item.thumbnail) {
+        const preview = node('img');
+        preview.src = item.thumbnail;
+        preview.alt = '';
+        preview.loading = 'lazy';
+        preview.decoding = 'async';
+        preview.onerror = () => preview.remove();
+        thumb.append(preview);
+      }
+      if (item.type === 'trailer') {
+        const badge = node('span', undefined, 'game-media-thumbnail-badge');
+        badge.append(icon('play'));
+        thumb.append(badge);
+      }
+      thumbs.push(thumb);
+      strip.append(thumb);
+    }
+    navigation.hidden = strip.hidden = items.length < 2;
+    show(0);
+    section.append(stage, navigation, strip);
+    content.append(section);
+  }
   async function openGame(game, origin) {
     const token = ++generation;
     currentDetail = null;
@@ -424,6 +680,7 @@
     const returnPage = window.MambaExperience.origin === 'library' ? 'library' : 'search';
     const returnScroll = $('#' + returnPage + '-page').scrollTop;
     const content = $('#game-content');
+    detailPage.scrollTop = 0;
     content.replaceChildren();
     detailPage.querySelector('.detail-cinematic-art')?.remove();
     const cinematic = node('div', undefined, 'detail-cinematic-art');
@@ -454,7 +711,7 @@
       currentDetail = data;
       loading.remove();
       title.remove();
-      window.MambaArtwork.get(data.libraryId || data.catalogId || data.id)
+      window.MambaArtwork.get(data.libraryId || data.catalogId || data.id, data.cover)
         .then((image) => {
           if (!image || token !== generation) return;
           detailPage.style.setProperty('--game-backdrop-image', `url("${image}")`);
@@ -463,7 +720,7 @@
         .catch(() => {});
       const hero = node('div', undefined, 'detail-hero');
       const image = node('div', undefined, 'detail-art game-art');
-      cover(image, data.libraryId || data.catalogId || data.id, data.name);
+      cover(image, data.libraryId || data.catalogId || data.id, data.name, data.cover);
       const intro = node('div', undefined, 'detail-intro');
       const heading = node('h1', data.name);
       heading.id = 'game-title';
@@ -522,25 +779,30 @@
         primary.append(
           action('Uninstall', () => removeInstallation(playable), 'trash-2', 'secondary-button'),
         );
-      const existingDownload = window.MambaPresence.download(recentJobs, { ...game, ...data });
-      if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status))
+      // Completed and cancelled jobs are history: only an unfinished job replaces the
+      // primary action, and it is the only control that tracks live progress.
+      const matchedDownload = window.MambaPresence.download(recentJobs, { ...game, ...data });
+      const existingDownload =
+        matchedDownload && !['completed', 'cancelled'].includes(matchedDownload.status)
+          ? matchedDownload
+          : null;
+      let progressAction = null;
+      if (existingDownload) {
         primary.querySelector('.primary-button')?.remove();
-      if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status))
-        primary.append(
-          action(
-            ['paused', 'failed'].includes(existingDownload.status)
-              ? 'Resume download'
-              : 'View progress',
-            async () => {
-              if (['paused', 'failed'].includes(existingDownload.status))
-                await window.mamba.retry(existingDownload.id);
-              showPage('activity');
-            },
-            'download',
-            'secondary-button',
-          ),
+        const resumable = ['paused', 'failed'].includes(existingDownload.status);
+        progressAction = action(
+          resumable ? 'Resume download' : downloadLabel(existingDownload),
+          async () => {
+            if (resumable) await window.mamba.retry(existingDownload.id);
+            showPage('activity');
+          },
+          'download',
+          'secondary-button',
         );
-      else if (data.catalogId && !playable)
+        if (!resumable) trackDownload(progressAction, existingDownload);
+        progressAction.classList.add('detail-main-action');
+        primary.prepend(progressAction);
+      } else if (data.catalogId && !playable)
         primary.append(
           action(
             'Install',
@@ -633,16 +895,8 @@
           );
       }
       primary.classList.add('detail-actions');
-      if (existingDownload && !['completed', 'cancelled'].includes(existingDownload.status)) {
-        const progress = [...primary.querySelectorAll('button')].find((b) =>
-          ['Resume download', 'View progress'].includes(b.textContent.trim()),
-        );
-        if (progress) {
-          progress.classList.add('detail-main-action');
-          primary.prepend(progress);
-        }
-      }
       const lead =
+        progressAction ||
         primary.querySelector('.detail-main-action') ||
         primary.querySelector('.primary-button') ||
         primary.querySelector('button');
@@ -674,6 +928,7 @@
         about.append(node('h2', 'Overview'), node('p', data.description, 'game-description'));
         content.append(about);
       }
+      mountMedia(content, data);
       const presentInstallations = data.installations.filter(
         (item) =>
           item.folderExists || !['not-installed', 'drive-unavailable'].includes(item.status),
@@ -841,7 +1096,7 @@
           integrations.append(
             node(
               'p',
-              'Repair this gameï¿½s integrations. Original Steam API files and existing backups are kept.',
+              'Repair this game’s integrations. Original Steam API files and existing backups are kept.',
               'field-hint',
             ),
           );
@@ -887,9 +1142,15 @@
         content.append(section);
       }
       if (data.catalogId) {
-        const section = node('section', undefined, 'detail-section game-downloads');
+        const section = node('details', undefined, 'detail-section game-downloads');
         section.id = 'game-downloads';
-        section.append(node('h2', 'Available Downloads'));
+        // Downloads are the main path for games that are not installed yet; installed
+        // games keep them tucked away until requested.
+        section.open = !playable;
+        const summary = node('summary');
+        const summaryLabel = node('h2', 'Available Downloads');
+        summary.append(summaryLabel, icon('chevron-down'));
+        section.append(summary);
         const hint = node('p', 'Checking your enabled download services\u2026', 'field-hint');
         section.append(hint);
         content.append(section);
@@ -913,6 +1174,10 @@
           const resolved = await window.mamba.resolveGame(data.catalogId);
           if (token !== generation) return;
           hint.remove();
+          const versions = resolved?.options?.length || 0;
+          summaryLabel.append(
+            node('small', versions === 1 ? '1 version' : versions + ' versions', 'downloads-count'),
+          );
           mountDownloadOptions(section, resolved, data);
         } catch (error) {
           hint.textContent =
@@ -1007,7 +1272,17 @@
         ],
         [
           'Sources',
-          activity.catalog.phase,
+          {
+            ready: 'Ready',
+            loading: 'Starting',
+            fetching: 'Syncing',
+            merging: 'Syncing',
+            checking: 'Checking',
+            waiting: 'Waiting',
+            interrupted: 'Restarting',
+            error: 'Needs attention',
+            'needs-key': 'Needs a key',
+          }[activity.catalog.phase] || String(activity.catalog.phase || 'Unknown'),
           activity.catalog.count.toLocaleString() +
             ' checked releases \u00b7 ' +
             activity.catalog.unavailableSources +
@@ -1064,6 +1339,7 @@
   }
   function pageChanged(name) {
     currentPage = name;
+    for (const video of document.querySelectorAll('.game-media video')) video.pause();
     if (name === 'activity') {
       loadActivity();
       renderDownloadOverview();
@@ -1385,15 +1661,8 @@
     .then((status) => renderIssues(status.issues))
     .catch(() => {});
   window.mamba.onIssues(renderIssues);
-  window.mamba.onNotice((notice) => {
-    showToast(
-      notice.name +
-        (notice.status === 'completed'
-          ? ' is ready to play'
-          : notice.status === 'needs-setup'
-            ? ' needs installation review'
-            : ' needs attention \u2014 open Activity'),
-    );
+  // app.js owns the actionable notice toast; this listener only refreshes Activity.
+  window.mamba.onNotice(() => {
     if (currentPage === 'activity') loadActivity();
   });
   window.mamba.onNavigate(async (target) => {

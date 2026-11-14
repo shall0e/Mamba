@@ -39,3 +39,34 @@ test('failed artwork can be retried rather than poisoning the shared cache', asy
   assert.equal(await window.MambaArtwork.get('game'), 'image');
   assert.equal(calls, 2);
 });
+test('a caller fallback is never shared with other consumers of the same artwork', async () => {
+  let calls = 0;
+  const window = {
+    mamba: {
+      artwork: async () => {
+        calls++;
+        return null;
+      },
+    },
+  };
+  vm.runInNewContext(script, { window, Date, Promise });
+  assert.equal(await window.MambaArtwork.get('game', 'steam-cover'), 'steam-cover');
+  assert.equal(await window.MambaArtwork.get('game'), null);
+  assert.equal(await window.MambaArtwork.get('game', 'other-cover'), 'other-cover');
+  assert.equal(calls, 1);
+});
+test('a fallback replaces failed artwork without poisoning the cache', async () => {
+  let calls = 0;
+  const window = {
+    mamba: {
+      artwork: async () => {
+        if (++calls === 1) throw Error('offline');
+        return 'image';
+      },
+    },
+  };
+  vm.runInNewContext(script, { window, Date, Promise });
+  assert.equal(await window.MambaArtwork.get('game', 'steam-cover'), 'steam-cover');
+  assert.equal(await window.MambaArtwork.get('game', 'steam-cover'), 'image');
+  assert.equal(calls, 2);
+});

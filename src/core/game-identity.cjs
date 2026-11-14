@@ -25,14 +25,14 @@ function cleanTitle(raw) {
     .replace(/\s*\+\s*(?:all\s+)?dlcs?\b.*$/i, '')
     .replace(/\s+(?:(?:digital\s+)?deluxe|ultimate|complete|gold|goty)(?:\s+edition)?\b/gi, '')
     .replace(/\(\s*\)/g, '')
-    .replace(/[+\s,:â€“â€”-]+$/, '')
+    .replace(/[+\s,:–—-]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 function identityWords(name) {
   return tokens(
     cleanTitle(name)
-      .replace(/[â€™']/g, '')
+      .replace(/[‘’']/g, '')
       .replace(/([a-z])(\d)/gi, '$1 $2'),
   ).map((w) => (w === 'v' ? '5' : w));
 }
@@ -40,10 +40,10 @@ function matchesTitle(raw, candidate) {
   const wanted = identityWords(raw),
     actual = identityWords(candidate);
   if (wanted.join(' ') === actual.join(' ') || wanted.join('') === actual.join('')) return true;
-  const prefix = String(candidate).split(/\s+[-ï¿½ï¿½]\s+|:\s*/)[0];
+  const prefix = String(candidate).split(/\s+[-–—]\s+|:\s*/)[0];
   if (
     prefix !== candidate &&
-    /\s+[-ï¿½ï¿½]\s+.*\bsimulator$/i.test(candidate) &&
+    /\s+[-–—]\s+.*\bsimulator$/i.test(candidate) &&
     identityWords(prefix).join('') === wanted.join('')
   )
     return true;
@@ -93,7 +93,7 @@ function isNonGame(app) {
   );
 }
 function matchesDlcTitle(raw, candidate) {
-  const parts = String(candidate).split(/:\s*|\s+[-ï¿½ï¿½]\s+/);
+  const parts = String(candidate).split(/:\s*|\s+[-–—]\s+/);
   return (
     parts.length > 1 &&
     identityWords(raw).length >= 2 &&
@@ -126,7 +126,14 @@ class GameIdentity {
   details(id) {
     const key = 'app:' + id;
     if (this.pending.has(key)) return this.pending.get(key);
-    const task = this.fetchDetails(id);
+    const stale = this.cache.get(key)?.data;
+    const task = this.fetchDetails(id).then(
+      (data) => data || stale || null,
+      (error) => {
+        if (stale?.steamId) return stale;
+        throw error;
+      },
+    );
     this.pending.set(key, task);
     task.finally(() => this.pending.delete(key)).catch(() => {});
     return task;
@@ -135,7 +142,7 @@ class GameIdentity {
     if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) return null;
     const key = 'app:' + id,
       saved = this.cache.get(key);
-    if (saved && saved.data.detailsVersion === 6 && Date.now() - saved.at < 30 * 86400000)
+    if (saved && saved.data.detailsVersion === 7 && Date.now() - saved.at < 30 * 86400000)
       return saved.data;
     const response = await this.fetch(
       'https://store.steampowered.com/api/appdetails?appids=' + id + '&l=english&cc=CA',
@@ -157,7 +164,7 @@ class GameIdentity {
         /nudity|sexual content|adult.only|sexually explicit/i.test(String(value)),
       );
     const data = {
-      detailsVersion: 6,
+      detailsVersion: 7,
       isFree: app.is_free === true,
       isHub: /\b(?:game launcher|launch hub|central hub|launch platform)\b/i.test(
         String(app.short_description || ''),
@@ -167,6 +174,17 @@ class GameIdentity {
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
         .slice(0, 2500),
+      screenshots: (app.screenshots || [])
+        .slice(0, 24)
+        .map((item) => ({ thumbnail: item.path_thumbnail, full: item.path_full })),
+      trailers: (app.movies || [])
+        .slice(0, 8)
+        .map((item) => ({
+          name: item.name || 'Trailer',
+          poster: item.thumbnail,
+          url: item.mp4?.max || item.mp4?.['480'] || item.webm?.max || item.webm?.['480'],
+        }))
+        .filter((item) => item.url),
       developers: app.developers || [],
       publishers: app.publishers || [],
       genres: (app.genres || []).map((item) => item.description),
@@ -209,14 +227,26 @@ class GameIdentity {
       verified: false,
       type: 'unknown',
       identityVersion: IDENTITY_VERSION,
-      detailsVersion: 6,
+      detailsVersion: 7,
     };
     if (isNonGame({ name: raw })) return { ...fallback, type: 'software' };
+    const known = [...this.cache.entries()].filter(
+      ([cacheKey, entry]) =>
+        cacheKey.startsWith('app:') &&
+        entry.data.type === 'game' &&
+        matchesTitle(raw, entry.data.name) &&
+        assessIdentity(raw, entry.data).accepted,
+    );
+    if (known.length === 1) {
+      const app = await this.details(known[0][1].data.steamId).catch(() => known[0][1].data);
+      if (app && matchesTitle(raw, app.name) && assessIdentity(raw, app).accepted)
+        return { ...app, verified: true, identityVersion: IDENTITY_VERSION };
+    }
     const saved = this.cache.get(key);
     if (
       saved &&
       saved.data.identityVersion === IDENTITY_VERSION &&
-      saved.data.detailsVersion === 6 &&
+      saved.data.detailsVersion === 7 &&
       Date.now() - saved.at < (saved.data.verified ? 30 : 0.05) * 86400000
     )
       return saved.data;

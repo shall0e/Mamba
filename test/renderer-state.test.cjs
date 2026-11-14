@@ -20,6 +20,7 @@ class Element {
   }
   append(...children) {
     this.children.push(...children);
+    for (const child of children) child.parent = this;
   }
   replaceChildren(...children) {
     this.children = children;
@@ -50,7 +51,15 @@ class Element {
   addEventListener(name, action) {
     this.listeners[name] = action;
   }
-  remove() {}
+  insertBefore(child, before) {
+    child.remove();
+    const index = before ? this.children.indexOf(before) : this.children.length;
+    this.children.splice(index, 0, child);
+    child.parent = this;
+  }
+  remove() {
+    if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
+  }
   showModal() {}
   close() {}
   focus() {}
@@ -75,6 +84,7 @@ function renderer() {
     console,
     installedGames: [],
     currentDetail: null,
+    recentRenderSignature: '',
     showUnknown: false,
     favoritesOnly: false,
     availability: 'all',
@@ -135,7 +145,10 @@ test('featured download stays queued after enqueue resolves and follows download
   for (const status of ['queued', 'downloading', 'needs-setup']) {
     context.window.MambaExperience.jobs = [{ id: 'job', gameId: 'game', status }];
     context.renderFeaturedGame(game);
-    assert.equal(primary(select).textContent, 'View download');
+    assert.equal(
+      primary(select).textContent,
+      { queued: 'Queued', downloading: 'Downloading', 'needs-setup': 'Setup required' }[status],
+    );
     await primary(select).click();
     assert.equal(actions.at(-1), 'activity');
   }
@@ -214,4 +227,19 @@ test('Home play history refreshes when only lastPlayed changes and cards are reu
   assert.equal(select('#game-list').firstChild, firstCard);
   assert.match(select('#recently-played').textContent, /Game/);
   assert.doesNotMatch(select('#recently-played').textContent, /No play history/);
+});
+
+test('download labels use live bytes, bounded stage progress and unknown-size states', () => {
+  const { context } = renderer();
+  assert.equal(
+    context.downloadLabel({ status: 'downloading', received: 42, total: 100, progress: 0 }),
+    'Downloading · 42%',
+  );
+  assert.equal(
+    context.downloadLabel({ status: 'downloading', received: 150, total: 100 }),
+    'Downloading · 100%',
+  );
+  assert.equal(context.downloadLabel({ status: 'downloading' }), 'Downloading');
+  assert.equal(context.downloadLabel({ status: 'extracting', progress: 36.8 }), 'Extracting · 36%');
+  assert.equal(context.downloadLabel({ status: 'paused', progress: 20 }), 'Paused · 20%');
 });

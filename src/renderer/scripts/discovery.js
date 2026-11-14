@@ -241,11 +241,9 @@
           job.status,
         )
       )
-        control = button(
-          'View download',
-          () => showPage('activity'),
-          'download',
-          'secondary-button',
+        control = trackDownload(
+          button(downloadLabel(job), () => showPage('activity'), 'download', 'secondary-button'),
+          job,
         );
       else if (owned || job?.status === 'completed')
         control = button(
@@ -364,7 +362,10 @@
     fail(message) {
       pending = false;
       setSearching(false);
-      $('#results-status').textContent = message;
+      $('#results-status').textContent =
+        String(message || '')
+          .replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+          .trim() || 'Search is unavailable right now. Try again.';
     },
     update(result, more) {
       revealResults = loading;
@@ -373,7 +374,7 @@
       games = more
         ? [...new Map([...games, ...items].map((game) => [game.id, game])).values()]
         : items;
-      total = result.total;
+      total = Number.isFinite(Number(result.total)) ? Number(result.total) : games.length;
       pending = !!result.pending;
       bestMatch = result.bestMatch || null;
       render();

@@ -258,6 +258,8 @@ class BackgroundService {
       name: info?.name || name,
       cover: info?.cover || base?.cover || source?.cover,
       description: info?.description || '',
+      screenshots: info?.screenshots || [],
+      trailers: info?.trailers || [],
       genres: info?.genres || [],
       developers: info?.developers || [],
       publishers: info?.publishers || [],

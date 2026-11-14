@@ -79,6 +79,10 @@ app
         dlcs: [],
         demos: [],
         description: 'Offline game details fixture.',
+        screenshots: [1, 2, 3].map((i) => ({
+          full: 'https://fixture.steamstatic.com/' + i + '.jpg',
+        })),
+        trailers: [{ name: 'Fixture trailer', url: 'https://fixture.steamstatic.com/trailer.mp4' }],
       },
     };
     const options = Array.from({ length: 8 }, (_, i) => ({
@@ -123,8 +127,12 @@ app
         return values[channel] ?? [];
       });
     }
-    session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://*/*'] }, (_d, done) =>
-      done({ cancel: true }),
+    session.defaultSession.protocol.handle(
+      'https',
+      () =>
+        new Response(Buffer.from(artwork[0].split(',')[1], 'base64'), {
+          headers: { 'Content-Type': 'image/jpeg' },
+        }),
     );
     const win = new BrowserWindow({
       width: Math.round(1700 / scale),
@@ -256,6 +264,42 @@ app
           await js(`getComputedStyle(document.querySelector('.detail-hero')).backgroundColor`),
           'rgba(0, 0, 0, 0)',
         );
+        assert.equal(await js(`document.querySelector('#game-downloads').open`), false);
+        assert.equal(
+          await js(`document.querySelectorAll('.game-media-stage figure:not([hidden])').length`),
+          1,
+        );
+        await js(`document.querySelector('.game-media-navigation button:last-child').click()`);
+        await new Promise((r) => setTimeout(r, 100));
+        assert.equal(
+          await js(`document.querySelector('.game-media-counter').textContent`),
+          '2 / 4',
+        );
+        await js(`document.querySelector('.game-media').scrollIntoView({block:'start'})`);
+        await screenshot('media-carousel');
+        assert.equal(await js(`document.querySelectorAll('.game-media-thumbnail').length`), 4);
+        assert.equal(
+          await js(
+            `document.querySelectorAll('.game-media-thumbnail[aria-current="true"]').length`,
+          ),
+          1,
+        );
+        await js(`document.querySelector('.game-media-stage figure:not([hidden]) button').click()`);
+        assert.equal(await js(`document.querySelector('.screenshot-dialog').open`), true);
+        assert.equal(
+          await js(`document.querySelector('.screenshot-dialog .game-media-counter').textContent`),
+          '1 / 3',
+        );
+        await js(
+          `document.querySelector('.screenshot-dialog').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`,
+        );
+        assert.equal(
+          await js(`document.querySelector('.screenshot-dialog .game-media-counter').textContent`),
+          '2 / 3',
+        );
+        await screenshot('screenshot-viewer');
+        await js(`document.querySelector('.screenshot-dialog').close()`);
+        assert.equal(await js(`document.querySelector('.screenshot-dialog')`), null);
         assert.equal(await js(`document.querySelector('.manage-installation').open`), false);
         assert.ok(
           await js(
@@ -263,6 +307,16 @@ app
           ),
         );
         assert.equal(await js(`document.querySelectorAll('.detail-main-action').length`), 1);
+        await js(
+          `document.querySelector('.detail-art').classList.remove('has-cover'); document.querySelector('.detail-art img').style.display='none'; document.querySelector('.detail-hero').scrollIntoView({block:'start'})`,
+        );
+        assert.ok(
+          await js(`document.querySelector('.detail-hero').getBoundingClientRect().height < 300`),
+        );
+        await screenshot('missing-artwork');
+        await js(
+          `document.querySelector('.detail-art').classList.add('has-cover'); document.querySelector('.detail-art img').style.removeProperty('display')`,
+        );
       }
       if (name === 'settings')
         assert.equal(
@@ -318,6 +372,10 @@ app
       path.join(output, 'recent-sizes.json'),
       JSON.stringify(recentSizes, null, 2),
     );
+    await js("showPage('library'); document.querySelector('#library-page').scrollTop=120");
+    const savedScroll = await js("document.querySelector('#library-page').scrollTop");
+    await js("showPage('activity'); showPage('library')");
+    assert.equal(await js("document.querySelector('#library-page').scrollTop"), savedScroll);
     const checks = [];
     for (const [width, height] of [
       [1700, 900],
@@ -326,7 +384,7 @@ app
       [2560, 1440],
     ]) {
       win.setSize(Math.round(width / scale), Math.round(height / scale));
-      for (const page of ['settings', 'library', 'search', 'game']) {
+      for (const page of ['settings', 'library', 'search', 'game', 'activity']) {
         await js('showPage(' + JSON.stringify(page) + ')');
         const c = await js(`(() => {
         const p=document.querySelector('.page:not([hidden])'), rail=document.querySelector('.sidebar').getBoundingClientRect(), s=getComputedStyle(document.querySelector('#library-open span'));
@@ -416,9 +474,26 @@ app
     await js(`document.querySelector('#browse-extra-folder').click()`);
     await new Promise((r) => setTimeout(r, 250));
     assert.equal(await js(`document.querySelectorAll('.folder-row').length`), 2);
+    const visiblePage = `document.querySelector('.page:not([hidden])').id`;
+    await js(
+      `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,
+    );
+    assert.equal(await js(visiblePage), 'library-page');
+    await js(`MambaExperience.openGame({id:'review',name:'Review game'},'library')`);
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(await js(visiblePage), 'game-page');
+    await js(
+      `document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`,
+    );
+    assert.equal(await js(visiblePage), 'library-page');
+    await js(
+      `document.dispatchEvent(new KeyboardEvent('keydown',{key:',',ctrlKey:true,bubbles:true}))`,
+    );
+    assert.equal(await js(`document.querySelector('#settings-backdrop').hidden`), false);
     for (const [name, index] of [
       ['services', 1],
       ['appearance', 3],
+      ['app', 4],
     ]) {
       await js(
         `showPage('settings'); document.querySelectorAll('.settings-category')[${index}].click()`,
