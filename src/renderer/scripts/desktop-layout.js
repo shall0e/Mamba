@@ -9,14 +9,8 @@
   const sidebar = $('.sidebar');
   const header = node('div', undefined, 'sidebar-heading');
   const brand = node('div', undefined, 'sidebar-brand');
-  const mark = node('img');
-  mark.src = '../../assets/mamba.png';
-  mark.alt = '';
-  brand.append(mark, node('span', 'mamba'));
+  brand.append(node('span', 'mamba'));
   const version = document.querySelector('#search-version');
-  mark.replaceWith(
-    Object.assign(document.createElement('span'), { className: 'mamba-mark sidebar-brand-mark' }),
-  );
   brand.append(version);
   header.append(brand);
   sidebar.prepend(header);
