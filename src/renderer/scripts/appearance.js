@@ -401,6 +401,7 @@
       control.setAttribute('aria-pressed', String(key === intensity));
     for (const key of model.keys) swatches[key].style.background = theme.colors[key];
     applyFonts();
+    window.MambaComponents?.apply(theme.layout);
     document.documentElement.dataset.navigation = theme.navigation.position;
     applyPalette(model.palette(theme));
     const style = document.documentElement.style,
@@ -479,6 +480,7 @@
             JSON.stringify(model.parse(item).effects) === JSON.stringify(theme.effects) &&
             model.parse(item).artworkIntensity === theme.artworkIntensity &&
             !theme.fonts?.length &&
+            !theme.layout &&
             model.parse(item).navigation.position === theme.navigation.position,
         )
         ?.name.toLowerCase() || 'custom';
@@ -496,6 +498,29 @@
   function read() {
     return { appearance: model.parse(theme), palette: model.palette(theme) };
   }
-  window.MambaAppearance = { configure, read };
+  // Lets other editors (such as the layout editor) add a section and edit the theme.
+  function addSection(key, title, description) {
+    sectionButton(key, title, description);
+    const group = node('section', undefined, 'theme-role');
+    group.setAttribute('aria-label', title + ' controls');
+    group.hidden = activeSection !== key;
+    sectionPanels[key] = group;
+    // Section panels sit above the shared "Custom themes" controls, like the built-in ones.
+    editor.insertBefore(group, share.parentElement === editor ? share : null);
+    return group;
+  }
+  window.MambaAppearance = {
+    configure,
+    read,
+    addSection,
+    layout: {
+      get: () => theme.layout || null,
+      set(layout) {
+        if (layout) theme.layout = layout;
+        else delete theme.layout;
+        customize();
+      },
+    },
+  };
   if (configLoaded) configReady.then(configure);
 })();

@@ -76,6 +76,168 @@
     $('#results-more').disabled = active;
     if (active) $('#results-status').textContent = 'Finding the best matches…';
   };
+  const serviceNames = { torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' };
+  const releaseYear = (game) =>
+    game.releaseYear || String(game.releaseYearLabel || '').match(/\b(?:19|20)\d{2}\b/)?.[0];
+  // Store titles often carry trademark symbols and a "(2007)" suffix that repeats the year.
+  function displayName(game, showsYear) {
+    let name = String(game.name || '')
+      .replace(/[™®©]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const year = releaseYear(game);
+    if (showsYear && year) name = name.replace(new RegExp('\\s*\\(' + year + '\\)$'), '');
+    return name || String(game.name || '');
+  }
+  function resultAction(game, owned, job) {
+    let control;
+    if (owned?.status === 'installed' && owned.executable)
+      control = button('Play', () => window.MambaExperience.play(owned), 'play', 'primary-button');
+    else if (job && ['paused', 'failed'].includes(job.status))
+      control = button(
+        job.status === 'paused' ? 'Resume' : 'Retry',
+        async () => {
+          await window.mamba.retry(job.id);
+          showPage('activity');
+        },
+        'rotate-ccw',
+        'secondary-button',
+      );
+    else if (
+      job &&
+      ['queued', 'preparing', 'downloading', 'extracting', 'installing', 'needs-setup'].includes(
+        job.status,
+      )
+    )
+      control = trackDownload(
+        button(downloadLabel(job), () => showPage('activity'), 'download', 'secondary-button'),
+        job,
+      );
+    else if (owned || job?.status === 'completed')
+      control = button(
+        owned ? 'Review setup' : 'View game',
+        () => window.MambaExperience.openGame(game, 'search'),
+        owned ? 'settings-2' : 'arrow-right',
+        'secondary-button',
+      );
+    else {
+      control = button(
+        'Download',
+        async (event) => {
+          if (event.shiftKey) return window.MambaExperience.openGame(game, 'search');
+          if (queueing.has(game.id)) return;
+          queueing.add(game.id);
+          control.dataset.locked = 'true';
+          render();
+          try {
+            const id = await window.mamba.downloadBest(game.id);
+            cardJobs.set(game.id, id);
+            showToast(game.name + ' added to downloads');
+          } catch (error) {
+            delete control.dataset.locked;
+            throw error;
+          } finally {
+            queueing.delete(game.id);
+            render();
+          }
+        },
+        'download',
+        'secondary-button',
+      );
+      control.title = 'Download the recommended version · Shift-click to choose a version';
+      if (queueing.has(game.id) || cardJobs.has(game.id)) {
+        control.lastChild.textContent = 'Queued';
+        control.disabled = true;
+        control.dataset.locked = 'true';
+      }
+    }
+    // Icon-only themes hide the label visually, so the name is always announced.
+    control.setAttribute(
+      'aria-label',
+      control.lastChild.textContent.trim() + ' ' + displayName(game, false),
+    );
+    if (!control.title) control.title = control.lastChild.textContent.trim();
+    return control;
+  }
+  function resultCard(game, owned, job) {
+    const open = () => window.MambaExperience.openGame(game, 'search');
+    return window.MambaComponents.render('result-card', {
+      artwork() {
+        const cover = button('', open, null, 'mc-artwork');
+        cover.setAttribute('aria-label', 'View ' + game.name);
+        cover.append($('#library-empty svg').cloneNode(true));
+        window.MambaArtwork.get(game.id)
+          .then((image) => {
+            if (!image || !cover.isConnected) return;
+            const img = node('img');
+            img.src = image;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.onload = () => cover.classList.add('has-cover');
+            img.onerror = () => img.remove();
+            cover.append(img);
+          })
+          .catch(() => {});
+        if (owned)
+          cover.append(
+            node(
+              'span',
+              owned.status === 'installed'
+                ? 'Installed'
+                : owned.status === 'not-installed'
+                  ? 'Not installed'
+                  : owned.status === 'drive-unavailable'
+                    ? 'Drive unavailable'
+                    : 'Setup required',
+              'owned-badge',
+            ),
+          );
+        return cover;
+      },
+      title(spec) {
+        const heading = node('h2', undefined, 'mc-title');
+        const label = displayName(game, spec.slots.includes('meta'));
+        const control = button(label, open, null, 'result-title');
+        control.title = game.name;
+        heading.append(control);
+        return heading;
+      },
+      meta() {
+        const values = [releaseYear(game), game.downloadSize].filter(
+          (value) => value && !/^unknown$/i.test(String(value)),
+        );
+        if (!values.length) return null;
+        const meta = node('p', values.join(' · '), 'mc-meta');
+        meta.setAttribute(
+          'aria-label',
+          [
+            releaseYear(game) && 'Released ' + releaseYear(game),
+            game.downloadSize && 'Download size ' + game.downloadSize,
+          ]
+            .filter(Boolean)
+            .join(', '),
+        );
+        return meta;
+      },
+      services() {
+        const services = [
+          ...new Set((game.options || []).flatMap((option) => option.services || [])),
+        ];
+        if (!services.length) return null;
+        return node(
+          'p',
+          services.map((value) => serviceNames[value] || value).join(' · '),
+          'mc-meta mc-services',
+        );
+      },
+      action() {
+        const actions = node('div', undefined, 'mc-actions');
+        actions.append(resultAction(game, owned, job));
+        return actions;
+      },
+    });
+  }
   function render() {
     if (loading) return;
     clear.hidden =
@@ -128,163 +290,18 @@
         job ? [job.id, job.status] : null,
         queueing.has(game.id),
         cardJobs.get(game.id),
+        window.MambaComponents.signature,
       ]);
       const cached = cardCache.get(game.id);
       if (cached?.signature === signature) {
         rows.push(cached.row);
         continue;
       }
-      const row = node('article', undefined, 'result-card game-cover-card discovery-card');
+      const row = resultCard(game, owned, job);
       if (!cached) arrivals.add(row);
       row.style.animation = 'none';
-      if (cached) {
-        cached.row.replaceWith(row);
-      }
+      if (cached) cached.row.replaceWith(row);
       cardCache.set(game.id, { row, signature });
-      const cover = button(
-        '',
-        () => window.MambaExperience.openGame(game, 'search'),
-        null,
-        'game-cover',
-      );
-      cover.setAttribute('aria-label', 'View ' + game.name);
-      cover.append($('#library-empty svg').cloneNode(true));
-      window.MambaArtwork.get(game.id)
-        .then((image) => {
-          if (!image || !cover.isConnected) return;
-          const img = node('img');
-          img.src = image;
-          img.alt = game.name;
-          img.loading = 'lazy';
-          img.onload = () => cover.classList.add('has-cover');
-          img.onerror = () => img.remove();
-          cover.append(img);
-        })
-        .catch(() => {});
-      if (owned) {
-        const badge = node(
-          'span',
-          owned.status === 'installed'
-            ? 'Installed'
-            : owned.status === 'not-installed'
-              ? 'Not installed'
-              : owned.status === 'drive-unavailable'
-                ? 'Drive unavailable'
-                : 'Setup required',
-          'owned-badge',
-        );
-        cover.append(badge);
-      }
-      const info = node('div', undefined, 'result-info');
-      const title = node('h2');
-      title.append(
-        button(
-          game.name,
-          () => window.MambaExperience.openGame(game, 'search'),
-          null,
-          'result-title',
-        ),
-      );
-      info.append(title);
-      const metadata = node('div', undefined, 'game-card-meta');
-      for (const [label, value] of [
-        [
-          'Release year',
-          game.releaseYear || String(game.releaseYearLabel || '').match(/\b(?:19|20)\d{2}\b/)?.[0],
-        ],
-        ['Download size', game.downloadSize],
-      ]) {
-        if (!value || /^unknown$/i.test(String(value))) continue;
-        const chip = node('span', String(value), 'metadata-chip');
-        chip.title = label;
-        chip.setAttribute('aria-label', label + ': ' + value);
-        metadata.append(chip);
-      }
-      info.append(metadata);
-      const sources = [...new Set((game.options || []).flatMap((option) => option.services || []))];
-      if (sources.length)
-        info.append(
-          node(
-            'p',
-            sources
-              .map(
-                (value) =>
-                  ({ torbox: 'TorBox', realdebrid: 'Real-Debrid', direct: 'Direct' })[value] ||
-                  value,
-              )
-              .join(' · '),
-            'game-card-source',
-          ),
-        );
-      const actions = node('div', undefined, 'result-actions game-result-action');
-      let control;
-      if (owned?.status === 'installed' && owned.executable)
-        control = button(
-          'Play',
-          () => window.MambaExperience.play(owned),
-          'play',
-          'primary-button',
-        );
-      else if (job && ['paused', 'failed'].includes(job.status))
-        control = button(
-          job.status === 'paused' ? 'Resume' : 'Retry',
-          async () => {
-            await window.mamba.retry(job.id);
-            showPage('activity');
-          },
-          'rotate-ccw',
-          'secondary-button',
-        );
-      else if (
-        job &&
-        ['queued', 'preparing', 'downloading', 'extracting', 'installing', 'needs-setup'].includes(
-          job.status,
-        )
-      )
-        control = trackDownload(
-          button(downloadLabel(job), () => showPage('activity'), 'download', 'secondary-button'),
-          job,
-        );
-      else if (owned || job?.status === 'completed')
-        control = button(
-          owned ? 'Review setup' : 'View game',
-          () => window.MambaExperience.openGame(game, 'search'),
-          owned ? 'settings-2' : 'arrow-right',
-          'secondary-button',
-        );
-      else {
-        control = button(
-          'Download',
-          async (event) => {
-            if (event.shiftKey) return window.MambaExperience.openGame(game, 'search');
-            if (queueing.has(game.id)) return;
-            queueing.add(game.id);
-            control.dataset.locked = 'true';
-            render();
-            try {
-              const id = await window.mamba.downloadBest(game.id);
-              cardJobs.set(game.id, id);
-              showToast(game.name + ' added to downloads');
-            } catch (error) {
-              delete control.dataset.locked;
-              throw error;
-            } finally {
-              queueing.delete(game.id);
-              render();
-            }
-          },
-          'download',
-          'text-button compact-download',
-        );
-        control.title = 'Download · Shift-click to choose a version';
-        if (queueing.has(game.id) || cardJobs.has(game.id)) {
-          control.lastChild.textContent = 'Queued';
-          control.disabled = true;
-          control.dataset.locked = 'true';
-        }
-      }
-      actions.append(control);
-      row.append(cover, info, actions);
       rows.push(row);
     }
     rows.forEach((row, index) => {
@@ -344,6 +361,9 @@
     list.setAttribute('aria-busy', String(pending));
     $('#results-more').disabled = pending;
   }
+  window.MambaComponents.onChange(() => {
+    if (games.length) render();
+  });
   window.MambaDiscovery = {
     render,
     reset(message) {

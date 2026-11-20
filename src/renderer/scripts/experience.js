@@ -120,6 +120,7 @@
         'Unmatched games (' + unknownCount + ')';
     const signature = JSON.stringify([
       libraryView,
+      window.MambaComponents.signature,
       matches.map((game) => [
         game.id,
         game.name,
@@ -145,7 +146,12 @@
     list.dataset.view = libraryView;
     for (const [index, game] of matches.entries()) {
       let card = existing.get(String(game.id));
-      const artworkKey = JSON.stringify([game.name, game.cover, game.steamId]);
+      const artworkKey = JSON.stringify([
+        game.name,
+        game.cover,
+        game.steamId,
+        window.MambaComponents.signature,
+      ]);
       if (card && card.dataset.artworkKey !== artworkKey) {
         card.remove();
         card = null;
@@ -162,16 +168,33 @@
         if (list.children[index] !== card) list.insertBefore(card, list.children[index] || null);
         continue;
       }
-      card = node('li', undefined, 'game-card');
+      card = window.MambaComponents.render(
+        'library-card',
+        {
+          artwork() {
+            const image = action(
+              '',
+              () => openGame(game, 'library'),
+              null,
+              'game-art library-cover',
+            );
+            image.setAttribute('aria-label', 'View ' + game.name);
+            image.title = game.name;
+            cover(image, game.id, game.name);
+            return image;
+          },
+          title: () => node('span', game.name, 'library-card-caption'),
+        },
+        { tag: 'li', className: 'game-card' },
+      );
+      // The original "cover" design overlays the title on the artwork on hover and focus.
+      const artworkSlot = card.querySelector('.library-cover');
+      const captionSlot = card.querySelector('.library-card-caption');
+      if (card.dataset.variant === 'cover' && artworkSlot && captionSlot)
+        artworkSlot.append(captionSlot);
       card.dataset.gameId = game.id;
       card.dataset.artworkKey = artworkKey;
       card.dataset.status = game.status;
-      const image = action('', () => openGame(game, 'library'), null, 'game-art library-cover');
-      image.setAttribute('aria-label', 'View ' + game.name);
-      image.title = game.name;
-      cover(image, game.id, game.name);
-      image.append(node('span', game.name, 'library-card-caption'));
-      card.append(image);
       list.insertBefore(card, list.children[index] || null);
     }
     if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
@@ -1389,6 +1412,7 @@
     },
   };
   window.MambaExperience = api;
+  window.MambaComponents.onChange(() => renderLibrary(installedGames));
   $('#activity-transfers').append($('#transfers'));
   const activityTools = node('details', undefined, 'activity-tools');
   $('.activity-controls').append($('#export-diagnostics'));

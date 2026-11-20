@@ -34,6 +34,10 @@ app
       running: i === 0,
       options: [],
       installations: [],
+      ...(i === 2 ? { name: 'Call of Duty® 4: Modern Warfare® (2009)' } : {}),
+      releaseYear: 2007 + i,
+      downloadSize: (1.5 + i / 4).toFixed(2) + ' GB',
+      options: [{ services: i % 2 ? ['torbox', 'direct'] : ['direct'] }],
       lastPlayed: '2026-10-' + (10 + i),
       installedAt: '2026-10-' + (10 + i),
     }));
@@ -474,6 +478,33 @@ app
     await js(`document.querySelector('#browse-extra-folder').click()`);
     await new Promise((r) => setTimeout(r, 250));
     assert.equal(await js(`document.querySelectorAll('.folder-row').length`), 2);
+    // Theme layouts: the original design, then each result-card variant.
+    await js(
+      `showPage('search'); document.querySelector('#main-search').value='Review'; document.querySelector('#search-page').classList.add('has-results'); document.querySelector('#search-results').hidden=false; MambaDiscovery.update({items:${JSON.stringify(games)},total:20});`,
+    );
+    assert.equal(
+      await js(`document.querySelector('#results-list .mc-result-card').dataset.variant`),
+      'stacked',
+    );
+    assert.equal(
+      await js(
+        `[...document.querySelectorAll('#results-list .result-title')].some(t => /[®™]|\\(2009\\)/.test(t.textContent))`,
+      ),
+      false,
+    );
+    await screenshot('layout-stacked');
+    for (const variant of ['overlay', 'row']) {
+      await js(
+        `MambaComponents.apply({components:{'result-card':{variant:'${variant}'},'result-grid':{style:{columns:${variant === 'row' ? 2 : 4}}}}})`,
+      );
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(
+        await js(`document.querySelector('#results-list .mc-result-card').dataset.variant`),
+        variant,
+      );
+      await screenshot('layout-' + variant);
+    }
+    await js(`MambaComponents.apply(null)`);
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,
@@ -500,6 +531,11 @@ app
       );
       await screenshot(name);
     }
+    await js(
+      `showPage('settings'); document.querySelectorAll('.settings-category')[3].click(); document.querySelector('.theme-section-button[aria-label="Layout"]').click()`,
+    );
+    assert.ok(await js(`document.querySelectorAll('.layout-slot').length >= 5`));
+    await screenshot('layout-editor');
     const themeChecks = await js(
       `(async()=>{const checks=[]; for(const theme of MambaThemes.presets) { await MambaAppearance.configure({appearance:theme}); checks.push({name:theme.name,labels:getComputedStyle(document.querySelector('#library-open span')).visibility}); } return checks;})()`,
     );

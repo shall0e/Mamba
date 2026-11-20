@@ -60,6 +60,22 @@ class Element {
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
+  querySelector(selector) {
+    const name = selector.startsWith('.') ? selector.slice(1) : null;
+    for (const child of this.children) {
+      if (!child || typeof child !== 'object') continue;
+      if (
+        name &&
+        String(child.className || '')
+          .split(/\s+/)
+          .includes(name)
+      )
+        return child;
+      const found = child.querySelector?.(selector);
+      if (found) return found;
+    }
+    return null;
+  }
   showModal() {}
   close() {}
   focus() {}
@@ -106,6 +122,7 @@ function renderer() {
     },
     document: {
       querySelector: select,
+      documentElement: { style: { setProperty() {} } },
       body: new Element('body'),
       activeElement: null,
       createElement: (tag) => new Element(tag),
@@ -124,6 +141,8 @@ function renderer() {
     },
     $: select,
   });
+  for (const script of ['../src/shared/layout-model.js', '../src/renderer/scripts/components.js'])
+    vm.runInContext(fs.readFileSync(path.join(__dirname, script), 'utf8'), context);
   const app = fs.readFileSync(path.join(__dirname, '../src/renderer/scripts/app.js'), 'utf8');
   vm.runInContext(app.slice(0, app.indexOf('function formatBytes')), context);
   context.action = context.button;

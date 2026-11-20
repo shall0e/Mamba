@@ -1,0 +1,120 @@
+# Theming Mamba
+
+A Mamba theme is a JSON file (`*.mamba-theme.json`) that controls **colors, effects, fonts and
+layout**. Mamba supplies everything else: components, game data, artwork, links, downloads and
+actions. Because a theme only arranges and styles what Mamba provides, a shared theme can't run
+code, open links or change what a button does.
+
+Anything a theme leaves out falls back to the original Mamba design, so a theme can be as small
+as one setting.
+
+Create themes in **Settings → Appearance**: use the color sections, **Fonts** and **Layout**, then
+save or export. Exported files can be edited in any text editor and imported again.
+
+## File structure
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "Compact rows",
+  "colors": {
+    "background": "#181818",
+    "foreground": "#202020",
+    "input": "#303030",
+    "icons": "#dedee3",
+    "text": "#eeeeee"
+  },
+  "glass": { "opacity": 0.88, "blur": 22 },
+  "layout": {
+    "version": 1,
+    "components": {
+      "result-card": {
+        "variant": "row",
+        "slots": ["artwork", "title", "meta", "action"],
+        "style": { "radius": 6, "titleLines": 1, "action": "icon" }
+      },
+      "result-grid": { "style": { "columns": 2, "gap": 16 } }
+    }
+  }
+}
+```
+
+| Section                | Purpose                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `colors`               | The theme roles: Background, Foreground, Input, Icons, Text (and Supporting Text) |
+| `glass` / `effects`    | Opacity and blur for each role                                                    |
+| `fonts` / `typography` | Embedded fonts and which interface roles use them                                 |
+| `artworkIntensity`     | `subtle`, `balanced` or `immersive` artwork treatment                             |
+| `navigation`           | Where page navigation appears                                                     |
+| `layout`               | Component variants, slot order and style tokens (below)                           |
+
+Themes contain appearance only. They never include API keys, source URLs, folders or other
+settings.
+
+## Layout
+
+`layout.components` maps a component name to three optional fields:
+
+- `variant`: one of the component's variants.
+- `slots`: the parts to show, in order. Parts left out of the list are hidden.
+- `style`: tokens with fixed ranges or keywords. Raw CSS isn't accepted.
+
+### `result-card`: games in search results
+
+| Slots      | Meaning                               |
+| ---------- | ------------------------------------- |
+| `artwork`  | Game artwork (opens details)          |
+| `title`    | Game name (opens details)             |
+| `meta`     | Release year and download size        |
+| `services` | Download services that offer the game |
+| `action`   | Play, Download, Resume or View button |
+
+Default slots: `artwork, title, meta, services, action`. At least one of `artwork` or `title` is
+required so every card can be opened.
+
+Variants: `stacked` (default), `overlay` (title over the artwork), `row` (artwork on the left).
+
+| Style token  | Values                        | Default      |
+| ------------ | ----------------------------- | ------------ |
+| `radius`     | 0–24 px                       | 8            |
+| `padding`    | 0–32 px                       | 16           |
+| `gap`        | 0–24 px                       | 8            |
+| `titleLines` | 1–3                           | 2            |
+| `surface`    | `foreground`, `input`, `none` | `foreground` |
+| `border`     | `none`, `line`                | `line`       |
+| `action`     | `label`, `icon`               | `label`      |
+
+### `result-grid`: search results arrangement
+
+| Style token | Values     | Default |
+| ----------- | ---------- | ------- |
+| `columns`   | 1–5        | 5       |
+| `minWidth`  | 160–480 px | 240     |
+| `gap`       | 0–48 px    | 24      |
+
+### `library-card`: games in the Library grid
+
+Slots: `artwork`, `title`. Variants: `cover` (default, title appears over the artwork on hover
+and focus) and `captioned` (title always shown below).
+
+| Style token  | Values  | Default |
+| ------------ | ------- | ------- |
+| `radius`     | 0–24 px | 8       |
+| `titleLines` | 1–3     | 2       |
+
+## Compatibility
+
+- Unknown components, slots and tokens are ignored, so themes made for newer versions of Mamba
+  still load with the parts this version understands.
+- Values of the wrong type or outside their range are rejected with a message naming the setting.
+- A `layout.version` newer than this version of Mamba supports is rejected.
+
+## For contributors: adding a component
+
+1. Describe it in `src/shared/layout-model.js` with its slots, variants and style tokens. The
+   defaults must reproduce the current design exactly.
+2. Build it with `MambaComponents.render(name, builders)` from `src/renderer/scripts/components.js`,
+   with one builder per slot that returns an element or `null`.
+3. Style it in `src/renderer/styles/components.css` using `var(--<component>-<token>, default)` and
+   `[data-variant]` / `[data-<token>]` selectors, with colors from the theme roles only.
+4. Document it here and add cases to `test/layout-model.test.cjs`.

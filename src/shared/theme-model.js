@@ -165,6 +165,14 @@
         return { name: font.name, data: font.data };
       });
     }
+    if (value.layout !== undefined && value.layout !== null) {
+      const layouts =
+        typeof module !== 'undefined' && module.exports
+          ? require('./layout-model.js')
+          : root.MambaLayouts;
+      const layout = layouts.parse(value.layout);
+      if (layout && Object.keys(layout.components).length) result.layout = layout;
+    }
     if (value.typography !== undefined) {
       result.typography = {};
       for (const role of Object.keys(fontRoles)) {
