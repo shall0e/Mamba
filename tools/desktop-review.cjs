@@ -34,10 +34,6 @@ app
       running: i === 0,
       options: [],
       installations: [],
-      ...(i === 2 ? { name: 'Call of Duty® 4: Modern Warfare® (2009)' } : {}),
-      releaseYear: 2007 + i,
-      downloadSize: (1.5 + i / 4).toFixed(2) + ' GB',
-      options: [{ services: i % 2 ? ['torbox', 'direct'] : ['direct'] }],
       lastPlayed: '2026-10-' + (10 + i),
       installedAt: '2026-10-' + (10 + i),
     }));
@@ -478,126 +474,6 @@ app
     await js(`document.querySelector('#browse-extra-folder').click()`);
     await new Promise((r) => setTimeout(r, 250));
     assert.equal(await js(`document.querySelectorAll('.folder-row').length`), 2);
-    // Theme layouts: the original design, then each result-card variant.
-    await js(
-      `showPage('search'); document.querySelector('#main-search').value='Review'; document.querySelector('#search-page').classList.add('has-results'); document.querySelector('#search-results').hidden=false; MambaDiscovery.update({items:${JSON.stringify(games)},total:20});`,
-    );
-    assert.equal(
-      await js(`document.querySelector('#results-list .mc-result-card').dataset.variant`),
-      'stacked',
-    );
-    assert.equal(
-      await js(
-        `[...document.querySelectorAll('#results-list .result-title')].some(t => /[®™]|\\(2009\\)/.test(t.textContent))`,
-      ),
-      false,
-    );
-    await screenshot('layout-stacked');
-    for (const variant of ['overlay', 'row']) {
-      await js(
-        `MambaComponents.apply({components:{'result-card':{variant:'${variant}'},'result-grid':{style:{columns:${variant === 'row' ? 2 : 4}}}}})`,
-      );
-      await new Promise((r) => setTimeout(r, 200));
-      assert.equal(
-        await js(`document.querySelector('#results-list .mc-result-card').dataset.variant`),
-        variant,
-      );
-      await screenshot('layout-' + variant);
-    }
-    await js(
-      `MambaComponents.apply({components:{'detail-hero':{variant:'split'},'game-details':{slots:['back','hero','downloads','metadata','overview','media','installation','content'],style:{width:1200,sectionGap:40}}}})`,
-    );
-    await js(`MambaExperience.openGame({id:'review',name:'Review game'},'search')`);
-    await new Promise((r) => setTimeout(r, 400));
-    assert.deepEqual(
-      await js(
-        `[...document.querySelectorAll('#game-content > [data-slot]')].map(e=>e.dataset.slot).slice(0,3)`,
-      ),
-      ['back', 'hero', 'downloads'],
-    );
-    assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'split');
-    assert.equal(
-      await js(
-        `getComputedStyle(document.querySelector('#game-content > [data-slot="downloads"]')).marginTop`,
-      ),
-      '40px',
-    );
-    await screenshot('details-split');
-    await js(`MambaComponents.apply(null)`);
-    await new Promise((r) => setTimeout(r, 400));
-    assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'cinematic');
-    const navOrder = `[...document.querySelectorAll('.sidebar nav > [data-slot]:not([hidden])')].map(e=>e.dataset.slot)`;
-    assert.deepEqual(await js(navOrder), ['home', 'library', 'activity', 'recent']);
-    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 192);
-    await js(
-      `showPage('search'); MambaComponents.apply({components:{'sidebar-nav':{slots:['recent','library','home']},sidebar:{style:{panelWidth:240,itemHeight:40}}}})`,
-    );
-    await new Promise((r) => setTimeout(r, 300));
-    assert.deepEqual(await js(navOrder), ['recent', 'library', 'home']);
-    assert.equal(await js(`document.querySelector('#activity-open').hidden`), true);
-    assert.equal(
-      await js(`document.querySelector('.sidebar nav').lastElementChild.id`),
-      'settings-open',
-    );
-    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 240);
-    assert.equal(
-      await js(`document.querySelector('#library-open').getBoundingClientRect().height`),
-      40,
-    );
-    assert.ok(
-      await js(
-        `document.querySelector('#settings-open').getBoundingClientRect().bottom <= innerHeight`,
-      ),
-    );
-    const recentBox = `(()=>{const r=document.querySelector('.sidebar-recents');return r.scrollHeight<=r.clientHeight+1})()`;
-    assert.ok(await js(recentBox), 'Recently Played overflows when reordered');
-    await screenshot('sidebar-reordered');
-    await js(`MambaComponents.apply({components:{sidebar:{variant:'icons'}}})`);
-    await new Promise((r) => setTimeout(r, 300));
-    assert.equal(await js(`document.documentElement.dataset.sidebarCollapsed`), 'true');
-    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 56);
-    await screenshot('sidebar-icons');
-    await js(`MambaComponents.apply(null)`);
-    await new Promise((r) => setTimeout(r, 300));
-    assert.equal(await js(`document.documentElement.dataset.sidebarCollapsed`), 'false');
-    assert.deepEqual(await js(navOrder), ['home', 'library', 'activity', 'recent']);
-    const activityOrder = `[...document.querySelectorAll('#activity-page > [data-slot]:not([hidden])')].map(e=>e.dataset.slot)`;
-    await js(`showPage('activity')`);
-    await new Promise((r) => setTimeout(r, 200));
-    assert.deepEqual(await js(activityOrder), [
-      'overview',
-      'downloads',
-      'cleanup',
-      'issues',
-      'tools',
-    ]);
-    const issuesMargin = `getComputedStyle(document.querySelector('.issues-section')).marginTop`;
-    assert.equal(await js(issuesMargin), '28px');
-    await screenshot('activity');
-    await js(
-      `MambaComponents.apply({components:{'activity-page':{slots:['downloads','issues','overview','tools'],style:{sectionGap:40}},'activity-overview':{slots:['recent']}}})`,
-    );
-    await new Promise((r) => setTimeout(r, 300));
-    assert.deepEqual(await js(activityOrder), ['downloads', 'issues', 'overview', 'tools']);
-    assert.equal(await js(`document.querySelector('.file-cleanup').hidden`), true);
-    assert.equal(await js(issuesMargin), '40px');
-    assert.equal(
-      await js(
-        `Math.round(document.querySelector('.recent-card').getBoundingClientRect().width) === Math.round(document.querySelector('.activity-overview').getBoundingClientRect().width)`,
-      ),
-      true,
-    );
-    await screenshot('activity-reordered');
-    await js(`MambaComponents.apply(null)`);
-    await new Promise((r) => setTimeout(r, 300));
-    assert.deepEqual(await js(activityOrder), [
-      'overview',
-      'downloads',
-      'cleanup',
-      'issues',
-      'tools',
-    ]);
-    assert.equal(await js(issuesMargin), '28px');
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,
@@ -624,11 +500,6 @@ app
       );
       await screenshot(name);
     }
-    await js(
-      `showPage('settings'); document.querySelectorAll('.settings-category')[3].click(); document.querySelector('.theme-section-button[aria-label="Layout"]').click()`,
-    );
-    assert.ok(await js(`document.querySelectorAll('.layout-slot').length >= 5`));
-    await screenshot('layout-editor');
     const themeChecks = await js(
       `(async()=>{const checks=[]; for(const theme of MambaThemes.presets) { await MambaAppearance.configure({appearance:theme}); checks.push({name:theme.name,labels:getComputedStyle(document.querySelector('#library-open span')).visibility}); } return checks;})()`,
     );

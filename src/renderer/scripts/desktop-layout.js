@@ -14,6 +14,7 @@
   brand.append(version);
   header.append(brand);
   sidebar.prepend(header);
+  document.documentElement.dataset.sidebarCollapsed = 'false';
   const recent = node('div', undefined, 'sidebar-recents');
   const groups = {};
   for (const [key, title] of [['played', 'Recently played']]) {
@@ -25,49 +26,14 @@
     recent.append(section);
   }
   $('#settings-open').before(recent);
-  // The theme arranges the sidebar (brand, navigation, icon-only variant) and the order of
-  // the page buttons and Recently Played. Settings stays anchored at the bottom, and hidden
-  // buttons stay in the document so shortcuts and the welcome tour keep working.
-  const nav = sidebar.querySelector('nav');
-  const navParts = {
-    home: $('#search-open'),
-    library: $('#library-open'),
-    activity: $('#activity-open'),
-    recent,
-  };
-  function arrangeSidebar() {
-    const components = window.MambaComponents;
-    if (!components) return;
-    const spec = components.mount(
-      sidebar,
-      'sidebar',
-      { brand: header, navigation: nav },
-      {
-        keep: true,
-      },
-    );
-    components.mount(nav, 'sidebar-nav', navParts, { keep: true, before: $('#settings-open') });
-    document.documentElement.dataset.sidebarCollapsed = String(spec.variant === 'icons');
-  }
-  arrangeSidebar();
   let recentGames = [];
   function recentLimit() {
     const list = groups.played;
     const settingsTop = $('#settings-open').getBoundingClientRect().top;
     const listTop = list.getBoundingClientRect().top;
-    // Reserve the list's bottom margin, the navigation gap before the next item and any
-    // page buttons a theme places below Recently Played, so the rows never overflow.
-    const gap = parseFloat(getComputedStyle(nav).rowGap) || 0;
-    let below = (parseFloat(getComputedStyle(list.parentElement).marginBottom) || 0) + gap;
-    for (
-      let el = recent.nextElementSibling;
-      el && el.id !== 'settings-open';
-      el = el.nextElementSibling
-    )
-      if (!el.hidden) below += el.getBoundingClientRect().height + gap;
     const row = list.querySelector('.sidebar-game-shortcut');
     const rowHeight = row?.getBoundingClientRect().height || 42;
-    return Math.max(0, Math.floor((settingsTop - listTop - below) / rowHeight));
+    return Math.max(0, Math.floor((settingsTop - listTop - 8) / rowHeight));
   }
   let recentSignature = '';
   function renderRecent(games = installedGames) {
@@ -162,11 +128,6 @@
     recentFrame = requestAnimationFrame(() => renderRecent(recentGames));
   };
   window.addEventListener('resize', scheduleRecent);
-  window.MambaComponents?.onChange(() => {
-    arrangeSidebar();
-    recentSignature = '';
-    scheduleRecent();
-  });
   new ResizeObserver(scheduleRecent).observe(sidebar);
   let gameMenu;
   function showGameMenu(game, x, y, restore) {
@@ -236,7 +197,7 @@
   });
   window.MambaDesktop = {
     configure: (c) => {
-      arrangeSidebar();
+      document.documentElement.dataset.sidebarCollapsed = 'false';
       renderRecent();
       updateConnections(c);
     },

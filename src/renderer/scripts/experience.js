@@ -17,7 +17,6 @@
   let recentRenderSignature = '';
   let libraryRefreshGeneration = 0;
   let steamEnabled = true;
-  let goBack = null;
   const node = (tag, text, className) => {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
@@ -121,7 +120,6 @@
         'Unmatched games (' + unknownCount + ')';
     const signature = JSON.stringify([
       libraryView,
-      window.MambaComponents.signature,
       matches.map((game) => [
         game.id,
         game.name,
@@ -147,12 +145,7 @@
     list.dataset.view = libraryView;
     for (const [index, game] of matches.entries()) {
       let card = existing.get(String(game.id));
-      const artworkKey = JSON.stringify([
-        game.name,
-        game.cover,
-        game.steamId,
-        window.MambaComponents.signature,
-      ]);
+      const artworkKey = JSON.stringify([game.name, game.cover, game.steamId]);
       if (card && card.dataset.artworkKey !== artworkKey) {
         card.remove();
         card = null;
@@ -169,33 +162,16 @@
         if (list.children[index] !== card) list.insertBefore(card, list.children[index] || null);
         continue;
       }
-      card = window.MambaComponents.render(
-        'library-card',
-        {
-          artwork() {
-            const image = action(
-              '',
-              () => openGame(game, 'library'),
-              null,
-              'game-art library-cover',
-            );
-            image.setAttribute('aria-label', 'View ' + game.name);
-            image.title = game.name;
-            cover(image, game.id, game.name);
-            return image;
-          },
-          title: () => node('span', game.name, 'library-card-caption'),
-        },
-        { tag: 'li', className: 'game-card' },
-      );
-      // The original "cover" design overlays the title on the artwork on hover and focus.
-      const artworkSlot = card.querySelector('.library-cover');
-      const captionSlot = card.querySelector('.library-card-caption');
-      if (card.dataset.variant === 'cover' && artworkSlot && captionSlot)
-        artworkSlot.append(captionSlot);
+      card = node('li', undefined, 'game-card');
       card.dataset.gameId = game.id;
       card.dataset.artworkKey = artworkKey;
       card.dataset.status = game.status;
+      const image = action('', () => openGame(game, 'library'), null, 'game-art library-cover');
+      image.setAttribute('aria-label', 'View ' + game.name);
+      image.title = game.name;
+      cover(image, game.id, game.name);
+      image.append(node('span', game.name, 'library-card-caption'));
+      card.append(image);
       list.insertBefore(card, list.children[index] || null);
     }
     if (scrollTop !== undefined) $('#library-page').scrollTop = scrollTop;
@@ -542,9 +518,9 @@
     document.body.append(dialog);
     dialog.showModal();
   }
-  function mountMedia(data) {
+  function mountMedia(content, data) {
     const items = mediaItems(data);
-    if (!items.length) return null;
+    if (!items.length) return;
     const shots = items.filter((item) => item.type === 'screenshot');
     const hasTrailers = items.length > shots.length;
     const title = !shots.length
@@ -692,23 +668,7 @@
     navigation.hidden = strip.hidden = items.length < 2;
     show(0);
     section.append(stage, navigation, strip);
-    return section;
-  }
-  // The hero keeps the original structure (artwork, then an intro column) while the
-  // theme decides which parts appear and in what order.
-  function mountHero(hero, intro, parts) {
-    const spec = window.MambaComponents.mount(hero, 'detail-hero', {});
-    for (const slot of spec.slots) {
-      const part = parts[slot];
-      if (!part) continue;
-      if (part.nodeType === 1) part.dataset.slot = slot;
-      if (slot === 'artwork') hero.append(part);
-      else {
-        if (!intro.isConnected || intro.parentElement !== hero) hero.append(intro);
-        intro.append(part);
-      }
-    }
-    return spec;
+    content.append(section);
   }
   async function openGame(game, origin) {
     const token = ++generation;
@@ -726,18 +686,17 @@
     const cinematic = node('div', undefined, 'detail-cinematic-art');
     cinematic.setAttribute('aria-hidden', 'true');
     detailPage.prepend(cinematic);
-    goBack = () => {
-      generation++;
-      showPage(returnPage);
-      $('#' + returnPage + '-page').scrollTop = returnScroll;
-    };
-    const back = action(
-      'Back to ' + (returnPage === 'search' ? 'Home' : 'Library'),
-      () => goBack(),
-      'arrow-left',
+    content.append(
+      action(
+        'Back to ' + (returnPage === 'search' ? 'Home' : 'Library'),
+        () => {
+          generation++;
+          showPage(returnPage);
+          $('#' + returnPage + '-page').scrollTop = returnScroll;
+        },
+        'arrow-left',
+      ),
     );
-    back.classList.add('detail-back');
-    content.append(back);
     const title = node('h1', game.name || 'Game details');
     title.id = 'game-title';
     title.tabIndex = -1;
@@ -759,8 +718,6 @@
           detailPage.classList.add('has-game-backdrop');
         })
         .catch(() => {});
-      const sections = { back };
-      const status = document.createDocumentFragment();
       const hero = node('div', undefined, 'detail-hero');
       const image = node('div', undefined, 'detail-art game-art');
       cover(image, data.libraryId || data.catalogId || data.id, data.name, data.cover);
@@ -768,7 +725,7 @@
       const heading = node('h1', data.name);
       heading.id = 'game-title';
       heading.tabIndex = -1;
-      const eyebrow = node('p', data.steamId ? 'STEAM GAME' : 'YOUR GAME', 'page-eyebrow');
+      intro.append(node('p', data.steamId ? 'STEAM GAME' : 'YOUR GAME', 'page-eyebrow'), heading);
       const metadata = node('dl', undefined, 'detail-metadata');
       for (const [label, value] of [
         ['Released', data.releaseDate],
@@ -796,7 +753,7 @@
         showToast('Game uninstalled; kept in library');
       };
       if (data.libraryId)
-        status.append(
+        intro.append(
           node(
             'span',
             playable
@@ -894,7 +851,7 @@
           ),
         );
       if (data.libraryId && !data.catalogId && !playable)
-        status.append(
+        intro.append(
           node(
             'p',
             'No matching download is currently available. Locate your existing files or refresh your sources.',
@@ -961,23 +918,17 @@
         control.setAttribute('aria-label', control.title);
         if (control.title === 'Uninstall') control.title = 'Uninstall (confirmation required)';
       }
-      const state = status.querySelector('.detail-owned');
+      intro.append(primary);
+      const state = intro.querySelector('.detail-owned');
       if (state && data.lastPlayed) state.textContent += ' · Last played ' + date(data.lastPlayed);
-      mountHero(hero, intro, {
-        artwork: image,
-        eyebrow,
-        title: heading,
-        status: status.childNodes.length ? status : null,
-        actions: primary,
-      });
-      sections.hero = hero;
-      if (metadata.childElementCount) sections.metadata = metadata;
+      hero.append(image, intro);
+      content.append(hero, metadata);
       if (data.description) {
         const about = node('section', undefined, 'detail-section game-overview');
         about.append(node('h2', 'Overview'), node('p', data.description, 'game-description'));
-        sections.overview = about;
+        content.append(about);
       }
-      sections.media = mountMedia(data);
+      mountMedia(content, data);
       const presentInstallations = data.installations.filter(
         (item) =>
           item.folderExists || !['not-installed', 'drive-unavailable'].includes(item.status),
@@ -1164,7 +1115,7 @@
           card.append(manage);
           section.append(card);
         }
-        sections.installation = section;
+        content.append(section);
       }
       if (data.dlcs.length || data.demos.length || data.availableDlcCount) {
         const section = node('section', undefined, 'detail-section');
@@ -1188,9 +1139,8 @@
             'field-hint',
           ),
         );
-        sections.content = section;
+        content.append(section);
       }
-      let downloads = null;
       if (data.catalogId) {
         const section = node('details', undefined, 'detail-section game-downloads');
         section.id = 'game-downloads';
@@ -1203,8 +1153,7 @@
         section.append(summary);
         const hint = node('p', 'Checking your enabled download services\u2026', 'field-hint');
         section.append(hint);
-        sections.downloads = section;
-        downloads = { section, hint, summaryLabel };
+        content.append(section);
         if (data.space) {
           const info = node(
             'p',
@@ -1221,11 +1170,6 @@
           );
           section.append(info);
         }
-      }
-      window.MambaComponents.mount(content, 'game-details', sections);
-      if (!sections.downloads) downloads = null;
-      if (downloads && content.contains(downloads.section)) {
-        const { section, hint, summaryLabel } = downloads;
         try {
           const resolved = await window.mamba.resolveGame(data.catalogId);
           if (token !== generation) return;
@@ -1410,12 +1354,6 @@
     pageChanged,
     handleError,
     play: playGame,
-    // Returns from game details; false when no details page is showing.
-    back() {
-      if ($('#game-page').hidden || !goBack) return false;
-      goBack();
-      return true;
-    },
     get jobs() {
       return recentJobs;
     },
@@ -1451,15 +1389,6 @@
     },
   };
   window.MambaExperience = api;
-  window.MambaComponents.onChange(() => {
-    renderLibrary(installedGames);
-    // A visible game page is rebuilt so layout edits preview immediately.
-    if (!$('#game-page').hidden && currentDetail)
-      openGame(
-        { id: currentDetail.libraryId || currentDetail.id, name: currentDetail.name },
-        window.MambaExperience.origin,
-      );
-  });
   $('#activity-transfers').append($('#transfers'));
   const activityTools = node('details', undefined, 'activity-tools');
   $('.activity-controls').append($('#export-diagnostics'));
@@ -1470,26 +1399,6 @@
     $('#storage-status'),
   );
   $('#activity-page').append(activityTools);
-  // The theme orders the Activity sections below the heading and the overview cards.
-  // Hidden sections stay in the document so live updates keep their targets.
-  const activityDownloads = node('div', undefined, 'activity-downloads');
-  $('#activity-transfers').before(activityDownloads);
-  activityDownloads.append($('#activity-transfers'), $('#activity-empty'));
-  const activityParts = {
-    overview: $('.activity-overview'),
-    downloads: activityDownloads,
-    cleanup: $('.file-cleanup'),
-    issues: $('.issues-section'),
-    tools: activityTools,
-  };
-  const overviewParts = { speed: $('.speed-card'), recent: $('.recent-card') };
-  function arrangeActivity() {
-    const components = window.MambaComponents;
-    components.mount(activityParts.overview, 'activity-overview', overviewParts, { keep: true });
-    components.mount($('#activity-page'), 'activity-page', activityParts, { keep: true });
-  }
-  arrangeActivity();
-  window.MambaComponents.onChange(arrangeActivity);
   const toolbar = $('#library-toolbar');
   const filters = node('div', undefined, 'library-view-controls');
   const availabilitySelect = node('select', undefined, 'settings-input library-sort');

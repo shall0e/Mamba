@@ -12,8 +12,6 @@
     !!document.querySelector('dialog[open], .game-context-menu, .welcome-dialog[open]');
   function goBack() {
     if ($('#game-page')?.hidden !== false) return false;
-    // Themes may move or hide the Back button, so use the page's own handler first.
-    if (window.MambaExperience?.back) return window.MambaExperience.back();
     const back = $('#game-content > button');
     if (!back) return false;
     back.click();
