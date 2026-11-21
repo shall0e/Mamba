@@ -152,6 +152,32 @@ test('sidebar defaults match the original sidebar and keep a page button', () =>
   );
 });
 
+test('activity sections default to the original page and keep downloads', () => {
+  const page = layouts.resolve(null, 'activity-page');
+  assert.deepEqual(page.slots, ['overview', 'downloads', 'cleanup', 'issues', 'tools']);
+  assert.deepEqual(page.custom, []);
+  const overview = layouts.resolve(null, 'activity-overview');
+  assert.equal(overview.variant, 'columns');
+  assert.deepEqual(overview.slots, ['speed', 'recent']);
+  assert.equal(layouts.cssVariables(null)['--activity-overview-gap'], '22px');
+  const custom = layouts.parse({
+    components: {
+      'activity-page': { slots: ['downloads', 'issues'], style: { sectionGap: 16 } },
+      'activity-overview': { variant: 'stacked', slots: ['recent'] },
+    },
+  });
+  assert.deepEqual(layouts.resolve(custom, 'activity-page').custom, ['sectionGap']);
+  assert.deepEqual(layouts.resolve(custom, 'activity-overview').slots, ['recent']);
+  assert.throws(
+    () => layouts.parse({ components: { 'activity-page': { slots: ['overview', 'tools'] } } }),
+    /at least one of/,
+  );
+  assert.throws(
+    () => layouts.parse({ components: { 'activity-overview': { slots: [] } } }),
+    /at least one of/,
+  );
+});
+
 test('theme files carry their layout and older themes are unchanged', () => {
   const base = themes.parse(themes.presets[0]);
   assert.equal(base.layout, undefined);

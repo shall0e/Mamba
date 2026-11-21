@@ -34,6 +34,8 @@
     container.dataset.component = name;
     for (const [key, value] of Object.entries(model.attributes(layout, name)))
       container.dataset[key] = value;
+    if (spec.custom.length) container.dataset.custom = spec.custom.join(' ');
+    else delete container.dataset.custom;
     for (const [slot, part] of Object.entries(parts))
       if (part?.nodeType === 1 && !spec.slots.includes(slot)) {
         if (keep) part.hidden = true;

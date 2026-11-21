@@ -320,8 +320,11 @@
 #game-content.mc-game-details .detail-metadata {
   max-width: none;
 }
-#game-content.mc-game-details > .mc-slot:not([data-slot='back']) + .mc-slot {
-  margin-top: var(--game-details-section-gap, 0px);
+/* A theme's section spacing replaces the original margins between sections. */
+#game-content.mc-game-details[data-custom~='sectionGap']
+  > [data-slot]:not([data-slot='back'])
+  ~ [data-slot] {
+  margin-top: var(--game-details-section-gap, 24px);
 }
 
 /* ---------- Game details header ---------- */
@@ -401,4 +404,16 @@
 /* The icon-only sidebar has no room for the wordmark, so its version label goes too. */
 html[data-sidebar-collapsed='true'] .sidebar-brand small {
   display: none;
+}
+
+/* ---------- Activity page ---------- */
+#activity-page.mc-activity-page[data-custom~='sectionGap'] > [data-slot] ~ [data-slot] {
+  margin-top: var(--activity-page-section-gap, 24px);
+}
+.mc-activity-overview {
+  gap: var(--activity-overview-gap, 22px);
+}
+/* A single card or the stacked variant uses the full width. */
+.mc-activity-overview:is([data-variant='stacked'], :has(> [data-slot][hidden])) {
+  grid-template-columns: minmax(0, 1fr);
 }

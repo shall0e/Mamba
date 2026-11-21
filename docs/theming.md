@@ -113,7 +113,10 @@ button, so keep it for themes meant for downloading games.
 | Style token  | Values      | Default |
 | ------------ | ----------- | ------- |
 | `width`      | 640–1600 px | 900     |
-| `sectionGap` | 0–64 px     | 0       |
+| `sectionGap` | 0–64 px     | 24      |
+
+When a theme sets `sectionGap`, it replaces the original spacing between sections with one even
+value. Without it, the original spacing is kept.
 
 ### `detail-hero`: game page header
 
@@ -152,6 +155,29 @@ height is left above Settings.
 | Style token | Values   | Default |
 | ----------- | -------- | ------- |
 | `recentArt` | 24–48 px | 34      |
+
+### `activity-page`: sections of the Activity page
+
+| Slots       | Meaning                                                      |
+| ----------- | ------------------------------------------------------------ |
+| `overview`  | Download speed and recently played (see `activity-overview`) |
+| `downloads` | Downloads in progress, or "No downloads"                     |
+| `cleanup`   | File cleanup                                                 |
+| `issues`    | Needs attention                                              |
+| `tools`     | More tools (status, storage and diagnostics)                 |
+
+All are shown in this order by default, below the page heading. `downloads` is required.
+`sectionGap` (0–64 px, default 24) replaces the original spacing between sections only when a
+theme sets it.
+
+### `activity-overview`: speed and recently played cards
+
+Slots: `speed`, `recent`; at least one is required. Variants: `columns` (default, side by side)
+and `stacked`. A single card always uses the full width.
+
+| Style token | Values  | Default |
+| ----------- | ------- | ------- |
+| `gap`       | 0–48 px | 22      |
 
 ### `library-card`: games in the Library grid
 

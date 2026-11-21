@@ -505,7 +505,7 @@ app
       await screenshot('layout-' + variant);
     }
     await js(
-      `MambaComponents.apply({components:{'detail-hero':{variant:'split'},'game-details':{slots:['back','hero','downloads','metadata','overview','media','installation','content'],style:{width:1200}}}})`,
+      `MambaComponents.apply({components:{'detail-hero':{variant:'split'},'game-details':{slots:['back','hero','downloads','metadata','overview','media','installation','content'],style:{width:1200,sectionGap:40}}}})`,
     );
     await js(`MambaExperience.openGame({id:'review',name:'Review game'},'search')`);
     await new Promise((r) => setTimeout(r, 400));
@@ -516,6 +516,12 @@ app
       ['back', 'hero', 'downloads'],
     );
     assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'split');
+    assert.equal(
+      await js(
+        `getComputedStyle(document.querySelector('#game-content > [data-slot="downloads"]')).marginTop`,
+      ),
+      '40px',
+    );
     await screenshot('details-split');
     await js(`MambaComponents.apply(null)`);
     await new Promise((r) => setTimeout(r, 400));
@@ -555,6 +561,43 @@ app
     await new Promise((r) => setTimeout(r, 300));
     assert.equal(await js(`document.documentElement.dataset.sidebarCollapsed`), 'false');
     assert.deepEqual(await js(navOrder), ['home', 'library', 'activity', 'recent']);
+    const activityOrder = `[...document.querySelectorAll('#activity-page > [data-slot]:not([hidden])')].map(e=>e.dataset.slot)`;
+    await js(`showPage('activity')`);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(await js(activityOrder), [
+      'overview',
+      'downloads',
+      'cleanup',
+      'issues',
+      'tools',
+    ]);
+    const issuesMargin = `getComputedStyle(document.querySelector('.issues-section')).marginTop`;
+    assert.equal(await js(issuesMargin), '28px');
+    await screenshot('activity');
+    await js(
+      `MambaComponents.apply({components:{'activity-page':{slots:['downloads','issues','overview','tools'],style:{sectionGap:40}},'activity-overview':{slots:['recent']}}})`,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(await js(activityOrder), ['downloads', 'issues', 'overview', 'tools']);
+    assert.equal(await js(`document.querySelector('.file-cleanup').hidden`), true);
+    assert.equal(await js(issuesMargin), '40px');
+    assert.equal(
+      await js(
+        `Math.round(document.querySelector('.recent-card').getBoundingClientRect().width) === Math.round(document.querySelector('.activity-overview').getBoundingClientRect().width)`,
+      ),
+      true,
+    );
+    await screenshot('activity-reordered');
+    await js(`MambaComponents.apply(null)`);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(await js(activityOrder), [
+      'overview',
+      'downloads',
+      'cleanup',
+      'issues',
+      'tools',
+    ]);
+    assert.equal(await js(issuesMargin), '28px');
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,

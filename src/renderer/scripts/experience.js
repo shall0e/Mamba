@@ -1470,6 +1470,26 @@
     $('#storage-status'),
   );
   $('#activity-page').append(activityTools);
+  // The theme orders the Activity sections below the heading and the overview cards.
+  // Hidden sections stay in the document so live updates keep their targets.
+  const activityDownloads = node('div', undefined, 'activity-downloads');
+  $('#activity-transfers').before(activityDownloads);
+  activityDownloads.append($('#activity-transfers'), $('#activity-empty'));
+  const activityParts = {
+    overview: $('.activity-overview'),
+    downloads: activityDownloads,
+    cleanup: $('.file-cleanup'),
+    issues: $('.issues-section'),
+    tools: activityTools,
+  };
+  const overviewParts = { speed: $('.speed-card'), recent: $('.recent-card') };
+  function arrangeActivity() {
+    const components = window.MambaComponents;
+    components.mount(activityParts.overview, 'activity-overview', overviewParts, { keep: true });
+    components.mount($('#activity-page'), 'activity-page', activityParts, { keep: true });
+  }
+  arrangeActivity();
+  window.MambaComponents.onChange(arrangeActivity);
   const toolbar = $('#library-toolbar');
   const filters = node('div', undefined, 'library-view-controls');
   const availabilitySelect = node('select', undefined, 'settings-input library-sort');

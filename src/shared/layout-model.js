@@ -73,7 +73,7 @@
       defaultVariant: 'standard',
       style: {
         width: px(640, 1600, 900, 'Page width'),
-        sectionGap: px(0, 64, 0, 'Extra space between sections'),
+        sectionGap: px(0, 64, 24, 'Space between sections'),
       },
     },
     'detail-hero': {
@@ -125,6 +125,36 @@
       defaultVariant: 'list',
       style: {
         recentArt: px(24, 48, 34, 'Recently played artwork size'),
+      },
+    },
+    'activity-page': {
+      label: 'Activity page',
+      description: 'The sections of the Activity page below its heading.',
+      slots: {
+        overview: 'Download speed and recently played',
+        downloads: 'Downloads',
+        cleanup: 'File cleanup',
+        issues: 'Needs attention',
+        tools: 'More tools',
+      },
+      defaultSlots: ['overview', 'downloads', 'cleanup', 'issues', 'tools'],
+      requireOneOf: ['downloads'],
+      variants: { standard: 'Standard' },
+      defaultVariant: 'standard',
+      style: {
+        sectionGap: px(0, 64, 24, 'Space between sections'),
+      },
+    },
+    'activity-overview': {
+      label: 'Activity overview',
+      description: 'The download speed and recently played cards.',
+      slots: { speed: 'Download speed', recent: 'Recently played' },
+      defaultSlots: ['speed', 'recent'],
+      requireOneOf: ['speed', 'recent'],
+      variants: { columns: 'Side by side', stacked: 'Stacked' },
+      defaultVariant: 'columns',
+      style: {
+        gap: px(0, 48, 22, 'Space between cards'),
       },
     },
     'library-card': {
@@ -246,6 +276,9 @@
       variant: entry.variant || spec.defaultVariant,
       slots: entry.slots ? [...entry.slots] : [...spec.defaultSlots],
       style,
+      // Tokens the theme set itself. Spacing tokens only replace the original design's
+      // varied margins when a theme chooses them.
+      custom: Object.keys(entry.style || {}).filter((token) => hasOwn(spec.style, token)),
     };
   }
   // Numeric tokens become CSS custom properties; enum tokens become data attributes.
