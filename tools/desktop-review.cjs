@@ -34,6 +34,10 @@ app
       running: i === 0,
       options: [],
       installations: [],
+      ...(i === 2 ? { name: 'Call of Duty® 4: Modern Warfare® (2009)' } : {}),
+      releaseYear: 2007 + i,
+      downloadSize: (1.5 + i / 4).toFixed(2) + ' GB',
+      options: [{ services: i % 2 ? ['torbox', 'direct'] : ['direct'] }],
       lastPlayed: '2026-10-' + (10 + i),
       installedAt: '2026-10-' + (10 + i),
     }));
@@ -474,6 +478,24 @@ app
     await js(`document.querySelector('#browse-extra-folder').click()`);
     await new Promise((r) => setTimeout(r, 250));
     assert.equal(await js(`document.querySelectorAll('.folder-row').length`), 2);
+    // Search cards: clean titles and an action button aligned to each card's bottom.
+    await js(
+      `showPage('search'); document.querySelector('#main-search').value='Review'; document.querySelector('#search-page').classList.add('has-results'); document.querySelector('#search-results').hidden=false; MambaDiscovery.update({items:${JSON.stringify(games)},total:20});`,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(
+      await js(
+        `[...document.querySelectorAll('#results-list .result-title')].some(t => /[®™]|\\(2009\\)/.test(t.textContent))`,
+      ),
+      false,
+    );
+    const cardCheck = await js(
+      `(()=>{const cards=[...document.querySelectorAll('#results-list .discovery-card')].slice(0,4);return cards.map(c=>{const a=c.querySelector('.game-result-action button').getBoundingClientRect();return {gap:Math.round(c.getBoundingClientRect().bottom-a.bottom),visible:getComputedStyle(c.querySelector('.game-result-action .button-label')).opacity}})})()`,
+    );
+    assert.ok(
+      cardCheck.length && cardCheck.every((c) => c.gap === cardCheck[0].gap && c.visible === '1'),
+    );
+    await screenshot('search-cards');
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,

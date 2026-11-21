@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Search result cards: removed trademark symbols and the repeated release year from titles, unified the year, size and service text, and kept the action button visible and aligned at the bottom of every card.
+- Fixed settings controls that should stay disabled being re-enabled whenever settings finished saving.
 - Game details show Steam screenshots and trailers in a carousel with a thumbnail strip, arrow-key navigation and a full-size screenshot viewer (previous/next, Esc or click outside to close).
 - Download buttons show live progress (for example "Downloading · 42%") on Home, search results, game details and release rows.
 - Available Downloads opens automatically for games that are not installed and shows how many versions were found; installed games keep it collapsed.

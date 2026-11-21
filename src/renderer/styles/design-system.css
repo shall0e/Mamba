@@ -2603,3 +2603,35 @@ html[data-theme] .play-button:focus-visible {
   color: var(--color-textMuted);
   font-size: var(--type-caption);
 }
+/* Search cards: titles clamp to two lines, year/size and services share one muted text
+   style, and the action stays visible and aligned to the bottom of every card. */
+.discovery-card {
+  display: flex;
+  flex-direction: column;
+}
+.discovery-card .result-info {
+  flex: 1 1 auto;
+}
+.discovery-card .result-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.discovery-card .game-card-meta,
+.discovery-card .game-card-source {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.discovery-card .result-actions.game-result-action {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: auto;
+  padding: 8px 16px 16px;
+}
+.discovery-card .result-actions button {
+  width: auto;
+  min-height: 36px;
+}
