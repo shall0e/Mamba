@@ -76,6 +76,16 @@
     $('#results-more').disabled = active;
     if (active) $('#results-status').textContent = 'Finding the best matches…';
   };
+  // Store titles often carry trademark symbols and a "(2007)" suffix that repeats the year
+  // already shown below the title.
+  function displayName(game, year) {
+    let name = String(game.name || '')
+      .replace(/[™®©]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (year) name = name.replace(new RegExp('\\s*\\(' + year + '\\)$'), '');
+    return name || String(game.name || '');
+  }
   function render() {
     if (loading) return;
     clear.hidden =
@@ -154,7 +164,7 @@
           if (!image || !cover.isConnected) return;
           const img = node('img');
           img.src = image;
-          img.alt = game.name;
+          img.alt = '';
           img.loading = 'lazy';
           img.onload = () => cover.classList.add('has-cover');
           img.onerror = () => img.remove();
@@ -177,30 +187,27 @@
       }
       const info = node('div', undefined, 'result-info');
       const title = node('h2');
-      title.append(
-        button(
-          game.name,
-          () => window.MambaExperience.openGame(game, 'search'),
-          null,
-          'result-title',
-        ),
+      const year =
+        game.releaseYear || String(game.releaseYearLabel || '').match(/\b(?:19|20)\d{2}\b/)?.[0];
+      const size = /^unknown$/i.test(String(game.downloadSize || '')) ? '' : game.downloadSize;
+      const titleButton = button(
+        displayName(game, year),
+        () => window.MambaExperience.openGame(game, 'search'),
+        null,
+        'result-title',
       );
+      titleButton.title = game.name;
+      title.append(titleButton);
       info.append(title);
-      const metadata = node('div', undefined, 'game-card-meta');
-      for (const [label, value] of [
-        [
-          'Release year',
-          game.releaseYear || String(game.releaseYearLabel || '').match(/\b(?:19|20)\d{2}\b/)?.[0],
-        ],
-        ['Download size', game.downloadSize],
-      ]) {
-        if (!value || /^unknown$/i.test(String(value))) continue;
-        const chip = node('span', String(value), 'metadata-chip');
-        chip.title = label;
-        chip.setAttribute('aria-label', label + ': ' + value);
-        metadata.append(chip);
+      // Year and size share one line in the same style as the download services below.
+      if (year || size) {
+        const metadata = node('p', [year, size].filter(Boolean).join(' · '), 'game-card-meta');
+        metadata.setAttribute(
+          'aria-label',
+          [year && 'Released ' + year, size && 'Download size ' + size].filter(Boolean).join(', '),
+        );
+        info.append(metadata);
       }
-      info.append(metadata);
       const sources = [...new Set((game.options || []).flatMap((option) => option.services || []))];
       if (sources.length)
         info.append(
@@ -241,11 +248,9 @@
           job.status,
         )
       )
-        control = button(
-          'View download',
-          () => showPage('activity'),
-          'download',
-          'secondary-button',
+        control = trackDownload(
+          button(downloadLabel(job), () => showPage('activity'), 'download', 'secondary-button'),
+          job,
         );
       else if (owned || job?.status === 'completed')
         control = button(
@@ -276,15 +281,19 @@
             }
           },
           'download',
-          'text-button compact-download',
+          'secondary-button',
         );
-        control.title = 'Download · Shift-click to choose a version';
+        control.title = 'Download the recommended version · Shift-click to choose a version';
         if (queueing.has(game.id) || cardJobs.has(game.id)) {
           control.lastChild.textContent = 'Queued';
           control.disabled = true;
           control.dataset.locked = 'true';
         }
       }
+      control.setAttribute(
+        'aria-label',
+        control.lastChild.textContent.trim() + ' ' + displayName(game),
+      );
       actions.append(control);
       row.append(cover, info, actions);
       rows.push(row);
@@ -364,7 +373,10 @@
     fail(message) {
       pending = false;
       setSearching(false);
-      $('#results-status').textContent = message;
+      $('#results-status').textContent =
+        String(message || '')
+          .replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+          .trim() || 'Search is unavailable right now. Try again.';
     },
     update(result, more) {
       revealResults = loading;
@@ -373,7 +385,7 @@
       games = more
         ? [...new Map([...games, ...items].map((game) => [game.id, game])).values()]
         : items;
-      total = result.total;
+      total = Number.isFinite(Number(result.total)) ? Number(result.total) : games.length;
       pending = !!result.pending;
       bestMatch = result.bestMatch || null;
       render();

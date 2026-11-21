@@ -27,3 +27,5 @@ themes.json*
 
 data/
 dist-preview*/
+dist-*/
+docs/design-review/

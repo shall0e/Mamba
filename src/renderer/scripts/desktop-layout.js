@@ -9,14 +9,8 @@
   const sidebar = $('.sidebar');
   const header = node('div', undefined, 'sidebar-heading');
   const brand = node('div', undefined, 'sidebar-brand');
-  const mark = node('img');
-  mark.src = '../../assets/mamba.png';
-  mark.alt = '';
-  brand.append(mark, node('span', 'mamba'));
+  brand.append(node('span', 'mamba'));
   const version = document.querySelector('#search-version');
-  mark.replaceWith(
-    Object.assign(document.createElement('span'), { className: 'mamba-mark sidebar-brand-mark' }),
-  );
   brand.append(version);
   header.append(brand);
   sidebar.prepend(header);
@@ -41,11 +35,25 @@
     const rowHeight = row?.getBoundingClientRect().height || 42;
     return Math.max(0, Math.floor((settingsTop - listTop - 8) / rowHeight));
   }
+  let recentSignature = '';
   function renderRecent(games = installedGames) {
     recentGames = games;
     const limit = recentLimit();
     for (const key of ['played']) {
       const rows = window.MambaActivity.sidebarRecent(games).slice(0, limit);
+      // Resizing only rebuilds rows when the visible set or its state actually changes.
+      const signature = JSON.stringify(
+        rows.map((game) => [
+          game.id,
+          game.name,
+          game.status,
+          !!game.executable,
+          game.folder,
+          game.running === true,
+        ]),
+      );
+      if (signature === recentSignature && groups[key].childElementCount) continue;
+      recentSignature = signature;
       groups[key].replaceChildren();
       if (!rows.length)
         groups[key].append(
@@ -114,8 +122,13 @@
       }
     }
   }
-  window.addEventListener('resize', () => renderRecent(recentGames));
-  new ResizeObserver(() => renderRecent(recentGames)).observe(sidebar);
+  let recentFrame = 0;
+  const scheduleRecent = () => {
+    cancelAnimationFrame(recentFrame);
+    recentFrame = requestAnimationFrame(() => renderRecent(recentGames));
+  };
+  window.addEventListener('resize', scheduleRecent);
+  new ResizeObserver(scheduleRecent).observe(sidebar);
   let gameMenu;
   function showGameMenu(game, x, y, restore) {
     gameMenu?.remove();

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Search result cards: removed trademark symbols and the repeated release year from titles, unified the year, size and service text, and kept the action button visible and aligned at the bottom of every card.
+- Fixed settings controls that should stay disabled being re-enabled whenever settings finished saving.
+- Game details show Steam screenshots and trailers in a carousel with a thumbnail strip, arrow-key navigation and a full-size screenshot viewer (previous/next, Esc or click outside to close).
+- Download buttons show live progress (for example "Downloading · 42%") on Home, search results, game details and release rows.
+- Available Downloads opens automatically for games that are not installed and shows how many versions were found; installed games keep it collapsed.
+- Optional keyboard shortcuts: Ctrl+1/2/3 for Home/Library/Activity, Ctrl+, for Settings, Ctrl+F to find, and Esc, Alt+← or the mouse Back button to leave game details. A reference card lives in Settings → App.
+- Mamba remembers its window size, position and maximized state, and moves the window back on-screen if a monitor is disconnected.
+- Fixed game details where a finished download relabeled the Uninstall or Favorite button and hid Install.
+- Fixed the "ready to play" toast being replaced before its Play action could be used; failures and setup reviews now offer a direct action.
+- Fixed game title matching for en/em dashes and curly apostrophes, which were stored as corrupted characters.
+- Fixed a shared artwork cache entry keeping one caller's fallback image for every other caller, and failed artwork now falls back to the Steam cover.
+- Toasts stay readable longer for long messages and pause while hovered or focused; retry countdowns no longer show "undefined".
+- Sidebar Recently Played no longer rebuilds on every resize frame; download-row updates avoid repeated DOM scans.
+- Hardened the window: navigation away from the app and pop-up windows are blocked, only video fullscreen permission is granted, IPC game actions are validated, and stray main-process errors are logged with secrets redacted.
+- Cached Steam details survive offline refreshes, and Activity shows readable source states.
+
 ## 1.6.2
 
 - Consolidated Library search, filters, sorting, Favorites and grid/list switching into one toolbar, with detection and Steam controls in Manage.

@@ -50,10 +50,24 @@ For Linux packages and requirements, see [Linux builds](#linux-builds).
 | Downloads         | Start downloads, track progress, review history, and collect diagnostics when something fails. |
 | Installation      | Automatic folder unnesting and Steam library integration on Windows.                           |
 | Library           | Browse installed games and open their details or launch them.                                  |
+| Game details      | Steam screenshots and trailers with a thumbnail strip and full-size screenshot viewer.         |
 | Appearance        | Customize colors, opacity, blur, and fonts through themes.                                     |
 | Command line      | Search, inspect releases, download, manage sources, and resume jobs with MambaCLI.             |
 
 Source availability and service compatibility determine which releases can be downloaded. Windows-specific installation tools and integrations are unavailable on Linux.
+
+### Keyboard shortcuts
+
+Shortcuts are optional; every one mirrors a visible control and none fire while you type. The full list is in **Settings → App**.
+
+| Action                   | Shortcut                                   |
+| ------------------------ | ------------------------------------------ |
+| Search games             | `Ctrl` `K`                                 |
+| Home, Library, Activity  | `Ctrl` `1`, `Ctrl` `2`, `Ctrl` `3`         |
+| Settings                 | `Ctrl` `,`                                 |
+| Find in the current page | `Ctrl` `F`                                 |
+| Back from game details   | `Esc`, `Alt` `←`, or the mouse Back button |
+| Browse screenshots       | `←` `→`                                    |
 
 ## MegaSource
 

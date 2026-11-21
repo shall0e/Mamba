@@ -473,7 +473,14 @@ test('a symlinked partial cannot redirect writes outside staging', async (t) => 
   const outside = path.join(f.dir, 'keep');
   await fs.writeFile(outside, 'safe');
   const target = path.join(f.dir, 'game.exe');
-  await fs.symlink(outside, target + '.part');
+  try {
+    await fs.symlink(outside, target + '.part');
+  } catch (error) {
+    // Windows only allows symlinks with Developer Mode or administrator rights (CI has both).
+    if (process.platform === 'win32' && error.code === 'EPERM')
+      return t.skip('Creating symlinks requires Developer Mode or administrator rights');
+    throw error;
+  }
   await assert.rejects(
     downloadFile(
       'https://cdn.test',

@@ -48,6 +48,17 @@ if (!app.requestSingleInstanceLock()) {
     publishIssues();
     return issue;
   }
+  // Record stray main-process rejections (secrets redacted) so they are diagnosable later
+  // instead of disappearing; the app keeps running.
+  process.on('unhandledRejection', (reason) => {
+    try {
+      const detail = safeMessage(String(reason?.stack || reason), configSecrets).slice(0, 2000);
+      fs.appendFile(
+        path.join(dataDirectory(), 'background-crashes.log'),
+        new Date().toISOString() + ' main rejection ' + detail.replace(/\s+/g, ' ') + '\n',
+      ).catch(() => {});
+    } catch {}
+  });
   const { registerHelperRuntime, openGameHelper } = require('../core/game-helper.cjs');
   const {
     validateSettings,
@@ -494,6 +505,7 @@ if (!app.requestSingleInstanceLock()) {
   );
   ipcMain.handle('config:view', (_event, view) =>
     updateConfig((config) => {
+      if (!view || typeof view !== 'object') throw Error('Invalid library preference.');
       if (view.libraryView !== undefined) {
         if (!['cards', 'list', 'banners'].includes(view.libraryView))
           throw Error('Invalid library view.');
@@ -803,7 +815,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     return launched;
   });
-  ipcMain.handle('library:action', async (_event, id, action) => {
+  const gameActions = new Set(['play', 'setup', 'setup-admin', 'launcher', 'folder']);
+  ipcMain.handle('library:action', async (_event, rawId, action) => {
+    const id = String(rawId);
+    if (!gameActions.has(action)) throw new Error('Unknown game action.');
     const game = await task('library:get', id);
     if (!game) throw new Error('Game not found. Refresh your library.');
     const config = await readConfig();
@@ -946,12 +961,20 @@ if (!app.requestSingleInstanceLock()) {
   );
   ipcMain.handle('window:close', (event) => BrowserWindow.fromWebContents(event.sender)?.close());
 
-  function createWindow() {
+  const windowState = require('./window-state.cjs');
+  async function createWindow() {
+    const { screen } = require('electron');
+    const bounds = windowState.restoreBounds(
+      await windowState.readWindowState(dataDirectory()),
+      screen.getAllDisplays().map((display) => display.workArea),
+    );
     const window = new BrowserWindow({
-      width: 1100,
-      height: 740,
-      minWidth: 400,
-      minHeight: 300,
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      minWidth: windowState.MINIMUM_SIZE.width,
+      minHeight: windowState.MINIMUM_SIZE.height,
       title: 'Mamba · TorBox',
       icon: path.join(appRoot, 'assets', 'mamba.ico'),
       backgroundColor: defaultPalette.primary,
@@ -965,6 +988,20 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     window.setMenuBarVisibility(false);
+    if (bounds.maximized) window.maximize();
+    windowState.trackWindowState(window, dataDirectory());
+    // The renderer is a local single-page app: never navigate it elsewhere or open
+    // secondary windows, and only grant the permission inline video fullscreen needs.
+    const rendererUrl = require('node:url')
+      .pathToFileURL(path.join(__dirname, '../renderer/index.html'))
+      .toString();
+    window.webContents.on('will-navigate', (event, url) => {
+      if (url.split('#')[0] !== rendererUrl) event.preventDefault();
+    });
+    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    window.webContents.session.setPermissionRequestHandler((_contents, permission, done) =>
+      done(permission === 'fullscreen'),
+    );
     window.on('minimize', (event) => {
       if (tray && !closing) {
         event.preventDefault();
@@ -1123,11 +1160,8 @@ if (!app.requestSingleInstanceLock()) {
                 });
                 notice.on('error', () => {});
                 notice.on('click', () => {
-                  const window = BrowserWindow.getAllWindows()[0];
-                  if (!window) return;
-                  window.show();
-                  if (window.isMinimized()) window.restore();
-                  window.focus();
+                  if (!BrowserWindow.getAllWindows().length) return;
+                  restoreWindow();
                   broadcast('app:navigate', {
                     id: job.gameId,
                     folder: job.folder,
@@ -1249,7 +1283,7 @@ if (!app.requestSingleInstanceLock()) {
       } catch {
         tray = null;
       }
-      createWindow();
+      await createWindow();
       await registerHelperRuntime();
       background.start().catch(() => {});
       await fs.mkdir(path.dirname(configFile()), { recursive: true });
@@ -1262,7 +1296,7 @@ if (!app.requestSingleInstanceLock()) {
       updates.start();
       creamInstaller.start();
       app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        if (BrowserWindow.getAllWindows().length === 0) createWindow().catch(() => {});
         else restoreWindow();
       });
     })

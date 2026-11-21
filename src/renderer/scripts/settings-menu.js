@@ -474,8 +474,10 @@
     saved,
     loadHosts,
     busy(value) {
+      // Controls marked locked (for example a queued download) stay disabled.
       for (const input of form.querySelectorAll('input,select,textarea,button'))
-        input.disabled = input.type === 'checkbox' ? !configLoaded : value;
+        input.disabled =
+          input.dataset.locked === 'true' || (input.type === 'checkbox' ? !configLoaded : value);
       clear.hidden = !config.realDebridConfigured;
     },
     read: () => ({

@@ -90,7 +90,10 @@ function renderFeaturedGame(game) {
       job.status,
     )
   )
-    primary = button('View download', () => showPage('activity'), 'download', 'secondary-button');
+    primary = trackDownload(
+      button(downloadLabel(job), () => showPage('activity'), 'download', 'secondary-button'),
+      job,
+    );
   else if (owned || job?.status === 'completed')
     primary = button(
       owned ? 'Review setup' : 'View game',
@@ -129,6 +132,40 @@ function icon(name) {
     document.createDocumentFragment()
   );
 }
+function downloadLabel(job) {
+  const status =
+    {
+      downloading: 'Downloading',
+      extracting: 'Extracting',
+      installing: 'Installing',
+      preparing: 'Preparing',
+      verifying: 'Verifying',
+      queued: 'Queued',
+      'waiting-retry': 'Retrying',
+      paused: 'Paused',
+      failed: 'Retry download',
+      'needs-setup': 'Setup required',
+      completed: 'Ready',
+      cancelled: 'Cancelled',
+    }[job.status] || 'Download';
+  const progress =
+    job.status === 'downloading' && job.total > 0
+      ? ((job.received || 0) / job.total) * 100
+      : job.progress;
+  return (
+    status +
+    (['downloading', 'extracting', 'installing', 'paused'].includes(job.status) &&
+    Number.isFinite(progress)
+      ? ' · ' + Math.min(100, Math.max(0, Math.floor(progress))) + '%'
+      : '')
+  );
+}
+function trackDownload(control, job) {
+  control.dataset.progressJob = job.id;
+  control.classList.add('download-button');
+  control.lastChild.textContent = downloadLabel(job);
+  return control;
+}
 function button(label, action, iconName, className = 'text-button') {
   const control = document.createElement('button');
   control.type = 'button';
@@ -156,9 +193,31 @@ function button(label, action, iconName, className = 'text-button') {
   return control;
 }
 function formatBytes(bytes) {
-  if (!bytes) return '0 B';
-  const unit = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
-  return `${(bytes / 1024 ** unit).toFixed(unit ? 1 : 0)} ${['B', 'KB', 'MB', 'GB'][unit]}`;
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const unit = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  return `${(value / 1024 ** unit).toFixed(unit ? 1 : 0)} ${units[unit]}`;
+}
+function retryCountdown(job) {
+  return job.status === 'waiting-retry' && job.recovery?.nextRetryAt
+    ? ` Retrying in ${Math.max(0, Math.ceil((job.recovery.nextRetryAt - Date.now()) / 1000))} seconds.`
+    : '';
+}
+function transferMessage(job) {
+  if (job.error)
+    return [job.message, job.error.advice].filter(Boolean).join(' · ') + retryCountdown(job);
+  if (['downloading', 'completed'].includes(job.status)) return '';
+  return (job.message || '') + retryCountdown(job);
+}
+function controlsByJob(selector, key) {
+  const groups = new Map();
+  for (const control of document.querySelectorAll(selector)) {
+    const id = control.dataset[key];
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(control);
+  }
+  return groups;
 }
 function remainingTime(job) {
   const speed = Number(job.speed),
@@ -295,30 +354,33 @@ function renderJobs(jobs) {
   window.MambaExperience?.jobsChanged(jobs);
   const jobIds = new Set(jobs.map((job) => job.id));
   for (const [gameId, jobId] of cardJobs) if (!jobIds.has(jobId)) cardJobs.delete(gameId);
-  for (const control of document.querySelectorAll('button[data-job-id]')) {
-    if (jobIds.has(control.dataset.jobId)) continue;
-    delete control.dataset.jobId;
-    control.dataset.locked = 'false';
-    control.disabled = false;
-    control.lastChild.textContent = 'Download';
+  const jobControls = controlsByJob('button[data-job-id]', 'jobId');
+  const progressControls = controlsByJob('[data-progress-job]', 'progressJob');
+  for (const [jobId, controls] of jobControls) {
+    if (jobIds.has(jobId)) continue;
+    for (const control of controls) {
+      delete control.dataset.jobId;
+      control.dataset.locked = 'false';
+      control.disabled = false;
+      control.lastChild.textContent = 'Download';
+    }
   }
   downloadJobsForRecovery = jobs;
   for (const job of jobs) {
-    const controls = [...document.querySelectorAll('button[data-job-id]')].filter(
-      (control) => control.dataset.jobId === job.id,
-    );
     const failed = ['failed', 'cancelled'].includes(job.status);
-    for (const control of controls) {
+    for (const control of jobControls.get(job.id) || []) {
       control.lastChild.textContent = failed
         ? 'Download'
         : job.status === 'completed'
           ? 'Installed'
           : job.status === 'needs-setup'
             ? 'Setup required'
-            : 'Queued';
+            : downloadLabel(job);
       control.dataset.locked = String(!failed);
       control.disabled = !failed;
     }
+    for (const control of progressControls.get(job.id) || [])
+      control.lastChild.textContent = downloadLabel(job);
     if (failed)
       for (const [gameId, jobId] of cardJobs) if (jobId === job.id) cardJobs.delete(gameId);
   }
@@ -367,14 +429,7 @@ function renderJobs(jobs) {
         failed: 'Needs attention',
         cancelled: 'Cancelled',
       }[job.status] || job.status;
-    row.querySelector('.transfer-message').textContent = job.error
-      ? job.message + ' · ' + job.error.advice
-      : ['downloading', 'completed'].includes(job.status)
-        ? ''
-        : job.message +
-          (job.status === 'waiting-retry' && job.recovery?.nextRetryAt
-            ? ` Retrying in ${Math.max(0, Math.ceil((job.recovery.nextRetryAt - Date.now()) / 1000))} seconds.`
-            : '');
+    row.querySelector('.transfer-message').textContent = transferMessage(job);
     const stats = row.querySelector('.transfer-stats');
     stats.replaceChildren();
     if (job.status === 'downloading' && job.total > 0) {
@@ -393,11 +448,17 @@ function renderJobs(jobs) {
       percent.textContent = Math.floor(job.progress) + '%';
       stats.append(percent);
     }
-    row.querySelector('progress').value = job.progress || 0;
+    row.querySelector('progress').value =
+      job.status === 'downloading' && job.total > 0
+        ? Math.min(100, Math.max(0, ((job.received || 0) / job.total) * 100))
+        : Math.min(100, Math.max(0, job.progress || 0));
     row.querySelector('progress').hidden = ['failed', 'cancelled', 'needs-setup'].includes(
       job.status,
     );
-    if (['preparing', 'verifying'].includes(job.status) || job.progress == null)
+    if (
+      ['preparing', 'verifying'].includes(job.status) ||
+      (job.progress == null && !(job.status === 'downloading' && job.total > 0))
+    )
       row.querySelector('progress').removeAttribute('value');
     const actions = row.querySelector('.transfer-actions');
     if (row.dataset.status !== job.status) {
@@ -413,9 +474,7 @@ function renderJobs(jobs) {
             'rotate-ccw',
           ),
         );
-      else if (!['completed', 'needs-setup'].includes(job.status) && !job.externalSetup)
-        actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
-      if (job.status === 'waiting-retry')
+      if (!['completed', 'needs-setup', 'cancelled'].includes(job.status) && !job.externalSetup)
         actions.append(button('Cancel', () => window.mamba.cancel(job.id)));
       if (job.status === 'failed')
         actions.append(button('Get help', () => showPage('activity'), 'circle-alert'));
@@ -447,12 +506,7 @@ setInterval(() => {
   for (const job of downloadJobsForRecovery) {
     if (job.status !== 'waiting-retry') continue;
     const row = document.getElementById(`transfer-${job.id}`);
-    if (row)
-      row.querySelector('.transfer-message').textContent =
-        job.message +
-        (job.recovery?.nextRetryAt
-          ? ` Retrying in ${Math.max(0, Math.ceil((job.recovery.nextRetryAt - Date.now()) / 1000))} seconds.`
-          : '');
+    if (row) row.querySelector('.transfer-message').textContent = transferMessage(job);
   }
 }, 1000);
 document.querySelector('#clear-finished').addEventListener('click', async () => {
@@ -476,7 +530,7 @@ function showPage(name) {
     document.querySelector(selector).hidden = page !== name;
   }
   updateHomeBackdrop();
-  document.querySelector(pages[name]).scrollTop = 0;
+  // Each page retains its position when navigation temporarily hides it.
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active =
       button.dataset.page === (name === 'game' ? window.MambaExperience?.origin || 'search' : name);
@@ -644,12 +698,22 @@ function openSettings() {
   showPage('settings');
 }
 
+let toastDuration = 0;
+function hideToastLater(delay = toastDuration) {
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), delay);
+}
+// Keep a toast readable while the pointer or keyboard focus is on it.
+toast.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+toast.addEventListener('pointerleave', () => hideToastLater(1600));
+toast.addEventListener('focusin', () => clearTimeout(toastTimer));
+toast.addEventListener('focusout', () => hideToastLater(1600));
 function showToast(message, actionLabel, action) {
-  toast.replaceChildren(
-    document.createTextNode(
-      String(message).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''),
-    ),
-  );
+  const text =
+    String(message ?? '')
+      .replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+      .trim() || 'Something went wrong. Try again.';
+  toast.replaceChildren(document.createTextNode(text));
   if (actionLabel && action)
     toast.append(
       button(
@@ -663,8 +727,9 @@ function showToast(message, actionLabel, action) {
       ),
     );
   toast.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), actionLabel ? 10000 : 2200);
+  // Longer messages (usually errors) stay up long enough to read.
+  toastDuration = actionLabel ? 10000 : Math.min(8000, Math.max(2600, 1200 + text.length * 45));
+  hideToastLater();
 }
 
 document.querySelector('#settings-open').addEventListener('click', openSettings);
@@ -950,14 +1015,19 @@ if (window.mamba) {
   window.mamba.onJobs(renderJobs);
   window.mamba.onLibrary(renderLibrary);
   window.mamba.onNotice((notice) => {
+    const name = notice.name || 'Your game';
+    const review = () =>
+      window.MambaExperience?.openGame({ id: notice.libraryId || notice.gameId, name }, 'library');
     if (notice.status === 'completed' && notice.libraryId)
-      showToast(`${notice.name} is ready. Play now?`, 'Play', () =>
+      showToast(`${name} is ready. Play now?`, 'Play', () =>
         window.mamba.gameAction(notice.libraryId, 'play'),
       );
+    else if (notice.status === 'completed')
+      showToast(`${name} is ready to play.`, 'View game', review);
     else if (notice.status === 'needs-setup')
-      showToast(`${notice.name} needs setup. Review it in your Library.`, 'Open library', () =>
-        showPage('library'),
-      );
+      showToast(`${name} needs setup before it can be played.`, 'Review', review);
+    else if (notice.status === 'failed')
+      showToast(`${name} needs attention.`, 'Open Activity', () => showPage('activity'));
   });
   window.mamba
     .catalogStatus()

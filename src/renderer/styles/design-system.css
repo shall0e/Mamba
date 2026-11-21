@@ -2321,3 +2321,317 @@ html[data-theme] .play-button:focus-visible {
   width: 100%;
   margin-inline: auto;
 }
+.screenshot-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--foreground-fill);
+  border-radius: var(--radius-card);
+  cursor: zoom-in;
+}
+/* The dialog element is a transparent full-viewport hit area; clicks on it close the viewer. */
+.screenshot-dialog {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: var(--space-8);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  display: none;
+  place-items: center;
+  overflow: hidden;
+}
+.screenshot-dialog[open] {
+  display: grid;
+}
+.screenshot-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-primary) 82%, transparent);
+  backdrop-filter: blur(var(--background-blur));
+}
+.screenshot-dialog-body {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  padding: var(--space-4);
+  background: var(--foreground-fill);
+  border-radius: var(--radius-card);
+}
+.screenshot-dialog-body img {
+  display: block;
+  width: min(1600px, calc(100vw - 96px));
+  height: auto;
+  max-height: calc(100vh - 176px);
+  object-fit: contain;
+  border-radius: var(--radius-control);
+}
+.screenshot-dialog .screenshot-close {
+  justify-self: end;
+  width: var(--control-height);
+  min-width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  justify-content: center;
+}
+.screenshot-dialog .game-media-navigation {
+  margin-top: 0;
+}
+.screenshot-dialog .game-media-navigation[hidden] {
+  display: none;
+}
+.downloads-count {
+  margin-left: var(--space-2);
+  color: var(--color-textMuted);
+  font-size: var(--type-caption);
+  font-weight: 400;
+}
+#game-content .game-downloads > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  list-style: none;
+}
+.game-downloads > summary::-webkit-details-marker {
+  display: none;
+}
+.game-downloads > summary svg {
+  width: 20px;
+  height: 20px;
+}
+.game-downloads[open] > summary svg {
+  transform: rotate(180deg);
+}
+.transfer-message,
+.transfer-row h3 {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.transfer-actions,
+.transfer-stats {
+  flex-wrap: wrap;
+}
+/* Media stays in one keyboard-accessible stage; absent artwork keeps the hero compact. */
+.game-media-stage figure {
+  margin: 0;
+  min-width: 0;
+}
+.game-media-stage figure[hidden] {
+  display: none;
+}
+.game-media-stage :is(img, video) {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 480px;
+  object-fit: contain;
+  border-radius: var(--radius-card);
+}
+.game-media-stage figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.game-media-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+.game-media-counter {
+  min-width: 56px;
+  text-align: center;
+  font-size: var(--type-small);
+  font-variant-numeric: tabular-nums;
+}
+.game-media-navigation[hidden],
+.game-media-thumbnails[hidden] {
+  display: none;
+}
+.game-media-navigation button:has(.button-label:empty) {
+  width: var(--control-height);
+  min-width: var(--control-height);
+  padding: 0;
+  justify-content: center;
+}
+.game-media-navigation button .button-label:empty {
+  display: none;
+}
+/* Horizontal thumbnail strip; it scrolls by wheel and selection, so no native scrollbar. */
+.game-media-thumbnails {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-1) 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.game-media-thumbnails::-webkit-scrollbar {
+  display: none;
+}
+.game-media-thumbnail {
+  position: relative;
+  flex: none;
+  width: 112px;
+  height: 63px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--input-fill);
+  border-radius: var(--radius-control);
+  opacity: 0.62;
+}
+.game-media-thumbnail:hover,
+.game-media-thumbnail[aria-current='true'] {
+  opacity: 1;
+}
+/* Markers sit above the artwork; inset shadows on the button itself paint beneath the image. */
+.game-media-thumbnail::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.game-media-thumbnail[aria-current='true']::after {
+  box-shadow: inset 0 -3px var(--color-icons);
+}
+.game-media-thumbnail:focus-visible {
+  opacity: 1;
+  box-shadow: none;
+}
+.game-media-thumbnail:focus-visible::after {
+  box-shadow: inset 0 0 0 2px var(--color-icons);
+}
+#game-content .game-downloads > summary h2 {
+  margin: 0;
+}
+.game-media-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.game-media-thumbnail .button-label {
+  display: none;
+}
+.game-media-thumbnail-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--icon-ink, var(--color-icons));
+  background: color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.game-media-thumbnail-badge svg {
+  width: 20px;
+  height: 20px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-media-thumbnails {
+    scroll-behavior: auto;
+  }
+}
+#game-content .detail-hero:has(.detail-art:not(.has-cover)) {
+  overflow: visible;
+}
+#game-content .detail-art:not(.has-cover) {
+  min-height: 0;
+  height: 48px;
+  aspect-ratio: auto;
+  background: transparent;
+  grid-area: auto;
+  margin: 16px 0 0;
+}
+#game-content .detail-hero:has(.detail-art:not(.has-cover)) .detail-intro {
+  grid-area: auto;
+  padding: 16px 0 24px;
+  background: none;
+}
+#game-content .detail-metadata:empty {
+  display: none;
+}
+
+.game-media-stage :is(img, video)[hidden] {
+  display: none;
+}
+/* Keyboard shortcut reference in Settings > App. */
+.shortcut-list {
+  display: grid;
+  margin: var(--space-4) 0 0;
+}
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--control-height);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--line);
+}
+.shortcut-list dt {
+  min-width: 0;
+}
+.shortcut-list dd {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+.shortcut-list kbd {
+  min-width: 24px;
+  padding: 2px var(--space-2);
+  font: 400 var(--type-caption) / 1.5 var(--font-default);
+  text-align: center;
+  color: var(--color-text);
+  background: var(--input-fill);
+  border-radius: var(--radius-control);
+}
+.shortcut-separator {
+  margin: 0 var(--space-1);
+  color: var(--color-textMuted);
+  font-size: var(--type-caption);
+}
+/* Search cards: titles clamp to two lines, year/size and services share one muted text
+   style, and the action stays visible and aligned to the bottom of every card. */
+.discovery-card {
+  display: flex;
+  flex-direction: column;
+}
+.discovery-card .result-info {
+  flex: 1 1 auto;
+}
+.discovery-card .result-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.discovery-card .game-card-meta,
+.discovery-card .game-card-source {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.discovery-card .result-actions.game-result-action {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: auto;
+  padding: 8px 16px 16px;
+}
+.discovery-card .result-actions button {
+  width: auto;
+  min-height: 36px;
+}
