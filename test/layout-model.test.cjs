@@ -76,6 +76,43 @@ test('broken layouts are rejected with readable errors', () => {
   );
 });
 
+test('game details sections and header default to the original page', () => {
+  const page = layouts.resolve(null, 'game-details');
+  assert.deepEqual(page.slots, [
+    'back',
+    'hero',
+    'metadata',
+    'overview',
+    'media',
+    'installation',
+    'content',
+    'downloads',
+  ]);
+  assert.equal(page.style.width, 900);
+  const hero = layouts.resolve(null, 'detail-hero');
+  assert.equal(hero.variant, 'cinematic');
+  assert.equal(layouts.cssVariables(null)['--detail-hero-art-width'], '900px');
+  const reordered = layouts.parse({
+    components: {
+      'game-details': { slots: ['hero', 'downloads', 'overview'] },
+      'detail-hero': { variant: 'split', slots: ['title', 'actions', 'artwork'] },
+    },
+  });
+  assert.deepEqual(layouts.resolve(reordered, 'game-details').slots, [
+    'hero',
+    'downloads',
+    'overview',
+  ]);
+  assert.throws(
+    () => layouts.parse({ components: { 'game-details': { slots: ['overview'] } } }),
+    /at least one of/,
+  );
+  assert.throws(
+    () => layouts.parse({ components: { 'detail-hero': { slots: ['artwork'] } } }),
+    /Game title/,
+  );
+});
+
 test('theme files carry their layout and older themes are unchanged', () => {
   const base = themes.parse(themes.presets[0]);
   assert.equal(base.layout, undefined);

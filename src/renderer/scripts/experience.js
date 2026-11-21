@@ -17,6 +17,7 @@
   let recentRenderSignature = '';
   let libraryRefreshGeneration = 0;
   let steamEnabled = true;
+  let goBack = null;
   const node = (tag, text, className) => {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
@@ -541,9 +542,9 @@
     document.body.append(dialog);
     dialog.showModal();
   }
-  function mountMedia(content, data) {
+  function mountMedia(data) {
     const items = mediaItems(data);
-    if (!items.length) return;
+    if (!items.length) return null;
     const shots = items.filter((item) => item.type === 'screenshot');
     const hasTrailers = items.length > shots.length;
     const title = !shots.length
@@ -691,7 +692,23 @@
     navigation.hidden = strip.hidden = items.length < 2;
     show(0);
     section.append(stage, navigation, strip);
-    content.append(section);
+    return section;
+  }
+  // The hero keeps the original structure (artwork, then an intro column) while the
+  // theme decides which parts appear and in what order.
+  function mountHero(hero, intro, parts) {
+    const spec = window.MambaComponents.mount(hero, 'detail-hero', {});
+    for (const slot of spec.slots) {
+      const part = parts[slot];
+      if (!part) continue;
+      if (part.nodeType === 1) part.dataset.slot = slot;
+      if (slot === 'artwork') hero.append(part);
+      else {
+        if (!intro.isConnected || intro.parentElement !== hero) hero.append(intro);
+        intro.append(part);
+      }
+    }
+    return spec;
   }
   async function openGame(game, origin) {
     const token = ++generation;
@@ -709,17 +726,18 @@
     const cinematic = node('div', undefined, 'detail-cinematic-art');
     cinematic.setAttribute('aria-hidden', 'true');
     detailPage.prepend(cinematic);
-    content.append(
-      action(
-        'Back to ' + (returnPage === 'search' ? 'Home' : 'Library'),
-        () => {
-          generation++;
-          showPage(returnPage);
-          $('#' + returnPage + '-page').scrollTop = returnScroll;
-        },
-        'arrow-left',
-      ),
+    goBack = () => {
+      generation++;
+      showPage(returnPage);
+      $('#' + returnPage + '-page').scrollTop = returnScroll;
+    };
+    const back = action(
+      'Back to ' + (returnPage === 'search' ? 'Home' : 'Library'),
+      () => goBack(),
+      'arrow-left',
     );
+    back.classList.add('detail-back');
+    content.append(back);
     const title = node('h1', game.name || 'Game details');
     title.id = 'game-title';
     title.tabIndex = -1;
@@ -741,6 +759,8 @@
           detailPage.classList.add('has-game-backdrop');
         })
         .catch(() => {});
+      const sections = { back };
+      const status = document.createDocumentFragment();
       const hero = node('div', undefined, 'detail-hero');
       const image = node('div', undefined, 'detail-art game-art');
       cover(image, data.libraryId || data.catalogId || data.id, data.name, data.cover);
@@ -748,7 +768,7 @@
       const heading = node('h1', data.name);
       heading.id = 'game-title';
       heading.tabIndex = -1;
-      intro.append(node('p', data.steamId ? 'STEAM GAME' : 'YOUR GAME', 'page-eyebrow'), heading);
+      const eyebrow = node('p', data.steamId ? 'STEAM GAME' : 'YOUR GAME', 'page-eyebrow');
       const metadata = node('dl', undefined, 'detail-metadata');
       for (const [label, value] of [
         ['Released', data.releaseDate],
@@ -776,7 +796,7 @@
         showToast('Game uninstalled; kept in library');
       };
       if (data.libraryId)
-        intro.append(
+        status.append(
           node(
             'span',
             playable
@@ -874,7 +894,7 @@
           ),
         );
       if (data.libraryId && !data.catalogId && !playable)
-        intro.append(
+        status.append(
           node(
             'p',
             'No matching download is currently available. Locate your existing files or refresh your sources.',
@@ -941,17 +961,23 @@
         control.setAttribute('aria-label', control.title);
         if (control.title === 'Uninstall') control.title = 'Uninstall (confirmation required)';
       }
-      intro.append(primary);
-      const state = intro.querySelector('.detail-owned');
+      const state = status.querySelector('.detail-owned');
       if (state && data.lastPlayed) state.textContent += ' · Last played ' + date(data.lastPlayed);
-      hero.append(image, intro);
-      content.append(hero, metadata);
+      mountHero(hero, intro, {
+        artwork: image,
+        eyebrow,
+        title: heading,
+        status: status.childNodes.length ? status : null,
+        actions: primary,
+      });
+      sections.hero = hero;
+      if (metadata.childElementCount) sections.metadata = metadata;
       if (data.description) {
         const about = node('section', undefined, 'detail-section game-overview');
         about.append(node('h2', 'Overview'), node('p', data.description, 'game-description'));
-        content.append(about);
+        sections.overview = about;
       }
-      mountMedia(content, data);
+      sections.media = mountMedia(data);
       const presentInstallations = data.installations.filter(
         (item) =>
           item.folderExists || !['not-installed', 'drive-unavailable'].includes(item.status),
@@ -1138,7 +1164,7 @@
           card.append(manage);
           section.append(card);
         }
-        content.append(section);
+        sections.installation = section;
       }
       if (data.dlcs.length || data.demos.length || data.availableDlcCount) {
         const section = node('section', undefined, 'detail-section');
@@ -1162,8 +1188,9 @@
             'field-hint',
           ),
         );
-        content.append(section);
+        sections.content = section;
       }
+      let downloads = null;
       if (data.catalogId) {
         const section = node('details', undefined, 'detail-section game-downloads');
         section.id = 'game-downloads';
@@ -1176,7 +1203,8 @@
         section.append(summary);
         const hint = node('p', 'Checking your enabled download services\u2026', 'field-hint');
         section.append(hint);
-        content.append(section);
+        sections.downloads = section;
+        downloads = { section, hint, summaryLabel };
         if (data.space) {
           const info = node(
             'p',
@@ -1193,6 +1221,11 @@
           );
           section.append(info);
         }
+      }
+      window.MambaComponents.mount(content, 'game-details', sections);
+      if (!sections.downloads) downloads = null;
+      if (downloads && content.contains(downloads.section)) {
+        const { section, hint, summaryLabel } = downloads;
         try {
           const resolved = await window.mamba.resolveGame(data.catalogId);
           if (token !== generation) return;
@@ -1377,6 +1410,12 @@
     pageChanged,
     handleError,
     play: playGame,
+    // Returns from game details; false when no details page is showing.
+    back() {
+      if ($('#game-page').hidden || !goBack) return false;
+      goBack();
+      return true;
+    },
     get jobs() {
       return recentJobs;
     },
@@ -1412,7 +1451,15 @@
     },
   };
   window.MambaExperience = api;
-  window.MambaComponents.onChange(() => renderLibrary(installedGames));
+  window.MambaComponents.onChange(() => {
+    renderLibrary(installedGames);
+    // A visible game page is rebuilt so layout edits preview immediately.
+    if (!$('#game-page').hidden && currentDetail)
+      openGame(
+        { id: currentDetail.libraryId || currentDetail.id, name: currentDetail.name },
+        window.MambaExperience.origin,
+      );
+  });
   $('#activity-transfers').append($('#transfers'));
   const activityTools = node('details', undefined, 'activity-tools');
   $('.activity-controls').append($('#export-diagnostics'));

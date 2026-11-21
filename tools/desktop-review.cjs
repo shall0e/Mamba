@@ -504,7 +504,22 @@ app
       );
       await screenshot('layout-' + variant);
     }
+    await js(
+      `MambaComponents.apply({components:{'detail-hero':{variant:'split'},'game-details':{slots:['back','hero','downloads','metadata','overview','media','installation','content'],style:{width:1200}}}})`,
+    );
+    await js(`MambaExperience.openGame({id:'review',name:'Review game'},'search')`);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.deepEqual(
+      await js(
+        `[...document.querySelectorAll('#game-content > [data-slot]')].map(e=>e.dataset.slot).slice(0,3)`,
+      ),
+      ['back', 'hero', 'downloads'],
+    );
+    assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'split');
+    await screenshot('details-split');
     await js(`MambaComponents.apply(null)`);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'cinematic');
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,

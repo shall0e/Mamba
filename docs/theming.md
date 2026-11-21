@@ -92,6 +92,40 @@ Variants: `stacked` (default), `overlay` (title over the artwork), `row` (artwor
 | `minWidth`  | 160–480 px | 240     |
 | `gap`       | 0–48 px    | 24      |
 
+### `game-details`: sections of a game page
+
+| Slots          | Meaning                                         |
+| -------------- | ----------------------------------------------- |
+| `back`         | Back to Home or Library                         |
+| `hero`         | Artwork, title and actions (see `detail-hero`)  |
+| `metadata`     | Release date, developer, publisher, genre, size |
+| `overview`     | Store description                               |
+| `media`        | Screenshots and trailers                        |
+| `installation` | Installation details and Manage Installation    |
+| `content`      | DLC and demos                                   |
+| `downloads`    | Available Downloads and release filters         |
+
+All slots are shown by default in the order above; `hero` is required. Sections with nothing to
+show (for example no screenshots) are skipped automatically. Esc, Alt+← and the mouse Back button
+still work when `back` is hidden. Hiding `downloads` also removes the target of the Install
+button, so keep it for themes meant for downloading games.
+
+| Style token  | Values      | Default |
+| ------------ | ----------- | ------- |
+| `width`      | 640–1600 px | 900     |
+| `sectionGap` | 0–64 px     | 0       |
+
+### `detail-hero`: game page header
+
+Slots: `artwork`, `eyebrow` (Steam game / Your game), `title`, `status` (install state and
+last played), `actions`. `title` is required. Variants: `cinematic` (default, title and actions
+over the bottom of centered artwork) and `split` (artwork on the left, details on the right).
+
+| Style token | Values      | Default |
+| ----------- | ----------- | ------- |
+| `artWidth`  | 320–1600 px | 900     |
+| `radius`    | 0–24 px     | 8       |
+
 ### `library-card`: games in the Library grid
 
 Slots: `artwork`, `title`. Variants: `cover` (default, title appears over the artwork on hover

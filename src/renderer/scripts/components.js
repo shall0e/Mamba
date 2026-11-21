@@ -24,6 +24,24 @@
     }
     return element;
   }
+  // Arranges already-built parts inside an existing container (for page-level components
+  // whose container is part of the static page). Parts the theme hides are removed.
+  function mount(container, name, parts) {
+    const spec = model.resolve(layout, name);
+    container.classList.add('mc', 'mc-' + name);
+    container.dataset.component = name;
+    for (const [key, value] of Object.entries(model.attributes(layout, name)))
+      container.dataset[key] = value;
+    for (const [slot, part] of Object.entries(parts))
+      if (part?.nodeType === 1 && !spec.slots.includes(slot)) part.remove();
+    for (const slot of spec.slots) {
+      const part = parts[slot];
+      if (!part) continue;
+      if (part.nodeType === 1) part.dataset.slot = slot;
+      container.append(part);
+    }
+    return spec;
+  }
   function apply(next) {
     layout = next ? model.parse(next) : null;
     const style = document.documentElement.style;
@@ -42,6 +60,7 @@
   }
   window.MambaComponents = {
     render,
+    mount,
     apply,
     resolve: (name) => model.resolve(layout, name),
     onChange(listener) {

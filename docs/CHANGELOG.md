@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Theme layout engine: themes can now arrange components (variant, which parts show and in what order) and set bounded shape and spacing tokens, falling back to the original design. Search result cards, the results grid and Library cards are the first components. Edit them in Settings → Appearance → Layout or in the theme file; see docs/theming.md.
+- Theme layout engine: themes can now arrange components (variant, which parts show and in what order) and set bounded shape and spacing tokens, falling back to the original design. Search result cards, the results grid, Library cards, the game details page (section order, width, spacing) and its header (Centered or Split) are built this way. Edit them in Settings → Appearance → Layout or in the theme file; see docs/theming.md.
 - Search result cards: removed the repeated release year and trademark symbols from titles, unified the year, size and service text, kept the action button visible and aligned at the bottom of every card, and added Overlay and Row variants.
 - Fixed settings controls that should stay disabled being re-enabled whenever settings finished saving.
 

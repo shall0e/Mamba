@@ -312,3 +312,59 @@
 .layout-editor {
   margin-bottom: 24px;
 }
+
+/* ---------- Game details page ---------- */
+#game-content.mc-game-details {
+  max-width: var(--game-details-width, 900px);
+}
+#game-content.mc-game-details .detail-metadata {
+  max-width: none;
+}
+#game-content.mc-game-details > .mc-slot:not([data-slot='back']) + .mc-slot {
+  margin-top: var(--game-details-section-gap, 0px);
+}
+
+/* ---------- Game details header ---------- */
+#game-content .mc-detail-hero {
+  max-width: min(100%, var(--detail-hero-art-width, 900px));
+  border-radius: var(--detail-hero-radius, 8px);
+}
+/* Without artwork the title and actions sit on the page rather than over an image. */
+#game-content .mc-detail-hero:not(:has(> .detail-art)) {
+  overflow: visible;
+}
+#game-content .mc-detail-hero:not(:has(> .detail-art)) > .detail-intro {
+  grid-area: auto;
+  padding: 16px 0 24px;
+  background: none;
+}
+/* Split: artwork on the left, title and actions beside it. */
+#game-content .mc-detail-hero[data-variant='split'] {
+  max-width: none;
+  grid-template-columns: minmax(0, min(var(--detail-hero-art-width, 900px), 45%)) minmax(0, 1fr);
+  align-items: center;
+  gap: 32px;
+  padding: 24px 0;
+  overflow: visible;
+  border-radius: 0;
+}
+#game-content .mc-detail-hero[data-variant='split'] > .detail-art {
+  grid-area: auto;
+  align-self: center;
+  overflow: hidden;
+  border-radius: var(--detail-hero-radius, 8px);
+}
+#game-content .mc-detail-hero[data-variant='split'] > .detail-intro {
+  grid-area: auto;
+  align-self: center;
+  padding: 0;
+  background: none;
+}
+#game-content .mc-detail-hero[data-variant='split']:not(:has(> .detail-art)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 850px) {
+  #game-content .mc-detail-hero[data-variant='split'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
