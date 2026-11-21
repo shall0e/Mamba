@@ -95,6 +95,38 @@
         radius: px(0, 24, 8, 'Artwork corner radius'),
       },
     },
+    sidebar: {
+      label: 'Sidebar',
+      description: 'The brand and page navigation at the side of the window.',
+      slots: { brand: 'Mamba name and version', navigation: 'Pages and Recently Played' },
+      defaultSlots: ['brand', 'navigation'],
+      requireOneOf: ['navigation'],
+      variants: { labeled: 'Icons and labels', icons: 'Icons only' },
+      defaultVariant: 'labeled',
+      style: {
+        panelWidth: px(160, 280, 192, 'Sidebar width'),
+        itemHeight: px(36, 56, 44, 'Button height'),
+        iconSize: px(16, 24, 20, 'Icon size'),
+        radius: px(0, 12, 6, 'Button corner radius'),
+      },
+    },
+    'sidebar-nav': {
+      label: 'Sidebar navigation',
+      description: 'Page buttons and Recently Played. Settings always stays at the bottom.',
+      slots: {
+        home: 'Home',
+        library: 'Library',
+        activity: 'Activity',
+        recent: 'Recently played',
+      },
+      defaultSlots: ['home', 'library', 'activity', 'recent'],
+      requireOneOf: ['home', 'library', 'activity'],
+      variants: { list: 'List' },
+      defaultVariant: 'list',
+      style: {
+        recentArt: px(24, 48, 34, 'Recently played artwork size'),
+      },
+    },
     'library-card': {
       label: 'Library card',
       description: 'Games in your Library grid.',

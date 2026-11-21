@@ -25,20 +25,28 @@
     return element;
   }
   // Arranges already-built parts inside an existing container (for page-level components
-  // whose container is part of the static page). Parts the theme hides are removed.
-  function mount(container, name, parts) {
+  // whose container is part of the static page). Parts the theme hides are removed, or
+  // with `keep` only hidden so static controls and their handlers stay in the document.
+  // Shown parts are placed in order before `before` (an anchored child) or at the end.
+  function mount(container, name, parts, { keep = false, before = null } = {}) {
     const spec = model.resolve(layout, name);
     container.classList.add('mc', 'mc-' + name);
     container.dataset.component = name;
     for (const [key, value] of Object.entries(model.attributes(layout, name)))
       container.dataset[key] = value;
     for (const [slot, part] of Object.entries(parts))
-      if (part?.nodeType === 1 && !spec.slots.includes(slot)) part.remove();
+      if (part?.nodeType === 1 && !spec.slots.includes(slot)) {
+        if (keep) part.hidden = true;
+        else part.remove();
+      }
     for (const slot of spec.slots) {
       const part = parts[slot];
       if (!part) continue;
-      if (part.nodeType === 1) part.dataset.slot = slot;
-      container.append(part);
+      if (part.nodeType === 1) {
+        part.dataset.slot = slot;
+        if (keep) part.hidden = false;
+      }
+      container.insertBefore(part, before);
     }
     return spec;
   }

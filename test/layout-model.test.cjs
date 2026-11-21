@@ -113,6 +113,45 @@ test('game details sections and header default to the original page', () => {
   );
 });
 
+test('sidebar defaults match the original sidebar and keep a page button', () => {
+  const sidebar = layouts.resolve(null, 'sidebar');
+  assert.equal(sidebar.variant, 'labeled');
+  assert.deepEqual(sidebar.slots, ['brand', 'navigation']);
+  const variables = layouts.cssVariables(null);
+  assert.equal(variables['--sidebar-panel-width'], '192px');
+  assert.equal(variables['--sidebar-item-height'], '44px');
+  assert.equal(variables['--sidebar-icon-size'], '20px');
+  assert.equal(variables['--sidebar-nav-recent-art'], '34px');
+  // The token must not collide with the responsive --sidebar-width the shell uses.
+  assert.equal(variables['--sidebar-width'], undefined);
+  assert.deepEqual(layouts.resolve(null, 'sidebar-nav').slots, [
+    'home',
+    'library',
+    'activity',
+    'recent',
+  ]);
+  const custom = layouts.parse({
+    components: {
+      sidebar: { variant: 'icons', slots: ['navigation'] },
+      'sidebar-nav': { slots: ['recent', 'library'] },
+    },
+  });
+  assert.equal(layouts.resolve(custom, 'sidebar').variant, 'icons');
+  assert.deepEqual(layouts.resolve(custom, 'sidebar-nav').slots, ['recent', 'library']);
+  assert.throws(
+    () => layouts.parse({ components: { 'sidebar-nav': { slots: ['recent'] } } }),
+    /at least one of/,
+  );
+  assert.throws(
+    () => layouts.parse({ components: { sidebar: { slots: ['brand'] } } }),
+    /at least one of/,
+  );
+  assert.throws(
+    () => layouts.parse({ components: { sidebar: { style: { panelWidth: 400 } } } }),
+    /160–280/,
+  );
+});
+
 test('theme files carry their layout and older themes are unchanged', () => {
   const base = themes.parse(themes.presets[0]);
   assert.equal(base.layout, undefined);

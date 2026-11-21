@@ -368,3 +368,37 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Sidebar: width, button size and icon size come from the theme's sidebar tokens. The
+   narrower widths at small windows still cap a wider theme width. */
+:root {
+  --sidebar-width: var(--sidebar-panel-width, 192px);
+}
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-width: min(var(--sidebar-panel-width, 192px), 180px);
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --sidebar-width: min(var(--sidebar-panel-width, 192px), 160px);
+  }
+}
+.sidebar .nav-button {
+  min-height: var(--sidebar-item-height, 44px);
+  height: var(--sidebar-item-height, 44px);
+  flex-basis: var(--sidebar-item-height, 44px);
+  border-radius: var(--sidebar-radius, 6px);
+}
+.sidebar .nav-button svg {
+  width: var(--sidebar-icon-size, 20px);
+  height: var(--sidebar-icon-size, 20px);
+}
+.sidebar .shortcut-thumbnail {
+  width: var(--sidebar-nav-recent-art, 34px);
+  height: var(--sidebar-nav-recent-art, 34px);
+}
+/* The icon-only sidebar has no room for the wordmark, so its version label goes too. */
+html[data-sidebar-collapsed='true'] .sidebar-brand small {
+  display: none;
+}

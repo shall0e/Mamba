@@ -126,6 +126,33 @@ over the bottom of centered artwork) and `split` (artwork on the left, details o
 | `artWidth`  | 320–1600 px | 900     |
 | `radius`    | 0–24 px     | 8       |
 
+### `sidebar`: the side panel
+
+Slots: `brand` (Mamba name and version) and `navigation` (pages and Recently Played), in that
+order by default. `navigation` is required. Variants: `labeled` (default, icons with labels) and
+`icons` (a narrow icon-only bar; labels appear as tooltips and Recently Played is hidden).
+
+| Style token  | Values     | Default |
+| ------------ | ---------- | ------- |
+| `panelWidth` | 160–280 px | 192     |
+| `itemHeight` | 36–56 px   | 44      |
+| `iconSize`   | 16–24 px   | 20      |
+| `radius`     | 0–12 px    | 6       |
+
+Narrow windows still cap the width at 180 px (under 1100 px wide) and 160 px (under 640 px).
+The `navigation` theme setting still chooses where the page buttons appear.
+
+### `sidebar-nav`: page buttons and Recently Played
+
+Slots: `home`, `library`, `activity`, `recent` (Recently Played), shown in that order by
+default. At least one of `home`, `library` or `activity` is required. Settings always stays at
+the bottom. Hidden pages are still reachable with Ctrl+1/2/3, and Recently Played fills whatever
+height is left above Settings.
+
+| Style token | Values   | Default |
+| ----------- | -------- | ------- |
+| `recentArt` | 24–48 px | 34      |
+
 ### `library-card`: games in the Library grid
 
 Slots: `artwork`, `title`. Variants: `cover` (default, title appears over the artwork on hover

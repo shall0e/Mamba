@@ -520,6 +520,41 @@ app
     await js(`MambaComponents.apply(null)`);
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(await js(`document.querySelector('.detail-hero').dataset.variant`), 'cinematic');
+    const navOrder = `[...document.querySelectorAll('.sidebar nav > [data-slot]:not([hidden])')].map(e=>e.dataset.slot)`;
+    assert.deepEqual(await js(navOrder), ['home', 'library', 'activity', 'recent']);
+    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 192);
+    await js(
+      `showPage('search'); MambaComponents.apply({components:{'sidebar-nav':{slots:['recent','library','home']},sidebar:{style:{panelWidth:240,itemHeight:40}}}})`,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(await js(navOrder), ['recent', 'library', 'home']);
+    assert.equal(await js(`document.querySelector('#activity-open').hidden`), true);
+    assert.equal(
+      await js(`document.querySelector('.sidebar nav').lastElementChild.id`),
+      'settings-open',
+    );
+    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 240);
+    assert.equal(
+      await js(`document.querySelector('#library-open').getBoundingClientRect().height`),
+      40,
+    );
+    assert.ok(
+      await js(
+        `document.querySelector('#settings-open').getBoundingClientRect().bottom <= innerHeight`,
+      ),
+    );
+    const recentBox = `(()=>{const r=document.querySelector('.sidebar-recents');return r.scrollHeight<=r.clientHeight+1})()`;
+    assert.ok(await js(recentBox), 'Recently Played overflows when reordered');
+    await screenshot('sidebar-reordered');
+    await js(`MambaComponents.apply({components:{sidebar:{variant:'icons'}}})`);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(await js(`document.documentElement.dataset.sidebarCollapsed`), 'true');
+    assert.equal(await js(`document.querySelector('.sidebar').getBoundingClientRect().width`), 56);
+    await screenshot('sidebar-icons');
+    await js(`MambaComponents.apply(null)`);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(await js(`document.documentElement.dataset.sidebarCollapsed`), 'false');
+    assert.deepEqual(await js(navOrder), ['home', 'library', 'activity', 'recent']);
     const visiblePage = `document.querySelector('.page:not([hidden])').id`;
     await js(
       `document.dispatchEvent(new KeyboardEvent('keydown',{key:'2',ctrlKey:true,bubbles:true}))`,
